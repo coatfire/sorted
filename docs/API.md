@@ -3,16 +3,22 @@
 Base URL: `/api`. Auth: `Authorization: Bearer <jwt>` on everything except
 `/auth/*` and `/webhooks/*`. Internal routes use `X-Internal-Secret`.
 
-All money is integer cents. All timestamps ISO 8601 UTC. Request/response
-shapes are the zod schemas in `packages/core/src/types.ts` — this doc lists
-routes and semantics; the schemas are the source of truth for fields.
+All money is integer cents. All timestamps ISO 8601 UTC. Request bodies are
+snake_case and validated by the zod schemas in `packages/core/src/types.ts`;
+responses are DB rows with camelCase keys (interfaces in the same file). This
+doc lists routes and semantics; the schemas are the source of truth for fields.
+Errors are `{ "error": "message" }` (or a zod `flatten()` object for 400s).
+
+`GET /health` (no auth) → `{ ok, features: { automation, paymentLinks } }` —
+which integrations are configured, so the UI only offers what works.
 
 ## Auth
 | Method | Path                | Notes |
 |--------|---------------------|-------|
-| POST   | /auth/magic-link    | body `{email}` → sends login link (M1: log to console) |
+| POST   | /auth/magic-link    | body `{email}` → emails a 15-min login link (logged if no email provider; returned as `dev_link` in local dev) |
 | POST   | /auth/verify        | body `{token}` → `{jwt, user}` |
 | GET    | /auth/me            | current user |
+| PATCH  | /auth/me            | business settings: `name`, `business_name`, `phone`, `review_link` |
 
 ## Clients
 | Method | Path          | Notes |
@@ -29,7 +35,7 @@ routes and semantics; the schemas are the source of truth for fields.
 | GET    | /bookings               | `?from=&to=&status=` |
 | POST   | /bookings               | inline client create supported: pass `client` object instead of `client_id` |
 | GET    | /bookings/:id           | includes client, payments, message log |
-| PATCH  | /bookings/:id           | field edits |
+| PATCH  | /bookings/:id           | field edits while enquiry/confirmed (409 after). Deposit is locked once confirmed |
 | POST   | /bookings/:id/confirm   | enquiry→confirmed. Emits `booking.confirmed`. Creates deposit payment row if deposit_cents > 0 |
 | POST   | /bookings/:id/complete  | confirmed→completed. Emits `booking.completed`. Creates balance payment row |
 | POST   | /bookings/:id/cancel    | emits `booking.cancelled` |
@@ -38,17 +44,18 @@ routes and semantics; the schemas are the source of truth for fields.
 | Method | Path                     | Notes |
 |--------|--------------------------|-------|
 | GET    | /payments                | `?status=pending` = the "who owes me" view |
-| POST   | /payments/:id/link       | creates Stripe Payment Link, stores url, emits `payment.link_created` (n8n WhatsApps it) |
+| POST   | /payments/:id/link       | creates Stripe Payment Link (503 if Stripe isn't configured), stores url, emits `payment.link_created` (n8n WhatsApps it) |
 | POST   | /payments/:id/mark-paid  | manual: body `{method}` (cash/bank_transfer). Emits `payment.paid` |
 
 ## Expenses
 | Method | Path                    | Notes |
 |--------|-------------------------|-------|
-| POST   | /expenses/upload-url    | → presigned S3 PUT url + `receipt_key` |
-| POST   | /expenses               | body includes `receipt_key`; triggers OCR; returns expense with `status=needs_review` + OCR suggestions |
+| POST   | /expenses/receipts      | body `{content_type, data_base64}` (photo downscaled by the client, ≤1.5 MB) → `{receipt_key}`. Stored in Postgres for now |
+| GET    | /expenses/:id/receipt   | the receipt image |
+| POST   | /expenses               | optional `receipt_key`. `confirmed: true` + all four fields → a confirmed expense; otherwise `status=needs_review` (where OCR suggestions will land) |
 | GET    | /expenses               | `?year=&category=&status=` |
 | PATCH  | /expenses/:id           | confirm/correct OCR fields → `status=confirmed` |
-| DELETE | /expenses/:id           | |
+| DELETE | /expenses/:id           | also deletes its receipt photo |
 
 ## Reports
 | Method | Path                  | Notes |
@@ -65,9 +72,9 @@ routes and semantics; the schemas are the source of truth for fields.
 | Method | Path                 | Notes |
 |--------|----------------------|-------|
 | POST   | /internal/messages   | n8n logs each WhatsApp send |
-| GET    | /internal/reminders  | `?window=24h` → bookings needing a reminder (n8n cron polls this) |
+| GET    | /internal/reminders  | `?window_hours=24` → bookings needing a reminder (n8n cron polls this) |
 | GET    | /internal/reviews    | bookings completed 2 days ago, review not yet requested |
-| PATCH  | /internal/bookings/:id/gcal | n8n writes back `gcal_event_id` |
+| PATCH  | /internal/bookings/:id | n8n writes back `gcal_event_id`, `reminder_sent_at`, `review_requested_at` |
 
 ## Domain events (API → n8n webhook)
 

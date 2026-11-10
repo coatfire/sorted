@@ -7,7 +7,8 @@ Canonical definitions live in code: `apps/api/src/db/schema.ts` (tables) and
 
 ### users
 The sole trader. One row = one account = one business.
-`id, email, name, business_name, phone, currency (default EUR), created_at`
+`id, email, name, business_name, phone, review_link, currency (default EUR),
+created_at`
 
 ### clients
 A person the trader works for. Phone is the WhatsApp identity — E.164, required
@@ -18,7 +19,8 @@ and the number added later.
 ### bookings
 The centre of the model. Everything hangs off a booking.
 `id, user_id, client_id, service, start_at, end_at, price_cents,
-deposit_cents, status, location, notes, gcal_event_id, created_at`
+deposit_cents, status, location, notes, gcal_event_id, reminder_sent_at,
+review_requested_at, completed_at, created_at`
 
 **Status state machine:**
 
@@ -49,8 +51,14 @@ Marking paid can happen two ways: Stripe webhook, or manual tap (cash/transfer).
 Both emit `payment.paid`.
 
 ### expenses
-`id, user_id, merchant, amount_cents, category, expense_date, receipt_key
-(S3), ocr_raw (jsonb), status (needs_review|confirmed), created_at`
+`id, user_id, merchant, amount_cents, category, expense_date, receipt_key,
+ocr_raw (jsonb), status (needs_review|confirmed), created_at`
+
+### receipts
+Receipt photos, downscaled in the browser and stored as base64 in Postgres —
+no bucket to provision for the MVP. `expenses.receipt_key` holds the receipt
+id and is the only pointer, so moving to S3 later touches one handler.
+`id, user_id, content_type, data_base64, created_at`
 
 Categories (Irish sole-trader friendly, keep enum small):
 `materials, travel, equipment, software, phone_internet, insurance,

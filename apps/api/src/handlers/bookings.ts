@@ -28,8 +28,12 @@ bookingRoutes.get("/", async (c) => {
   const { from, to, status } = c.req.query();
 
   const conditions = [eq(schema.bookings.userId, userId)];
-  if (from) conditions.push(gte(schema.bookings.startAt, new Date(from)));
-  if (to) conditions.push(lte(schema.bookings.startAt, new Date(to)));
+  for (const [value, op] of [[from, gte], [to, lte]] as const) {
+    if (!value) continue;
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return c.json({ error: "Invalid date" }, 400);
+    conditions.push(op(schema.bookings.startAt, date));
+  }
   if (status) {
     const parsedStatus = BookingStatus.safeParse(status);
     if (!parsedStatus.success) return c.json({ error: "Invalid status" }, 400);
@@ -222,6 +226,24 @@ bookingRoutes.patch("/:id", async (c) => {
       ),
     );
   if (!current) return c.json({ error: "Booking not found" }, 404);
+  if (current.status === "completed" || current.status === "cancelled") {
+    return c.json(
+      { error: `A ${current.status} booking can't be edited` },
+      409,
+    );
+  }
+  // The deposit request goes out on confirm; changing it afterwards would
+  // leave the payment row and what the client was told out of step.
+  if (
+    current.status !== "enquiry" &&
+    input.deposit_cents !== undefined &&
+    input.deposit_cents !== current.depositCents
+  ) {
+    return c.json(
+      { error: "The deposit can't be changed once a booking is confirmed" },
+      409,
+    );
+  }
   const priceCents = input.price_cents ?? current.priceCents;
   const depositCents = input.deposit_cents ?? current.depositCents;
   if (depositCents > priceCents) {

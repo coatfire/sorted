@@ -7,12 +7,26 @@ evenings/weekends solo pace.
 Reference implementation: `apps/api/src/handlers/bookings.ts` is fully written.
 Every stub says `// TODO(M#)` with the milestone it belongs to.
 
+## Where things stand
+
+Built and working end to end (web ↔ API, covered by `pnpm test`):
+M0, M1, M2 (Stripe code paths are written but need your test keys to try),
+M6, and from M8: emailed login links (Resend), offline shell, first-run nudge.
+Also done ahead of plan: client page, booking edit, receipt photos (stored in
+Postgres rather than S3), `wa.me` hand-off so confirmations and payment links
+can be sent from your own WhatsApp before Meta approval lands.
+
+Still to do: M3/M4/M7 (n8n workflows — the API side is ready), M5's OCR,
+and the rest of M8 (deploy, GDPR client delete, error tracking).
+
+The checklists below are the original plan, kept for the acceptance criteria.
+
 ---
 
 ## M0 — Repo runs (½ day)
 - [ ] `pnpm install` at root succeeds
 - [ ] Neon project created, `DATABASE_URL` in `apps/api/.env`
-- [ ] `pnpm --filter api db:push` creates all tables
+- [ ] `pnpm --filter api db:migrate` creates all tables
 - [ ] `pnpm --filter api dev` → `GET /api/health` returns `{ok:true}`
 - [ ] `pnpm --filter web dev` → PWA shell loads, hits health endpoint
 

@@ -3,7 +3,9 @@
   "private": true,
   "packageManager": "pnpm@9.0.0",
   "scripts": {
-    "dev": "pnpm --filter api dev & pnpm --filter web dev",
-    "typecheck": "pnpm -r typecheck"
+    "dev": "pnpm -r --parallel dev",
+    "typecheck": "pnpm -r typecheck",
+    "test": "pnpm --filter api test",
+    "build": "pnpm --filter api build && pnpm --filter web build"
   }
 }

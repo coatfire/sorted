@@ -53,6 +53,23 @@ export const Phone = z
   .string()
   .regex(/^\+[1-9]\d{6,14}$/, "Phone must be E.164, e.g. +353871234567");
 
+/**
+ * Turn what a person types ("087 123 4567", "00353 87…", "+44 7700 900123")
+ * into E.164. Bare national numbers are assumed Irish — the beta market.
+ * Returns null if the result isn't a plausible E.164 number.
+ */
+export function normalisePhone(input: string, defaultCountry = "353"): string | null {
+  const raw = input.trim();
+  if (!raw) return null;
+  const digits = raw.replace(/\D/g, "");
+  let e164: string;
+  if (raw.startsWith("+")) e164 = `+${digits}`;
+  else if (digits.startsWith("00")) e164 = `+${digits.slice(2)}`;
+  else if (digits.startsWith(defaultCountry) && digits.length > 10) e164 = `+${digits}`;
+  else e164 = `+${defaultCountry}${digits.replace(/^0/, "")}`;
+  return Phone.safeParse(e164).success ? e164 : null;
+}
+
 // ─── Request schemas (validate at the edge, trust internally) ─────────────
 
 export const CreateClientInput = z.object({
@@ -63,7 +80,13 @@ export const CreateClientInput = z.object({
 });
 export type CreateClientInput = z.infer<typeof CreateClientInput>;
 
-export const UpdateClientInput = CreateClientInput.partial();
+export const UpdateClientInput = z.object({
+  name: z.string().min(1).max(200).optional(),
+  // null clears the field
+  phone: Phone.nullable().optional(),
+  email: z.string().email().nullable().optional(),
+  notes: z.string().max(2000).nullable().optional(),
+});
 
 export const CreateBookingInput = z
   .object({
@@ -90,33 +113,82 @@ export type CreateBookingInput = z.infer<typeof CreateBookingInput>;
 export const UpdateBookingInput = z.object({
   service: z.string().min(1).max(200).optional(),
   start_at: z.coerce.date().optional(),
-  end_at: z.coerce.date().optional(),
+  end_at: z.coerce.date().nullable().optional(),
   price_cents: z.number().int().nonnegative().optional(),
   deposit_cents: z.number().int().nonnegative().optional(),
-  location: z.string().max(500).optional(),
-  notes: z.string().max(2000).optional(),
+  // null clears the field
+  location: z.string().max(500).nullable().optional(),
+  notes: z.string().max(2000).nullable().optional(),
 });
+export type UpdateBookingInput = z.infer<typeof UpdateBookingInput>;
+
+export const UpdateUserInput = z.object({
+  name: z.string().max(200).nullable().optional(),
+  business_name: z.string().max(200).nullable().optional(),
+  phone: Phone.nullable().optional(),
+  review_link: z.string().url().max(500).nullable().optional(),
+});
+export type UpdateUserInput = z.infer<typeof UpdateUserInput>;
 
 export const MarkPaidInput = z.object({
   method: PaymentMethod.exclude(["stripe"]), // stripe paid only via webhook
 });
 
-export const CreateExpenseInput = z.object({
-  receipt_key: z.string().optional(), // S3 key from /expenses/upload-url
-  merchant: z.string().max(200).optional(),
-  amount_cents: z.number().int().positive().optional(),
-  category: ExpenseCategory.optional(),
-  expense_date: z.coerce.date().optional(),
+/** A receipt photo, downscaled client-side. ~1.5 MB of base64 is plenty. */
+export const UploadReceiptInput = z.object({
+  content_type: z.enum(["image/jpeg", "image/png", "image/webp"]),
+  data_base64: z
+    .string()
+    .min(1)
+    .max(2_000_000)
+    .regex(/^[A-Za-z0-9+/]+=*$/, "Must be base64"),
 });
 
-export const ConfirmExpenseInput = z.object({
+const expenseFields = {
   merchant: z.string().min(1).max(200),
   amount_cents: z.number().int().positive(),
   category: ExpenseCategory,
   expense_date: z.coerce.date(),
-});
+};
 
-// ─── Response types (plain interfaces; DB rows map to these) ──────────────
+/**
+ * Create an expense. With `confirmed: true` (the person typed/checked every
+ * field themselves) all four fields are required and it becomes a tax record
+ * immediately. Otherwise it lands in `needs_review` — that is where OCR
+ * suggestions go, and they must never confirm themselves.
+ */
+export const CreateExpenseInput = z
+  .object({
+    receipt_key: z.string().max(200).optional(),
+    merchant: expenseFields.merchant.optional(),
+    amount_cents: expenseFields.amount_cents.optional(),
+    category: expenseFields.category.optional(),
+    expense_date: expenseFields.expense_date.optional(),
+    confirmed: z.boolean().default(false),
+  })
+  .refine(
+    (v) =>
+      !v.confirmed ||
+      (v.merchant && v.amount_cents && v.category && v.expense_date),
+    { message: "A confirmed expense needs merchant, amount, category and date" },
+  );
+
+export const ConfirmExpenseInput = z.object(expenseFields);
+
+// ─── Response types ───────────────────────────────────────────────────────
+// What the API actually returns: DB rows serialised as JSON (camelCase keys,
+// ISO timestamp strings). Request bodies above are snake_case.
+
+export interface User {
+  id: string;
+  email: string;
+  name: string | null;
+  businessName: string | null;
+  phone: string | null;
+  reviewLink: string | null;
+  currency: string;
+  createdAt: string;
+}
 
 export interface Client {
   id: string;
@@ -124,45 +196,65 @@ export interface Client {
   phone: string | null;
   email: string | null;
   notes: string | null;
-  created_at: string;
+  createdAt: string;
 }
 
 export interface Booking {
   id: string;
-  client_id: string;
+  clientId: string;
   service: string;
-  start_at: string;
-  end_at: string | null;
-  price_cents: number;
-  deposit_cents: number;
+  startAt: string;
+  endAt: string | null;
+  priceCents: number;
+  depositCents: number;
   status: BookingStatus;
   location: string | null;
   notes: string | null;
-  gcal_event_id: string | null;
-  created_at: string;
+  gcalEventId: string | null;
+  completedAt: string | null;
+  createdAt: string;
 }
 
 export interface Payment {
   id: string;
-  booking_id: string;
+  bookingId: string;
   kind: PaymentKind;
-  amount_cents: number;
+  amountCents: number;
   method: PaymentMethod | null;
   status: PaymentStatus;
-  link_url: string | null;
-  paid_at: string | null;
-  created_at: string;
+  linkUrl: string | null;
+  paidAt: string | null;
+  createdAt: string;
 }
 
 export interface Expense {
   id: string;
   merchant: string | null;
-  amount_cents: number | null;
+  amountCents: number | null;
   category: ExpenseCategory | null;
-  expense_date: string | null;
-  receipt_key: string | null;
+  expenseDate: string | null;
+  receiptKey: string | null;
   status: ExpenseStatus;
-  created_at: string;
+  createdAt: string;
+}
+
+export interface MessageLogEntry {
+  id: string;
+  bookingId: string | null;
+  template: MessageTemplate;
+  status: "sent" | "delivered" | "failed";
+  sentAt: string;
+}
+
+/** GET /api/health — lets the UI be honest about what is wired up. */
+export interface Health {
+  ok: true;
+  features: {
+    /** n8n webhook configured → confirmations/reminders actually send */
+    automation: boolean;
+    /** Stripe key configured → payment links can be created */
+    paymentLinks: boolean;
+  };
 }
 
 export interface ReportSummary {

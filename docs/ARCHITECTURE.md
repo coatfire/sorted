@@ -67,7 +67,8 @@ storage (PWA: localStorage is acceptable at MVP, revisit). One `users` row owns
 everything via `user_id` FK. Keep it embarrassingly simple.
 
 ### Expense OCR
-Receipt photo → S3 (presigned upload) → API calls a vision model (Claude via
+Receipt photo → storage (Postgres today — see DATA_MODEL `receipts`; S3
+presigned upload when volume justifies it) → API calls a vision model (Claude via
 Anthropic API, or AWS Textract) to extract merchant / amount / date / suggested
 category → user confirms with one tap. The confirm step matters: never silently
 write OCR guesses into tax records.

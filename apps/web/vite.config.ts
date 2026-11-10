@@ -7,6 +7,12 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: "autoUpdate",
+      includeAssets: ["icon.svg", "icon-192.png"],
+      workbox: {
+        // The app shell works offline; API calls must always hit the network.
+        navigateFallbackDenylist: [/^\/api\//],
+        globPatterns: ["**/*.{js,css,html,svg,png,woff2}"],
+      },
       manifest: {
         name: "Sorted",
         short_name: "Sorted",

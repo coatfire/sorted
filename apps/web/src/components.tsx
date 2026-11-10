@@ -1,6 +1,7 @@
-import type { ButtonHTMLAttributes, ReactNode } from "react";
-import { euros } from "./lib/api";
-import type { BookingStatus, PaymentStatus } from "./lib/store";
+import { useEffect, useRef, type ButtonHTMLAttributes, type ReactNode } from "react";
+import { useNavigate } from "react-router-dom";
+import type { BookingStatus, PaymentStatus } from "@sorted/core";
+import { euros } from "./lib/format";
 
 export function Icon({
   name,
@@ -21,7 +22,12 @@ export function Icon({
     | "download"
     | "sparkles"
     | "message"
-    | "chevron";
+    | "chevron"
+    | "edit"
+    | "copy"
+    | "trash"
+    | "logout"
+    | "alert";
   size?: number;
 }) {
   const paths: Record<typeof name, ReactNode> = {
@@ -96,6 +102,36 @@ export function Icon({
       </>
     ),
     chevron: <path d="m9 18 6-6-6-6" />,
+    edit: (
+      <>
+        <path d="M4 20h4L19 9a2.8 2.8 0 0 0-4-4L4 16v4Z" />
+        <path d="m13.5 6.5 4 4" />
+      </>
+    ),
+    copy: (
+      <>
+        <rect x="9" y="9" width="12" height="12" rx="2.5" />
+        <path d="M5 15H4.5A1.5 1.5 0 0 1 3 13.5v-9A1.5 1.5 0 0 1 4.5 3h9A1.5 1.5 0 0 1 15 4.5V5" />
+      </>
+    ),
+    trash: (
+      <>
+        <path d="M4 7h16M10 11v6M14 11v6" />
+        <path d="M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3" />
+      </>
+    ),
+    logout: (
+      <>
+        <path d="M9 21H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3" />
+        <path d="M16 17l5-5-5-5M21 12H9" />
+      </>
+    ),
+    alert: (
+      <>
+        <circle cx="12" cy="12" r="9" />
+        <path d="M12 8v4.5M12 16h.01" />
+      </>
+    ),
   };
 
   return (
@@ -156,7 +192,7 @@ export function MoneyText({
 }
 
 export function StatusChip({ status }: { status: BookingStatus | PaymentStatus }) {
-  const label = status === "enquiry" ? "Enquiry" : status[0].toUpperCase() + status.slice(1);
+  const label = status === "pending" ? "Due" : status[0].toUpperCase() + status.slice(1);
   return <span className={`status-chip status-${status}`}>{label}</span>;
 }
 
@@ -190,5 +226,81 @@ export function Field({
       {children}
       {helper && <span className="field-helper">{helper}</span>}
     </label>
+  );
+}
+
+export function BackButton({ to }: { to?: string }) {
+  const navigate = useNavigate();
+  return (
+    <button
+      className="back-button"
+      onClick={() => (to ? navigate(to) : window.history.length > 1 ? navigate(-1) : navigate("/"))}
+    >
+      <span aria-hidden="true">‹</span> Back
+    </button>
+  );
+}
+
+export function EmptyState({
+  icon,
+  title,
+  children,
+  tone,
+  small,
+}: {
+  icon: Parameters<typeof Icon>[0]["name"];
+  title: string;
+  children?: ReactNode;
+  tone?: "paid";
+  small?: boolean;
+}) {
+  return (
+    <div className={`empty-state ${small ? "small" : ""}`}>
+      <span className={`empty-icon ${tone ?? ""}`}><Icon name={icon} /></span>
+      <strong>{title}</strong>
+      {children && <p>{children}</p>}
+    </div>
+  );
+}
+
+/** Bottom action sheet. Closes on backdrop tap or Escape. */
+export function Sheet({
+  title,
+  onClose,
+  children,
+}: {
+  title: string;
+  onClose: () => void;
+  children: ReactNode;
+}) {
+  const panel = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const previous = document.activeElement as HTMLElement | null;
+    panel.current?.focus();
+    const onKey = (event: KeyboardEvent) => event.key === "Escape" && onClose();
+    document.addEventListener("keydown", onKey);
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.body.style.overflow = "";
+      previous?.focus();
+    };
+  }, [onClose]);
+  return (
+    <div className="sheet-backdrop" onClick={onClose}>
+      <div
+        ref={panel}
+        className="sheet"
+        role="dialog"
+        aria-modal="true"
+        aria-label={title}
+        tabIndex={-1}
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className="sheet-grip" aria-hidden="true" />
+        <h2>{title}</h2>
+        {children}
+      </div>
+    </div>
   );
 }
