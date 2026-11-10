@@ -1,36 +1,14 @@
+import { useState } from "react";
 import { Link } from "react-router-dom";
-import { Card, Icon, MoneyText, StatusChip } from "../components";
-import { useStore, type Booking } from "../lib/store";
+import { Card, EmptyState, Icon, MoneyText, StatusChip } from "../components";
+import type { BookingRow as Booking } from "../lib/backend";
+import { dayLabel, daysBetween, firstName, dayMonth, longDay, startOfDay, time } from "../lib/format";
+import { useData } from "../lib/store";
 
-const sameDay = (a: Date, b: Date) =>
-  a.getFullYear() === b.getFullYear() &&
-  a.getMonth() === b.getMonth() &&
-  a.getDate() === b.getDate();
-
-function dateLabel(value: string) {
-  const date = new Date(value);
-  const today = new Date();
-  const tomorrow = new Date();
-  tomorrow.setDate(today.getDate() + 1);
-  if (sameDay(date, today)) return "Today";
-  if (sameDay(date, tomorrow)) return "Tomorrow";
-  return new Intl.DateTimeFormat("en-IE", {
-    weekday: "long",
-    day: "numeric",
-    month: "short",
-  }).format(date);
-}
-
-function BookingRow({ booking }: { booking: Booking }) {
+export function BookingRow({ booking, lead }: { booking: Booking; lead?: string }) {
   return (
     <Link className="booking-row" to={`/bookings/${booking.id}`}>
-      <time>
-        {new Intl.DateTimeFormat("en-IE", {
-          hour: "2-digit",
-          minute: "2-digit",
-          hour12: false,
-        }).format(new Date(booking.startAt))}
-      </time>
+      <time dateTime={booking.startAt}>{lead ?? time(booking.startAt)}</time>
       <div className="booking-row-main">
         <strong>{booking.client.name}</strong>
         <span>{booking.service}</span>
@@ -44,35 +22,80 @@ function BookingRow({ booking }: { booking: Booking }) {
   );
 }
 
+/** Rows with a day heading whenever the date changes. */
+function GroupedRows({ bookings }: { bookings: Booking[] }) {
+  return (
+    <>
+      {bookings.map((booking, index) => {
+        const previous = bookings[index - 1];
+        const newDay = !previous || daysBetween(new Date(previous.startAt), new Date(booking.startAt)) !== 0;
+        return (
+          <div key={booking.id}>
+            {newDay && <p className="date-divider">{dayLabel(booking.startAt)}</p>}
+            <BookingRow booking={booking} />
+          </div>
+        );
+      })}
+    </>
+  );
+}
+
 export function Home() {
-  const { bookings, payments, business } = useStore();
-  const activeBookings = bookings
-    .filter((booking) => booking.status !== "cancelled")
-    .sort((a, b) => new Date(a.startAt).getTime() - new Date(b.startAt).getTime());
-  const today = activeBookings.filter((booking) => sameDay(new Date(booking.startAt), new Date()));
-  const upcoming = activeBookings.filter((booking) => new Date(booking.startAt) > new Date() && !today.includes(booking));
+  const { bookings, payments, user } = useData();
+  const [showLater, setShowLater] = useState(false);
+  const [showPast, setShowPast] = useState(false);
+
+  const today = startOfDay();
+  const byStart = [...bookings].sort((a, b) => a.startAt.localeCompare(b.startAt));
+  const open = byStart.filter((b) => b.status === "enquiry" || b.status === "confirmed");
+  const offset = (b: Booking) => daysBetween(today, new Date(b.startAt));
+
+  // Jobs whose date has passed but were never closed out — without this list
+  // they'd vanish from the app and the balance would never be requested.
+  const wrapUp = open.filter((b) => offset(b) < 0);
+  const todays = byStart.filter((b) => offset(b) === 0 && b.status !== "cancelled");
+  const upcoming = open.filter((b) => offset(b) > 0 && offset(b) <= 14);
+  const later = open.filter((b) => offset(b) > 14);
+  const past = byStart
+    .filter((b) => (b.status === "completed" || b.status === "cancelled") && offset(b) < 0)
+    .reverse()
+    .slice(0, 20);
+
   const owed = payments
     .filter((payment) => payment.status === "pending")
     .reduce((sum, payment) => sum + payment.amountCents, 0);
   const hour = new Date().getHours();
   const greeting = hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
+  const who = user.name ? firstName(user.name) : null;
+  const brandNew = bookings.length === 0;
 
   return (
     <div className="page">
       <header className="brand-header">
         <div>
           <p className="brand-wordmark">Sorted<span>.</span></p>
-          <p className="header-greeting">{greeting}, {business.owner}</p>
+          <p className="header-greeting">{greeting}{who ? `, ${who}` : ""}</p>
         </div>
-        <Link className="icon-button avatar-button" to="/settings" aria-label="Settings">
-          {business.owner.slice(0, 1).toUpperCase()}
+        <Link className="icon-button" to="/settings" aria-label="Settings">
+          <Icon name="settings" />
         </Link>
       </header>
 
+      {!user.businessName && (
+        <Link className="card nudge-card" to="/settings">
+          <span className="empty-icon"><Icon name="sparkles" /></span>
+          <div>
+            <strong>Welcome to Sorted</strong>
+            <span>Add your business name so clients know who’s messaging them.</span>
+          </div>
+          <Icon name="chevron" size={17} />
+        </Link>
+      )}
+
       <Card className="snapshot-card">
         <div>
-          <span className="snapshot-label">Coming up</span>
-          <strong>{today.length} {today.length === 1 ? "booking" : "bookings"} today</strong>
+          <span className="snapshot-label">Today</span>
+          <strong>{todays.length} {todays.length === 1 ? "booking" : "bookings"}</strong>
         </div>
         <div className="snapshot-divider" />
         <Link to="/money">
@@ -82,61 +105,90 @@ export function Home() {
         </Link>
       </Card>
 
-      <section className="list-section">
-        <div className="section-heading">
-          <div>
-            <p className="eyebrow">Today</p>
-            <h2>
-              {new Intl.DateTimeFormat("en-IE", {
-                weekday: "long",
-                day: "numeric",
-                month: "long",
-              }).format(new Date())}
-            </h2>
-          </div>
-          <span className="count-badge">{today.length}</span>
-        </div>
-        <Card className="list-card">
-          {today.length ? (
-            today.map((booking) => <BookingRow key={booking.id} booking={booking} />)
-          ) : (
-            <div className="empty-state">
-              <span className="empty-icon"><Icon name="calendar" /></span>
-              <strong>Your day is clear</strong>
-              <p>Tap + to log a booking. It takes about 30 seconds.</p>
-            </div>
-          )}
+      {brandNew ? (
+        <Card>
+          <EmptyState icon="calendar" title="No bookings yet">
+            Tap + to log your first — it takes 30 seconds.
+          </EmptyState>
         </Card>
-      </section>
-
-      <section className="list-section">
-        <div className="section-heading">
-          <div>
-            <p className="eyebrow">Next up</p>
-            <h2>Upcoming bookings</h2>
-          </div>
-        </div>
-        <Card className="list-card">
-          {upcoming.length ? (
-            upcoming.slice(0, 5).map((booking, index) => {
-              const previous = upcoming[index - 1];
-              const showDate = !previous || !sameDay(new Date(previous.startAt), new Date(booking.startAt));
-              return (
-                <div key={booking.id}>
-                  {showDate && <p className="date-divider">{dateLabel(booking.startAt)}</p>}
-                  <BookingRow booking={booking} />
+      ) : (
+        <>
+          {wrapUp.length > 0 && (
+            <section className="list-section">
+              <div className="section-heading">
+                <div>
+                  <p className="eyebrow due-text">To wrap up</p>
+                  <h2>Done? Mark it complete</h2>
                 </div>
-              );
-            })
-          ) : (
-            <div className="empty-state small">
-              <span className="empty-icon"><Icon name="calendar" /></span>
-              <strong>Nothing else booked yet</strong>
-              <p>Your next confirmed booking will appear here.</p>
-            </div>
+                <span className="count-badge due">{wrapUp.length}</span>
+              </div>
+              <Card className="list-card">
+                {wrapUp.map((booking) => (
+                  <BookingRow key={booking.id} booking={booking} lead={dayMonth(booking.startAt)} />
+                ))}
+              </Card>
+            </section>
           )}
-        </Card>
-      </section>
+
+          <section className="list-section">
+            <div className="section-heading">
+              <div>
+                <p className="eyebrow">Today</p>
+                <h2>{longDay(new Date())}</h2>
+              </div>
+            </div>
+            <Card className="list-card">
+              {todays.length ? (
+                todays.map((booking) => <BookingRow key={booking.id} booking={booking} />)
+              ) : (
+                <EmptyState icon="calendar" title="Your day is clear" small>
+                  Tap + to log a booking.
+                </EmptyState>
+              )}
+            </Card>
+          </section>
+
+          <section className="list-section">
+            <div className="section-heading">
+              <div>
+                <p className="eyebrow">Next two weeks</p>
+                <h2>Upcoming</h2>
+              </div>
+            </div>
+            <Card className="list-card">
+              {upcoming.length ? (
+                <GroupedRows bookings={upcoming} />
+              ) : (
+                <EmptyState icon="calendar" title="Nothing in the next two weeks" small />
+              )}
+            </Card>
+            {later.length > 0 && (
+              <>
+                <button className="disclosure" aria-expanded={showLater} onClick={() => setShowLater(!showLater)}>
+                  Later · {later.length} {later.length === 1 ? "booking" : "bookings"}
+                  <Icon name="chevron" size={15} />
+                </button>
+                {showLater && <Card className="list-card"><GroupedRows bookings={later} /></Card>}
+              </>
+            )}
+            {past.length > 0 && (
+              <>
+                <button className="disclosure" aria-expanded={showPast} onClick={() => setShowPast(!showPast)}>
+                  Past bookings
+                  <Icon name="chevron" size={15} />
+                </button>
+                {showPast && (
+                  <Card className="list-card">
+                    {past.map((booking) => (
+                      <BookingRow key={booking.id} booking={booking} lead={dayMonth(booking.startAt)} />
+                    ))}
+                  </Card>
+                )}
+              </>
+            )}
+          </section>
+        </>
+      )}
     </div>
   );
 }

@@ -1,51 +1,74 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
-import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { Navigate, useNavigate, useSearchParams } from "react-router-dom";
 import { Button, Icon } from "../components";
-import { api } from "../lib/api";
+import { isNetworkError, post } from "../lib/api";
+import { useSession } from "../lib/store";
 
 export function Login() {
+  const { mode, signIn, startDemo } = useSession();
   const [email, setEmail] = useState("");
-  const [sent, setSent] = useState(false);
+  const [sent, setSent] = useState<{ devLink?: string } | null>(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
+  const token = searchParams.get("token");
   const verified = useRef(false);
 
   useEffect(() => {
-    const token = searchParams.get("token");
     if (!token || verified.current) return;
     verified.current = true;
     setLoading(true);
-    api<{ jwt: string }>("/auth/verify", {
-      method: "POST",
-      body: JSON.stringify({ token }),
-    })
+    post<{ jwt: string }>("/auth/verify", { token })
       .then(({ jwt }) => {
-        localStorage.setItem("sorted_jwt", jwt);
+        signIn(jwt);
         navigate("/", { replace: true });
       })
       .catch((caught: Error) => {
-        setError(caught.message);
+        setError(
+          isNetworkError(caught)
+            ? "Sorted couldn't reach its server. Check your connection and tap the link again."
+            : "That login link has expired or was already used. Enter your email for a fresh one.",
+        );
         setLoading(false);
+        navigate("/login", { replace: true });
       });
-  }, [navigate, searchParams]);
+  }, [navigate, signIn, token]);
+
+  if (mode && !token) return <Navigate to="/" replace />;
 
   async function submit(event: FormEvent) {
     event.preventDefault();
     setLoading(true);
     setError("");
     try {
-      await api<{ ok: true }>("/auth/magic-link", {
-        method: "POST",
-        body: JSON.stringify({ email }),
-      });
-      setSent(true);
+      const res = await post<{ ok: true; dev_link?: string }>("/auth/magic-link", { email });
+      setSent({ devLink: res.dev_link });
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Could not send login link");
+      setError(
+        isNetworkError(caught)
+          ? "Sorted couldn't reach its server. Check your connection and try again."
+          : caught instanceof Error
+            ? caught.message
+            : "Couldn't send the login link.",
+      );
     } finally {
       setLoading(false);
     }
+  }
+
+  function demo() {
+    startDemo();
+    navigate("/");
+  }
+
+  if (token && loading) {
+    return (
+      <main className="login-page">
+        <div className="login-mark">S</div>
+        <h1>Logging you in…</h1>
+      </main>
+    );
   }
 
   return (
@@ -73,19 +96,23 @@ export function Login() {
               {loading ? "Sending…" : "Send me a login link"} <Icon name="arrow" />
             </Button>
           </form>
-          <small>No password. We email you a secure link.</small>
-          <Link className="demo-link" to="/">Explore the demo instead</Link>
+          <small>No password. We email you a link.</small>
+          <button className="demo-link" onClick={demo}>Explore the demo instead</button>
         </>
       ) : (
         <div className="login-sent">
           <span className="success-mark"><Icon name="message" size={28} /></span>
           <h1>Check your email</h1>
           <p>
-            Your development login link is in the API console for{" "}
-            <strong>{email}</strong>.
+            We sent a login link to <strong>{email}</strong>. It works for 15 minutes.
           </p>
-          <Button onClick={() => setSent(false)} kind="quiet">Use a different email</Button>
-          <Link className="demo-link" to="/">Continue to demo</Link>
+          {sent.devLink && (
+            <div className="dev-note">
+              <p>Local development: no email is sent.</p>
+              <a className="button button-primary" href={sent.devLink}>Open login link</a>
+            </div>
+          )}
+          <Button onClick={() => setSent(null)} kind="quiet">Use a different email</Button>
         </div>
       )}
     </main>

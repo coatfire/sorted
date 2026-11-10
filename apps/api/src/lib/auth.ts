@@ -49,7 +49,9 @@ export const requireAuth: MiddlewareHandler<{
 
 /** For /internal/* routes called by n8n. */
 export const requireInternalSecret: MiddlewareHandler = async (c, next) => {
-  if (c.req.header("X-Internal-Secret") !== env.internalSecret()) {
+  const secret = env.internalSecret();
+  // An unset secret must lock the routes, not match an empty header.
+  if (!secret || c.req.header("X-Internal-Secret") !== secret) {
     return c.json({ error: "Forbidden" }, 403);
   }
   await next();

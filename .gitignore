@@ -6,3 +6,4 @@ dist/
 *.local
 *.tsbuildinfo
 .DS_Store
+.data/

@@ -63,18 +63,24 @@ paymentRoutes.post("/:id/link", async (c) => {
   const key = env.stripeKey();
   if (!key) return c.json({ error: "Stripe is not configured" }, 503);
   const stripe = new Stripe(key);
-  const price = await stripe.prices.create({
-    currency: "eur",
-    unit_amount: row.payment.amountCents,
-    product_data: {
-      name: `${row.booking.service} — ${row.payment.kind}`,
-    },
-  });
-  const link = await stripe.paymentLinks.create({
-    line_items: [{ price: price.id, quantity: 1 }],
-    metadata: { payment_id: row.payment.id },
-    payment_intent_data: { metadata: { payment_id: row.payment.id } },
-  });
+  let link: Stripe.PaymentLink;
+  try {
+    const price = await stripe.prices.create({
+      currency: "eur",
+      unit_amount: row.payment.amountCents,
+      product_data: {
+        name: `${row.booking.service} — ${row.payment.kind}`,
+      },
+    });
+    link = await stripe.paymentLinks.create({
+      line_items: [{ price: price.id, quantity: 1 }],
+      metadata: { payment_id: row.payment.id },
+      payment_intent_data: { metadata: { payment_id: row.payment.id } },
+    });
+  } catch (err) {
+    console.error("[payments] Stripe link creation failed", err);
+    return c.json({ error: "Stripe couldn't create the payment link" }, 502);
+  }
   const [payment] = await db
     .update(schema.payments)
     .set({

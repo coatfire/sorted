@@ -155,7 +155,7 @@ export const expenses = pgTable(
     amountCents: integer("amount_cents"),
     category: expenseCategory("category"),
     expenseDate: timestamp("expense_date", { withTimezone: true }),
-    receiptKey: text("receipt_key"), // S3 object key
+    receiptKey: text("receipt_key"), // receipts.id today; S3 object key later
     ocrRaw: jsonb("ocr_raw"), // full OCR response for audit/debug
     status: expenseStatus("status").notNull().default("needs_review"),
     createdAt: timestamp("created_at", { withTimezone: true })
@@ -163,6 +163,27 @@ export const expenses = pgTable(
       .defaultNow(),
   },
   (t) => [index("expenses_user_date_idx").on(t.userId, t.expenseDate)],
+);
+
+/**
+ * Receipt photos. MVP stores the (client-downscaled) image in Postgres so
+ * there is no bucket to provision; swap for S3 when volume justifies it —
+ * expenses.receipt_key is the only pointer.
+ */
+export const receipts = pgTable(
+  "receipts",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id),
+    contentType: text("content_type").notNull(),
+    dataBase64: text("data_base64").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [index("receipts_user_idx").on(t.userId)],
 );
 
 export const messageLog = pgTable(
