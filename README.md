@@ -75,6 +75,8 @@ offers what is actually connected.
   API never talks to Meta or Google directly; it emits events. See
   `automation/n8n/README.md`.
 - `docs/IMPLEMENTATION_PLAN.md` — the milestone list and what's left.
+- `docs/HANDOVER.md` — ordered, step-by-step tasks to take this from MVP to
+  a deployed app. Start here if you are picking the project up.
 
 ## Stack
 
