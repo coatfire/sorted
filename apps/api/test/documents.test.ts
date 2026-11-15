@@ -21,7 +21,7 @@ async function fixture() {
 }
 
 describe("booking document numbering", () => {
-  it.each(["invoice", "receipt", "quote"] as const)("locks only the client before the booking when issuing or reopening a %s", async kind => {
+  it.each(["invoice", "receipt", "quote"] as const)("locks user, client, then booking when issuing or reopening a %s", async kind => {
     const f = await fixture();
     const booking = await f.booking();
     const [payment] = await db.insert(schema.payments).values({ userId: f.user.id, bookingId: booking.id, kind: "deposit", status: "paid", amountCents: 2000 }).returning();
@@ -31,12 +31,14 @@ describe("booking document numbering", () => {
       locks.mockClear();
       expect((await f.request(booking.id, { kind, payment_id: payment.id })).status).toBe(200);
       const queries = locks.mock.contexts.map(query => (query as { toSQL(): { sql: string; params: unknown[] } }).toSQL());
-      expect(queries[0].sql).toMatch(/from "clients" inner join "bookings"/);
-      expect(queries[0].sql).toMatch(/for share of "clients"$/);
-      expect(queries[0].params).toEqual([booking.id, f.user.id, f.user.id]);
-      expect(queries[1].sql).toMatch(/from "bookings"/);
-      expect(queries[1].sql).toMatch(/for update$/);
-      expect(queries[1].params).toEqual([booking.id, f.user.id, f.client.id]);
+      expect(queries[0].sql).toMatch(/from "users".*for share$/);
+      expect(queries[0].params).toEqual([f.user.id]);
+      expect(queries[1].sql).toMatch(/from "clients" inner join "bookings"/);
+      expect(queries[1].sql).toMatch(/for share of "clients"$/);
+      expect(queries[1].params).toEqual([booking.id, f.user.id, f.user.id]);
+      expect(queries[2].sql).toMatch(/from "bookings"/);
+      expect(queries[2].sql).toMatch(/for update$/);
+      expect(queries[2].params).toEqual([booking.id, f.user.id, f.client.id]);
     }
   });
 
@@ -93,10 +95,13 @@ describe("booking document numbering", () => {
     expect(numbers.sort()).toEqual([2, 3]);
   });
 
-  it.each([false, true])("retries a rolled-back unique conflict (nested: %s)", async (nested) => {
+  it.each([
+    { code: "23505", nested: false }, { code: "23505", nested: true },
+    { code: "40P01", nested: false }, { code: "40P01", nested: true },
+  ])("retries a rolled-back $code conflict (nested: $nested)", async ({ code, nested }) => {
     const f = await fixture();
     const b = await f.booking();
-    const conflict = nested ? new Error("Unique conflict", { cause: { code: "23505" } }) : Object.assign(new Error("Unique conflict"), { code: "23505" });
+    const conflict = nested ? new Error("Transaction conflict", { cause: { code } }) : Object.assign(new Error("Transaction conflict"), { code });
     const transaction = vi.spyOn(db, "transaction").mockRejectedValueOnce(conflict);
     const response = await f.request(b.id, { kind: "invoice" });
     expect(response.status).toBe(200);
@@ -104,11 +109,11 @@ describe("booking document numbering", () => {
     expect(transaction).toHaveBeenCalledTimes(2);
   });
 
-  it("bounds conflict retries and does not retry unrelated database failures", async () => {
+  it.each(["23505", "40P01"])("bounds %s retries and does not retry unrelated database failures", async code => {
     const f = await fixture();
     const b = await f.booking();
     vi.spyOn(console, "error").mockImplementation(() => {});
-    const transaction = vi.spyOn(db, "transaction").mockRejectedValue(Object.assign(new Error("Unique conflict"), { code: "23505" }));
+    const transaction = vi.spyOn(db, "transaction").mockRejectedValue(Object.assign(new Error("Transaction conflict"), { code }));
     expect((await f.request(b.id, { kind: "invoice" })).status).toBe(500);
     expect(transaction).toHaveBeenCalledTimes(3);
     transaction.mockClear().mockRejectedValue(new Error("Database unavailable"));

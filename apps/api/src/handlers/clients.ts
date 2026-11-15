@@ -3,6 +3,7 @@ import { and, desc, eq, ilike, inArray, isNotNull, or, sql } from "drizzle-orm";
 import { CreateClientInput, UpdateClientInput } from "@sorted/core";
 import { db, schema } from "../db";
 import { deactivatePaymentLink } from "../lib/stripe";
+import { userTransaction } from "../lib/transaction";
 import type { AppEnv } from "../app";
 
 export const clientRoutes = new Hono<AppEnv>();
@@ -98,18 +99,18 @@ clientRoutes.delete("/:id", async (c) => {
   }
   const userId = c.get("userId");
   const id = c.req.param("id");
-  const result = await db.transaction(async (tx) => {
+  const result = await userTransaction(userId, async (tx) => {
     const clientScope = and(eq(schema.clients.id, id), eq(schema.clients.userId, userId));
     const [client] = await tx.select().from(schema.clients).where(clientScope).for("update");
     if (!client) return c.json({ error: "Client not found" }, 404);
     const bookingScope = and(eq(schema.bookings.clientId, id), eq(schema.bookings.userId, userId));
-    const bookings = await tx.select().from(schema.bookings).where(bookingScope).for("update");
+    const bookings = await tx.select().from(schema.bookings).where(bookingScope).orderBy(schema.bookings.id).for("update");
     if (bookings.some((booking) => booking.status === "enquiry" || booking.status === "confirmed")) {
       return c.json({ error: "Cancel or complete their open bookings first." }, 409);
     }
     const ids = bookings.map((booking) => booking.id);
     const paymentScope = and(eq(schema.payments.userId, userId), inArray(schema.payments.bookingId, ids));
-    const payments = await tx.select().from(schema.payments).where(paymentScope).for("update");
+    const payments = await tx.select().from(schema.payments).where(paymentScope).orderBy(schema.payments.id).for("update");
     await tx.delete(schema.messageLog).where(and(
       eq(schema.messageLog.userId, userId),
       or(eq(schema.messageLog.clientId, id), inArray(schema.messageLog.bookingId, ids)),
@@ -119,6 +120,9 @@ clientRoutes.delete("/:id", async (c) => {
       await tx.update(schema.clients)
         .set(anonymised).where(clientScope);
       await tx.update(schema.bookings).set({ notes: null, location: null }).where(bookingScope);
+      await tx.select({ id: schema.invoices.id }).from(schema.invoices).where(and(
+        eq(schema.invoices.userId, userId), inArray(schema.invoices.bookingId, ids), isNotNull(schema.invoices.documentSnapshot),
+      )).orderBy(schema.invoices.id).for("update");
       await tx.update(schema.invoices).set({
         documentSnapshot: sql`jsonb_set(${schema.invoices.documentSnapshot}, '{data,client}', ${JSON.stringify({ name: anonymised.name, email: anonymised.email, phone: anonymised.phone })}::jsonb)`,
       }).where(and(
