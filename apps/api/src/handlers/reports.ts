@@ -148,13 +148,14 @@ reportRoutes.get("/export", async (c) => {
     ]),
     [],
     ["EXPENSES"],
-    ["date", "merchant", "category", "amount_eur", "has_receipt"],
+    ["date", "merchant", "category", "amount_eur", "has_receipt", "vat_eur"],
     ...expenses.map((row) => [
       row.expenseDate?.toISOString().slice(0, 10),
       row.merchant,
       row.category,
       ((row.amountCents ?? 0) / 100).toFixed(2),
       row.receiptKey ? "yes" : "no",
+      row.vatCents === null ? "" : (row.vatCents / 100).toFixed(2),
     ]),
   ];
   c.header("Content-Type", "text/csv; charset=utf-8");

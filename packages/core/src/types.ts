@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { InvoiceLogo, InvoiceAccent, IrishVatNumber } from "./documents";
+import { VatRateBp, IncomeTaxRateBp, VatPeriodMonths } from "./tax";
 import { normaliseIban, normaliseBic, validIban, validBic } from "./bank";
 
 // ─── Enums ────────────────────────────────────────────────────────────────
@@ -125,6 +126,10 @@ export const UpdateBookingInput = z.object({
 export type UpdateBookingInput = z.infer<typeof UpdateBookingInput>;
 
 export const UpdateUserInput = z.object({
+  vat_registered: z.boolean().optional(),
+  vat_rate_bp: VatRateBp.nullable().optional(),
+  vat_period_months: VatPeriodMonths.optional(),
+  income_tax_rate_bp: IncomeTaxRateBp.nullable().optional(),
   invoice_logo: InvoiceLogo.nullable().optional(),
   invoice_accent: InvoiceAccent.nullable().optional(),
   invoice_footer: z.string().max(1000).nullable().optional(),
@@ -160,7 +165,12 @@ const expenseFields = {
   amount_cents: z.number().int().positive(),
   category: ExpenseCategory,
   expense_date: z.coerce.date(),
+  vat_cents: z.number().int().nonnegative().nullable().optional(),
 };
+
+const expenseVatWithinAmount = (value: { vat_cents?: number | null; amount_cents?: number }) =>
+  value.vat_cents == null || (value.amount_cents !== undefined && value.vat_cents <= value.amount_cents);
+const expenseVatError = { message: "VAT paid cannot exceed the expense amount.", path: ["vat_cents"] };
 
 /**
  * Create an expense. With `confirmed: true` (the person typed/checked every
@@ -176,21 +186,26 @@ export const CreateExpenseInput = z
     category: expenseFields.category.optional(),
     expense_date: expenseFields.expense_date.optional(),
     confirmed: z.boolean().default(false),
+    vat_cents: expenseFields.vat_cents,
   })
   .refine(
     (v) =>
       !v.confirmed ||
       (v.merchant && v.amount_cents && v.category && v.expense_date),
     { message: "A confirmed expense needs merchant, amount, category and date" },
-  );
+  ).refine(expenseVatWithinAmount, expenseVatError);
 
-export const ConfirmExpenseInput = z.object(expenseFields);
+export const ConfirmExpenseInput = z.object(expenseFields).refine(expenseVatWithinAmount, expenseVatError);
 
 // ─── Response types ───────────────────────────────────────────────────────
 // What the API actually returns: DB rows serialised as JSON (camelCase keys,
 // ISO timestamp strings). Request bodies above are snake_case.
 
 export interface User {
+  vatRegistered: boolean;
+  vatRateBp: number | null;
+  vatPeriodMonths: number;
+  incomeTaxRateBp: number | null;
   invoiceLogo: string | null;
   invoiceAccent: string | null;
   invoiceFooter: string | null;
@@ -249,6 +264,7 @@ export interface Payment {
 }
 
 export interface Expense {
+  vatCents: number | null;
   id: string;
   merchant: string | null;
   amountCents: number | null;

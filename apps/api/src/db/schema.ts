@@ -8,6 +8,7 @@ import {
   index,
   uniqueIndex,
   pgEnum,
+  boolean,
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import type { ReceiptSnapshot } from "@sorted/core";
@@ -64,6 +65,10 @@ export const messageStatus = pgEnum("message_status", [
 ]);
 
 export const users = pgTable("users", {
+  vatRegistered: boolean("vat_registered").notNull().default(false),
+  vatRateBp: integer("vat_rate_bp"),
+  vatPeriodMonths: integer("vat_period_months").notNull().default(2),
+  incomeTaxRateBp: integer("income_tax_rate_bp"),
   id: uuid("id").primaryKey().defaultRandom(),
   email: text("email").notNull().unique(),
   passwordHash: text("password_hash"),
@@ -187,6 +192,7 @@ export const expenses = pgTable(
       .references(() => users.id),
     merchant: text("merchant"),
     amountCents: integer("amount_cents"),
+    vatCents: integer("vat_cents"),
     category: expenseCategory("category"),
     expenseDate: timestamp("expense_date", { withTimezone: true }),
     receiptKey: text("receipt_key"), // receipts.id today; S3 object key later

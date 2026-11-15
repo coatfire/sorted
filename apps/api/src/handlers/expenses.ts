@@ -60,6 +60,7 @@ expenseRoutes.post("/", async (c) => {
       receiptKey: input.receipt_key,
       merchant: input.merchant,
       amountCents: input.amount_cents,
+      vatCents: input.vat_cents ?? null,
       category: input.category,
       expenseDate: input.expense_date,
       status: input.confirmed ? "confirmed" : "needs_review",
@@ -132,6 +133,7 @@ expenseRoutes.patch("/:id", async (c) => {
     .set({
       merchant: input.merchant,
       amountCents: input.amount_cents,
+      vatCents: input.vat_cents ?? null,
       category: input.category,
       expenseDate: input.expense_date,
       status: "confirmed",

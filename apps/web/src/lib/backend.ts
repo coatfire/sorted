@@ -37,6 +37,7 @@ export interface BookingDraft {
 }
 
 export interface ExpenseDraft {
+  vatCents: number | null;
   merchant: string;
   amountCents: number;
   category: ExpenseCategory;
@@ -88,6 +89,10 @@ export interface Backend {
     invoiceAccent?: string | null;
     invoiceFooter?: string | null;
     vatNumber?: string | null;
+    vatRegistered?: boolean;
+    vatRateBp?: number | null;
+    vatPeriodMonths?: number;
+    incomeTaxRateBp?: number | null;
   }): Promise<void>;
   exportCsv(year: number): Promise<Blob>;
 }

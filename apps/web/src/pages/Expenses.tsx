@@ -10,12 +10,13 @@ import { useValidation } from "../lib/useValidation";
 const blank = () => ({
   merchant: "",
   amount: "",
+  vat: "",
   date: toDateInput(new Date()),
   category: "materials" as ExpenseCategory,
 });
 
 export function Expenses() {
-  const { expenses } = useData();
+  const { expenses, user } = useData();
   const { backend, toast } = useStore();
   const { busy, run } = useAction();
   const fileInput = useRef<HTMLInputElement>(null);
@@ -25,7 +26,8 @@ export function Expenses() {
   const [photo, setPhoto] = useState<{ blob?: Blob; url: string } | null>(null);
   const [form, setForm] = useState(blank);
   const validation = useValidation({
-    amount: () => !parseEuros(form.amount) ? "Add the amount, like 24.60." : undefined,
+    amount: () => !parseEuros(form.amount) ? "Add the amount, like 24.60." : !user.vatRegistered && (parseEuros(form.vat) ?? 0) > parseEuros(form.amount)! ? "The amount cannot be less than the saved VAT paid. Update VAT in Settings to edit it." : undefined,
+    vat: () => user.vatRegistered && form.vat.trim() && (parseEuros(form.vat) === null || parseEuros(form.vat)! > (parseEuros(form.amount) ?? 0)) ? "VAT paid cannot exceed the expense amount." : undefined,
   });
   const [filter, setFilter] = useState<ExpenseCategory | "all">("all");
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -90,6 +92,7 @@ export function Expenses() {
     setForm({
       merchant: expense.merchant ?? "",
       amount: centsToInput(expense.amountCents ?? 0),
+      vat: expense.vatCents == null ? "" : centsToInput(expense.vatCents),
       date: toDateInput(new Date(expense.expenseDate!)),
       category: expense.category ?? "other",
     });
@@ -109,6 +112,7 @@ export function Expenses() {
     const draft = {
       merchant: form.merchant.trim(),
       amountCents,
+      vatCents: form.vat.trim() ? parseEuros(form.vat) : null,
       category: form.category,
       expenseDate: new Date(`${form.date}T12:00:00`).toISOString(),
       receipt: photo?.blob,
@@ -190,6 +194,9 @@ export function Expenses() {
                 />
               </Field>
             </div>
+            {user.vatRegistered && <Field label="VAT paid (reclaimable)" helper="Optional. Enter only the VAT you can reclaim." {...validation.field("vat")}>
+              <div className="money-input"><span>€</span><input name="vat" inputMode="decimal" value={form.vat} onChange={(event) => setForm({ ...form, vat: event.target.value })} placeholder="0.00" /></div>
+            </Field>}
             <span className="field-label category-label" id="category-label">Category</span>
             <div className="category-row" role="radiogroup" aria-labelledby="category-label">
               {CATEGORIES.map((category) => (

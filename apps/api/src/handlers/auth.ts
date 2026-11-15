@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { and, count, eq, gte, isNull } from "drizzle-orm";
 import { z } from "zod";
-import { UpdateUserInput } from "@sorted/core";
+import { UpdateUserInput, TaxSettings } from "@sorted/core";
 import { env } from "../lib/env";
 import { db, schema } from "../db";
 import { issueJwt, issueEmailToken, requireAuth, verifyEmailToken } from "../lib/auth";
@@ -142,14 +142,26 @@ authRoutes.patch("/me", requireAuth, async (c) => {
   const parsed = UpdateUserInput.safeParse(await c.req.json());
   if (!parsed.success) return c.json({ error: parsed.error.flatten() }, 400);
   const input = parsed.data;
-  const [user] = await db.update(schema.users).set({
-    name: input.name, businessName: input.business_name, phone: input.phone, reviewLink: input.review_link,
-    address: input.address, iban: input.iban, bic: input.bic,
-    bookingConfirmationTemplate: input.booking_confirmation_template,
-    paymentRequestTemplate: input.payment_request_template,
-    invoiceLogo: input.invoice_logo, invoiceAccent: input.invoice_accent,
-    invoiceFooter: input.invoice_footer, vatNumber: input.vat_number,
-  }).where(eq(schema.users.id, c.get("userId"))).returning();
-  if (!user) return c.json({ error: "Not found" }, 404);
-  return c.json(publicUser(user));
+  return db.transaction(async (tx) => {
+    const [current] = await tx.select().from(schema.users).where(eq(schema.users.id, c.get("userId"))).for("update");
+    if (!current) return c.json({ error: "Not found" }, 404);
+    const tax = TaxSettings.safeParse({
+      vatRegistered: input.vat_registered ?? current.vatRegistered,
+      vatRateBp: input.vat_rate_bp === undefined ? current.vatRateBp : input.vat_rate_bp,
+      vatPeriodMonths: input.vat_period_months ?? current.vatPeriodMonths,
+      incomeTaxRateBp: input.income_tax_rate_bp === undefined ? current.incomeTaxRateBp : input.income_tax_rate_bp,
+    });
+    if (!tax.success) return c.json({ error: tax.error.flatten() }, 400);
+    const [user] = await tx.update(schema.users).set({
+      ...tax.data,
+      name: input.name, businessName: input.business_name, phone: input.phone, reviewLink: input.review_link,
+      address: input.address, iban: input.iban, bic: input.bic,
+      bookingConfirmationTemplate: input.booking_confirmation_template,
+      paymentRequestTemplate: input.payment_request_template,
+      invoiceLogo: input.invoice_logo, invoiceAccent: input.invoice_accent,
+      invoiceFooter: input.invoice_footer, vatNumber: input.vat_number,
+    }).where(eq(schema.users.id, c.get("userId"))).returning();
+    if (!user) return c.json({ error: "Not found" }, 404);
+    return c.json(publicUser(user));
+  });
 });

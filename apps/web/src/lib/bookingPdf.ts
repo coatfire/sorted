@@ -90,7 +90,11 @@ export async function createBookingPdf(data: BookingDocumentData): Promise<Blob>
   rule();
   row(data.lineItem.description, data.lineItem.amount);
   y -= 12;
-  row(data.kind === "receipt" ? "Total received" : "Total", data.total, 14);
+  if (data.vat) {
+    row("Net", data.vat.net);
+    row(`VAT at ${data.vat.rate}`, data.vat.amount);
+  }
+  row(data.vat ? "Total including VAT" : data.kind === "receipt" ? "Total received" : "Total", data.total, 14);
   y -= 12;
   if (data.kind === "invoice") {
     row("Paid to date", data.paidToDate);

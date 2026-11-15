@@ -4,6 +4,7 @@ import {
   normalisePhone, normaliseIban, normaliseBic, validIban, validBic,
   DEFAULT_BOOKING_CONFIRMATION_TEMPLATE, DEFAULT_PAYMENT_REQUEST_TEMPLATE, MESSAGE_PLACEHOLDERS,
   DEFAULT_INVOICE_ACCENT, InvoiceAccent, IrishVatNumber,
+  percentToBasisPoints,
 } from "@sorted/core";
 import { BackButton, Button, Card, Field, Icon, PageHeader } from "../components";
 import { useAction, useData, useSession, useStore } from "../lib/store";
@@ -32,11 +33,19 @@ export function Settings({ welcome = false }: { welcome?: boolean }) {
     invoiceAccent: user.invoiceAccent ?? DEFAULT_INVOICE_ACCENT,
     invoiceFooter: user.invoiceFooter ?? "",
     vatNumber: user.vatNumber ?? "",
+    vatRegistered: user.vatRegistered ?? false,
+    vatRateChoice: user.vatRateBp == null ? "" : [2300, 1350, 900].includes(user.vatRateBp) ? String(user.vatRateBp) : "custom",
+    vatCustomPercent: user.vatRateBp == null ? "" : String(user.vatRateBp / 100),
+    vatPeriodMonths: String(user.vatPeriodMonths ?? 2),
+    incomeTaxPercent: user.incomeTaxRateBp == null ? "" : String(user.incomeTaxRateBp / 100),
   });
   const set = (field: keyof typeof form) => (event: { target: { value: string } }) => {
     setForm({ ...form, [field]: event.target.value });
   };
   const validation = useValidation({
+    vatRateChoice: () => form.vatRegistered && !form.vatRateChoice ? "Enter your VAT rate." : undefined,
+    vatCustomPercent: () => form.vatRegistered && form.vatRateChoice === "custom" && percentToBasisPoints(form.vatCustomPercent, 3000) === null ? "Enter a rate from 0 to 30%, with up to two decimal places." : undefined,
+    incomeTaxPercent: () => form.incomeTaxPercent.trim() && percentToBasisPoints(form.incomeTaxPercent) === null ? "Enter a rate from 0 to 100%, with up to two decimal places." : undefined,
     invoiceAccent: () => !InvoiceAccent.safeParse(form.invoiceAccent).success ? "Enter a hex colour, like #14532D." : undefined,
     vatNumber: () => form.vatNumber.trim() && !IrishVatNumber.safeParse(form.vatNumber).success ? "Enter a valid Irish VAT number." : undefined,
     phone: () => form.phone.trim() && !normalisePhone(form.phone)
@@ -71,6 +80,10 @@ export function Settings({ welcome = false }: { welcome?: boolean }) {
             invoiceAccent: InvoiceAccent.parse(form.invoiceAccent) === DEFAULT_INVOICE_ACCENT ? null : InvoiceAccent.parse(form.invoiceAccent),
             invoiceFooter: form.invoiceFooter.trim() || null,
             vatNumber: form.vatNumber.trim() ? IrishVatNumber.parse(form.vatNumber) : null,
+            vatRegistered: form.vatRegistered,
+            vatRateBp: form.vatRateChoice === "custom" ? percentToBasisPoints(form.vatCustomPercent, 3000) : form.vatRateChoice ? Number(form.vatRateChoice) : null,
+            vatPeriodMonths: Number(form.vatPeriodMonths),
+            incomeTaxRateBp: form.incomeTaxPercent.trim() ? percentToBasisPoints(form.incomeTaxPercent) : null,
           } : {}),
         }),
       "Settings saved",
@@ -115,6 +128,37 @@ export function Settings({ welcome = false }: { welcome?: boolean }) {
           </Field>}
         </Card>
         {!welcome && <section className="settings-section">
+          <p className="eyebrow">VAT &amp; tax</p>
+          <Card className="form-card">
+            <Field label="VAT registered" helper="Your prices are treated as including VAT.">
+              <select name="vatRegistered" value={form.vatRegistered ? "yes" : "no"} onChange={(event) => setForm({ ...form, vatRegistered: event.target.value === "yes" })}>
+                <option value="no">Not VAT registered</option><option value="yes">VAT registered</option>
+              </select>
+            </Field>
+            {form.vatRegistered && <>
+              <Field label="VAT rate" {...validation.field("vatRateChoice")}>
+                <select name="vatRateChoice" value={form.vatRateChoice} onChange={set("vatRateChoice")}>
+                  <option value="">Choose a rate</option><option value="2300">23%</option><option value="1350">13.5%</option><option value="900">9%</option><option value="custom">Custom rate</option>
+                </select>
+              </Field>
+              {form.vatRateChoice === "custom" && <Field label="Custom VAT rate (%)" {...validation.field("vatCustomPercent")}>
+                <input name="vatCustomPercent" inputMode="decimal" value={form.vatCustomPercent} onChange={set("vatCustomPercent")} placeholder="e.g. 23" />
+              </Field>}
+              <Field label="VAT period">
+                <select name="vatPeriodMonths" value={form.vatPeriodMonths} onChange={set("vatPeriodMonths")}>
+                  <option value="2">Every 2 months (Jan–Feb, Mar–Apr…)</option><option value="4">Every 4 months (Jan–Apr, May–Aug…)</option><option value="6">Every 6 months (Jan–Jun, Jul–Dec)</option><option value="12">Yearly (Jan–Dec)</option>
+                </select>
+              </Field>
+            </>}
+            <Field label="VAT number (optional)" {...validation.field("vatNumber")}>
+              <input name="vatNumber" value={form.vatNumber} onChange={set("vatNumber")} placeholder="IE1234567AB" autoCapitalize="characters" />
+            </Field>
+            <Field label="Income tax rate (%)" helper="e.g. 20% or 40% — the rate you expect on your profit." {...validation.field("incomeTaxPercent")}>
+              <input name="incomeTaxPercent" inputMode="decimal" value={form.incomeTaxPercent} onChange={set("incomeTaxPercent")} placeholder="e.g. 20" />
+            </Field>
+          </Card>
+        </section>}
+        {!welcome && <section className="settings-section">
           <p className="eyebrow">Invoices &amp; receipts</p>
           <Card className="form-card">
             <Field label="Logo" helper="PNG or JPEG. Resized to 400px; under 300KB after compression." error={logoError}>
@@ -138,9 +182,6 @@ export function Settings({ welcome = false }: { welcome?: boolean }) {
             </Field>
             <Field label="Footer text">
               <textarea name="invoiceFooter" rows={3} maxLength={1000} value={form.invoiceFooter} onChange={set("invoiceFooter")} />
-            </Field>
-            <Field label="VAT number (optional)" {...validation.field("vatNumber")}>
-              <input name="vatNumber" value={form.vatNumber} onChange={set("vatNumber")} placeholder="IE1234567AB" autoCapitalize="characters" />
             </Field>
           </Card>
         </section>}
