@@ -2,6 +2,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { backUpToDrive, prepareDriveBackup } from "../../web/src/lib/driveBackup";
 import type { Backend } from "../../web/src/lib/backend";
+import type { Snapshot } from "../../web/src/lib/backend";
+import { patchSnapshotUser } from "../../web/src/lib/snapshot";
 
 afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); });
 
@@ -41,6 +43,19 @@ function fixture({ failUpload = false, closePopup = false, empty = false } = {})
 }
 
 describe("browser-driven Drive backup", () => {
+  it("patches the shared snapshot from the completion response without a reload", async () => {
+    const f = fixture();
+    const current = { user: { id: "user-1", driveBackedUpAt: null }, bookings: [] } as unknown as Snapshot;
+    const requestToken = await prepareDriveBackup("test-client");
+    const result = await backUpToDrive(requestToken(), f.backend, vi.fn());
+    const updated = patchSnapshotUser(current, "user-1", { driveBackedUpAt: result.driveBackedUpAt });
+    expect(updated?.user.driveBackedUpAt).toBe("2026-07-01T12:00:00Z");
+    expect(updated?.bookings).toBe(current.bookings);
+    expect(current.user.driveBackedUpAt).toBeNull();
+    expect(JSON.parse(JSON.stringify(updated)).user.driveBackedUpAt).toBe(result.driveBackedUpAt);
+    expect(patchSnapshotUser(null, "user-1", { driveBackedUpAt: result.driveBackedUpAt })).toBeNull();
+    expect(patchSnapshotUser(current, "another-user", { driveBackedUpAt: result.driveBackedUpAt })).toBe(current);
+  });
   it("preloads a cold GIS script and client without opening a popup, then requests synchronously on tap", async () => {
     const f = fixture();
     const script = { src: "", async: false, onload: () => {}, onerror: () => {}, remove: vi.fn() };
