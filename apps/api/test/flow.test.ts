@@ -77,6 +77,70 @@ describe("auth", () => {
     return token;
   }
 
+  it.each(["provider", "network", "missing key"])("fails safely in production when login email fails (%s)", async (failure) => {
+    const email = `email-failure-${crypto.randomUUID()}@example.com`;
+    const log = vi.spyOn(console, "log").mockImplementation(() => {});
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    const retainedToken = await linkToken(await requestLink(email));
+    const retainedRows = await db.select().from(schema.loginTokens).where(eq(schema.loginTokens.email, email));
+    log.mockClear();
+    vi.spyOn(env, "isLocal").mockReturnValue(false);
+    vi.spyOn(env, "resendKey").mockReturnValue(failure === "missing key" ? undefined : "re_test_placeholder");
+    let attemptedToken: string | undefined;
+    const send = vi.spyOn(globalThis, "fetch").mockImplementation(async (_input, init) => {
+      const body = JSON.parse(String(init?.body)) as { text: string };
+      attemptedToken = new URL(body.text.split("\n")[2]).searchParams.get("token") ?? undefined;
+      if (failure === "network") throw new Error(body.text);
+      return new Response(body.text, { status: 503 });
+    });
+    for (let attempt = 0; attempt < 4; attempt++) {
+      const response = await requestLink(email);
+      expect(response.status).toBe(502);
+      expect(await response.json()).toEqual({ error: "We couldn't send your login email. Try again in a minute." });
+      expect(await db.select().from(schema.loginTokens).where(eq(schema.loginTokens.email, email))).toEqual(retainedRows);
+    }
+    expect(log).not.toHaveBeenCalled();
+    const logs = [...log.mock.calls, ...error.mock.calls].flat().map(String).join("\n");
+    expect(logs).not.toContain("token=");
+    if (failure === "missing key") {
+      expect(send).not.toHaveBeenCalled();
+    } else {
+      expect(attemptedToken).toBeTruthy();
+      expect(logs).not.toContain(attemptedToken!);
+      expect((await verify(attemptedToken!)).status).toBe(401);
+    }
+    expect((await verify(retainedToken)).status).toBe(200);
+  });
+
+  it.each([false, true])("keeps local login links usable when email is unavailable (provider failure=%s)", async (providerFailure) => {
+    vi.spyOn(env, "isLocal").mockReturnValue(true);
+    vi.spyOn(env, "resendKey").mockReturnValue(providerFailure ? "re_test_placeholder" : undefined);
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("Email unavailable", { status: 503 }));
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const log = vi.spyOn(console, "log").mockImplementation(() => {});
+    const response = await requestLink(`local-email-${crypto.randomUUID()}@example.com`);
+    expect(response.status).toBe(200);
+    const { ok, dev_link } = await json<{ ok: boolean; dev_link: string }>(response);
+    expect(ok).toBe(true);
+    expect(log).toHaveBeenCalledWith(expect.stringContaining(dev_link));
+    const token = new URL(dev_link).searchParams.get("token");
+    expect(token).toBeTruthy();
+    expect((await verify(token!)).status).toBe(200);
+  });
+
+  it("returns success without a development link when production email succeeds", async () => {
+    vi.spyOn(env, "isLocal").mockReturnValue(false);
+    vi.spyOn(env, "resendKey").mockReturnValue("re_test_placeholder");
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("{}", { status: 200 }));
+    const log = vi.spyOn(console, "log").mockImplementation(() => {});
+    const email = `email-success-${crypto.randomUUID()}@example.com`;
+    const response = await requestLink(email);
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ ok: true });
+    expect(log).not.toHaveBeenCalled();
+    expect(await db.select().from(schema.loginTokens).where(eq(schema.loginTokens.email, email))).toHaveLength(1);
+  });
+
   it("allows a login link once and rejects reuse with the invalid-link error", async () => {
     const token = await linkToken(await requestLink("single-use@example.com"));
     const first = await verify(token);

@@ -27,11 +27,11 @@ async function sendLoginEmail(email: string, link: string): Promise<boolean> {
       text: `Tap to log in to Sorted:\n\n${link}\n\nThis link works for 15 minutes. If you didn't ask for it, ignore this email.`,
     }),
     signal: AbortSignal.timeout(5000),
-  }).catch((err) => {
-    console.error("[auth] email send failed", err);
+  }).catch(() => {
+    console.error("[auth] email send failed");
     return null;
   });
-  if (res && !res.ok) console.error("[auth] email send failed", res.status, await res.text());
+  if (res && !res.ok) console.error("[auth] email send failed", res.status);
   return Boolean(res?.ok);
 }
 
@@ -40,7 +40,7 @@ async function sendLoginEmail(email: string, link: string): Promise<boolean> {
  * Creates the user if new, then delivers a 15-minute login link:
  *  - RESEND_API_KEY set → emailed
  *  - local dev          → returned as `dev_link` so the login screen can open it
- *  - otherwise          → logged (so a deploy without email is still usable)
+ *  - otherwise          → 502; discard the undelivered login token
  */
 authRoutes.post("/magic-link", async (c) => {
   const parsed = z
@@ -72,7 +72,16 @@ authRoutes.post("/magic-link", async (c) => {
   const token = await issueMagicLinkToken(user.id, loginToken.id);
   const link = `${env.appUrl()}/login?token=${token}`;
   const emailed = await sendLoginEmail(email, link);
-  if (!emailed) console.log(`\n🔑 Login link for ${email}: ${link}\n`);
+  if (!emailed) {
+    if (env.isLocal()) {
+      console.log(`\n🔑 Login link for ${email}: ${link}\n`);
+    } else {
+      await db.delete(schema.loginTokens).where(and(
+        eq(schema.loginTokens.id, loginToken.id), eq(schema.loginTokens.email, user.email),
+      ));
+      return c.json({ error: "We couldn't send your login email. Try again in a minute." }, 502);
+    }
+  }
 
   return c.json({
     ok: true,

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Navigate, useNavigate, useSearchParams } from "react-router-dom";
 import { Button, Icon } from "../components";
-import { isNetworkError, post } from "../lib/api";
+import { ApiError, isNetworkError, post } from "../lib/api";
 import { useSession } from "../lib/store";
 
 export function Login() {
@@ -46,11 +46,13 @@ export function Login() {
       setSent({ devLink: res.dev_link });
     } catch (caught) {
       setError(
-        isNetworkError(caught)
-          ? "Sorted couldn't reach its server. Check your connection and try again."
-          : caught instanceof Error
-            ? caught.message
-            : "Couldn't send the login link.",
+        caught instanceof ApiError
+          ? caught.message
+          : isNetworkError(caught)
+            ? "Sorted couldn't reach its server. Check your connection and try again."
+            : caught instanceof Error
+              ? caught.message
+              : "Couldn't send the login link.",
       );
     } finally {
       setLoading(false);
