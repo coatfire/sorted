@@ -6,6 +6,7 @@ import { blobToDataUrl } from "./image";
 const expenseBody = (draft: ExpenseDraft) => ({
   merchant: draft.merchant,
   amount_cents: draft.amountCents,
+  vat_cents: draft.vatCents,
   category: draft.category,
   expense_date: draft.expenseDate,
 });
@@ -122,6 +123,10 @@ export const apiBackend: Backend = {
       invoice_accent: changes.invoiceAccent,
       invoice_footer: changes.invoiceFooter,
       vat_number: changes.vatNumber,
+      vat_registered: changes.vatRegistered,
+      vat_rate_bp: changes.vatRateBp,
+      vat_period_months: changes.vatPeriodMonths,
+      income_tax_rate_bp: changes.incomeTaxRateBp,
     });
   },
 

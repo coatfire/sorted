@@ -4,6 +4,7 @@ import Stripe from "stripe";
 import { db, schema } from "../db";
 import { emitBookingEvent } from "../lib/events";
 import { env } from "../lib/env";
+import { effectivePaymentVatRate } from "../lib/tax";
 
 export const webhookRoutes = new Hono();
 
@@ -64,7 +65,7 @@ webhookRoutes.post("/stripe", async (c) => {
   }
   const [payment] = await db
     .update(schema.payments)
-    .set({ status: "paid", method: "stripe", paidAt: new Date() })
+    .set({ status: "paid", method: "stripe", paidAt: new Date(), vatRateBp: effectivePaymentVatRate(userId) })
     .where(and(
       eq(schema.payments.id, paymentId),
       eq(schema.payments.userId, userId),

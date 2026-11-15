@@ -53,13 +53,15 @@ bookingRoutes.post("/:id/documents", async (c) => {
         const [sequence] = await tx.select({ next: sql<number>`coalesce(max(${schema.invoices.number}), 0) + 1` })
           .from(schema.invoices).where(and(eq(schema.invoices.userId, userId), eq(schema.invoices.kind, kind)));
         const issuedAt = new Date();
+        const [taxSettings] = await tx.select({ vatRegistered: schema.users.vatRegistered, vatRateBp: schema.users.vatRateBp }).from(schema.users).where(eq(schema.users.id, userId));
         const receiptSnapshot = kind === "receipt" ? snapshotReceipt(
           { ...booking, startAt: booking.startAt.toISOString() },
           paidPayments.map((payment) => ({ ...payment, paidAt: payment.paidAt?.toISOString() ?? null, createdAt: payment.createdAt.toISOString() })),
-          paymentId!, issuedAt.toISOString(),
+          paymentId!, issuedAt.toISOString(), taxSettings,
         ) : null;
         const [document] = await tx.insert(schema.invoices).values({
           userId, bookingId, kind, number: Number(sequence.next), issuedAt,
+          vatRateBp: kind === "invoice" ? taxSettings.vatRegistered ? taxSettings.vatRateBp : 0 : null,
           paymentId: kind === "receipt" ? paymentId : null, receiptSnapshot,
         }).returning();
         return c.json(document);

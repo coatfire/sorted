@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
 import { Button, Card, EmptyState, Icon, MoneyText, PageHeader } from "../components";
 import { PaymentActions } from "../PaymentActions";
+import { TaxEstimateCard } from "../TaxEstimateCard";
 import { daysBetween, euros, kindLabel } from "../lib/format";
 import { download } from "../lib/image";
 import { useAction, useData, useStore } from "../lib/store";
@@ -84,6 +85,7 @@ export function Money() {
         )}
       </section>
 
+      <TaxEstimateCard />
       <section className="list-section">
         <div className="section-heading">
           <div><p className="eyebrow">This year</p><h2>{year} at a glance</h2></div>

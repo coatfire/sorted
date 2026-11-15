@@ -60,6 +60,7 @@ expenseRoutes.post("/", async (c) => {
       receiptKey: input.receipt_key,
       merchant: input.merchant,
       amountCents: input.amount_cents,
+      vatCents: input.vat_cents ?? null,
       category: input.category,
       expenseDate: input.expense_date,
       status: input.confirmed ? "confirmed" : "needs_review",
@@ -127,24 +128,22 @@ expenseRoutes.patch("/:id", async (c) => {
   const parsed = ConfirmExpenseInput.safeParse(await c.req.json());
   if (!parsed.success) return c.json({ error: parsed.error.flatten() }, 400);
   const input = parsed.data;
-  const [expense] = await db
-    .update(schema.expenses)
-    .set({
+  return db.transaction(async (tx) => {
+    const scope = and(eq(schema.expenses.id, c.req.param("id")), eq(schema.expenses.userId, c.get("userId")));
+    const [current] = await tx.select().from(schema.expenses).where(scope).for("update");
+    if (!current) return c.json({ error: "Expense not found" }, 404);
+    const resulting = ConfirmExpenseInput.safeParse({ ...input, vat_cents: input.vat_cents === undefined ? current.vatCents : input.vat_cents });
+    if (!resulting.success) return c.json({ error: resulting.error.flatten() }, 400);
+    const [expense] = await tx.update(schema.expenses).set({
       merchant: input.merchant,
       amountCents: input.amount_cents,
+      vatCents: input.vat_cents,
       category: input.category,
       expenseDate: input.expense_date,
       status: "confirmed",
-    })
-    .where(
-      and(
-        eq(schema.expenses.id, c.req.param("id")),
-        eq(schema.expenses.userId, c.get("userId")),
-      ),
-    )
-    .returning();
-  if (!expense) return c.json({ error: "Expense not found" }, 404);
-  return c.json(expense);
+    }).where(scope).returning();
+    return c.json(expense);
+  });
 });
 
 expenseRoutes.delete("/:id", async (c) => {

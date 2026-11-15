@@ -6,6 +6,7 @@ import {
 } from "@sorted/core";
 
 const user: User = {
+  vatRegistered: false, vatRateBp: null, vatPeriodMonths: 2, incomeTaxRateBp: null,
   id: "user", email: "studio@example.com", name: "Shane", businessName: "Studio by Shane", phone: "+353871234567",
   emailVerifiedAt: null, address: "Main Street\nDublin", iban: "IE29AIBK93115212345678", bic: "AIBKIE2D",
   invoiceLogo: null, invoiceAccent: null, invoiceFooter: "Thank you!\nSee you soon.", vatNumber: "IE1234567AB",
@@ -16,10 +17,40 @@ const booking: Booking = {
   id: "booking", clientId: client.id, service: "Bridal makeup", startAt: "2026-07-01T23:30:00Z", endAt: null,
   priceCents: 12050, depositCents: 2000, status: "confirmed", location: null, notes: null, gcalEventId: null, completedAt: null, createdAt: user.createdAt,
 };
-const document: BookingDocument = { id: "document", bookingId: booking.id, kind: "invoice", number: 1, issuedAt: "2026-07-02T12:00:00Z", paymentId: null, receiptSnapshot: null };
-const paid: Payment = { id: "paid", bookingId: booking.id, kind: "deposit", status: "paid", amountCents: 2000, paidAt: "2026-07-01T12:00:00Z", method: "bank_transfer", linkUrl: null, createdAt: user.createdAt };
+const document: BookingDocument = { id: "document", bookingId: booking.id, kind: "invoice", number: 1, issuedAt: "2026-07-02T12:00:00Z", paymentId: null, receiptSnapshot: null, vatRateBp: null };
+const paid: Payment = { id: "paid", bookingId: booking.id, kind: "deposit", status: "paid", amountCents: 2000, paidAt: "2026-07-01T12:00:00Z", method: "bank_transfer", linkUrl: null, createdAt: user.createdAt, vatRateBp: null };
 
 describe("document data", () => {
+  it("prefers a payment's captured VAT rate for receipts, including zero before registration", () => {
+    const registered = { ...user, vatRegistered: true, vatRateBp: 2300 };
+    expect(snapshotReceipt(booking, [{ ...paid, vatRateBp: 900 }], paid.id, document.issuedAt, registered).vatRateBp).toBe(900);
+    expect(snapshotReceipt(booking, [{ ...paid, vatRateBp: 0 }], paid.id, document.issuedAt, registered).vatRateBp).toBe(0);
+    expect(snapshotReceipt(booking, [paid], paid.id, document.issuedAt, registered).vatRateBp).toBe(2300);
+  });
+  it("keeps issued invoice VAT independent of current settings and falls back for legacy invoices", () => {
+    const issued = { ...document, vatRateBp: 2300 };
+    const original = assembleBookingDocument({ ...user, vatRegistered: true, vatRateBp: 2300 }, booking, client, [], issued);
+    expect(assembleBookingDocument({ ...user, vatRegistered: true, vatRateBp: 900 }, booking, client, [], issued)).toEqual(original);
+    expect(assembleBookingDocument(user, booking, client, [], issued)).toEqual(original);
+    expect(assembleBookingDocument({ ...user, vatRegistered: true, vatRateBp: 900 }, booking, client, [], document).vat?.rate).toBe("9%");
+    expect(assembleBookingDocument({ ...user, vatRegistered: true, vatRateBp: 2300 }, booking, client, [], { ...document, vatRateBp: 0 }).vat)
+      .toMatchObject({ rate: "0%", amount: "€0.00", total: "€120.50" });
+  });
+  it("shows inclusive VAT on invoices and freezes receipt VAT even when registration or rates change", () => {
+    const registered = { ...user, vatRegistered: true, vatRateBp: 2300 };
+    expect(assembleBookingDocument(registered, booking, client, [paid], document).vat)
+      .toEqual({ rate: "23%", net: "€97.97", amount: "€22.53", total: "€120.50" });
+    const snapshot = snapshotReceipt(booking, [paid], paid.id, document.issuedAt, registered);
+    const receipt: BookingDocument = { ...document, kind: "receipt", paymentId: paid.id, receiptSnapshot: snapshot };
+    const before = assembleBookingDocument(registered, booking, client, [paid], receipt);
+    expect(before.vat).toEqual({ rate: "23%", net: "€16.26", amount: "€3.74", total: "€20.00" });
+    expect(assembleBookingDocument({ ...user, vatRateBp: 900 }, booking, client, [paid], receipt)).toEqual(before);
+    expect(assembleBookingDocument(user, booking, client, [paid], document).vat).toBeNull();
+    const { vatRateBp: _legacy, ...legacy } = snapshot;
+    expect(assembleBookingDocument(registered, booking, client, [paid], { ...receipt, receiptSnapshot: legacy }).vat).toBeNull();
+    expect(assembleBookingDocument({ ...registered, vatRateBp: 0 }, booking, client, [paid], document).vat)
+      .toEqual({ rate: "0%", net: "€120.50", amount: "€0.00", total: "€120.50" });
+  });
   it("assembles an invoice with Ireland dates, exact cents, contact and bank details", () => {
     const data = assembleBookingDocument(user, booking, client, [paid, { ...paid, id: "due", status: "pending" }, { ...paid, bookingId: "other" }], document);
     expect(data).toMatchObject({ number: "INV-0001", issuedDate: "02 Jul 2026", bookingDate: "02 Jul 2026", total: "€120.50", paidToDate: "€20.00", balanceDue: "€100.50", iban: user.iban, bic: user.bic, accent: "#14532D" });

@@ -5,7 +5,7 @@
  * payment links are simulated — nothing leaves the browser.
  */
 import type { Client, Expense, MessageLogEntry, Payment, BookingDocument } from "@sorted/core";
-import { snapshotReceipt } from "@sorted/core";
+import { snapshotReceipt, TaxSettings, ConfirmExpenseInput } from "@sorted/core";
 import type { Backend, BookingRow, Snapshot } from "./backend";
 import { blobToDataUrl } from "./image";
 
@@ -69,6 +69,7 @@ function seed(): DemoData {
     bk: BookingRow, kind: Payment["kind"], amountCents: number,
     paid?: { method: Payment["method"]; at: string },
   ): Payment => ({
+    vatRateBp: paid ? 0 : null,
     id: id(), bookingId: bk.id, kind, amountCents, method: paid?.method ?? null,
     status: paid ? "paid" : "pending", linkUrl: null, paidAt: paid?.at ?? null,
     createdAt: paid?.at ?? bk.startAt,
@@ -93,7 +94,7 @@ function seed(): DemoData {
     merchant: string, amountCents: number, category: Expense["category"], date: string,
     receipt = false,
   ): Expense => ({
-    id: id(), merchant, amountCents, category, expenseDate: date,
+    id: id(), merchant, amountCents, category, expenseDate: date, vatCents: null,
     receiptKey: receipt ? "demo" : null, status: "confirmed", createdAt: date,
   });
   const message = (
@@ -108,6 +109,7 @@ function seed(): DemoData {
       emailVerifiedAt: at(-200, 9), address: null, iban: null, bic: null,
       bookingConfirmationTemplate: null, paymentRequestTemplate: null,
       invoiceLogo: null, invoiceAccent: null, invoiceFooter: null, vatNumber: null,
+      vatRegistered: false, vatRateBp: null, vatPeriodMonths: 2, incomeTaxRateBp: null,
     },
     features: { automation: true, paymentLinks: true },
     clients: [sarah, aoife, emma, ryan, niamh, laura],
@@ -146,7 +148,13 @@ function seed(): DemoData {
 function read(): DemoData {
   try {
     const saved = localStorage.getItem(KEY);
-    if (saved) return JSON.parse(saved) as DemoData;
+    if (saved) {
+      const data = JSON.parse(saved) as DemoData;
+      data.user = { ...data.user, ...TaxSettings.parse(data.user) };
+      data.expenses = data.expenses.map((expense) => ({ ...expense, vatCents: expense.vatCents ?? null }));
+      data.payments = data.payments.map((payment) => ({ ...payment, vatRateBp: payment.vatRateBp ?? null }));
+      return data;
+    }
   } catch {
     /* corrupt or unavailable storage — fall through to a fresh seed */
   }
@@ -205,8 +213,9 @@ export const demoBackend: Backend = {
     const issuedAt = now();
     const document: BookingDocument = {
       id: id(), bookingId, kind, issuedAt,
+      vatRateBp: kind === "invoice" ? d.user.vatRegistered ? d.user.vatRateBp : 0 : null,
       paymentId: kind === "receipt" ? paymentId! : null,
-      receiptSnapshot: kind === "receipt" ? snapshotReceipt(booking, d.payments, paymentId!, issuedAt) : null,
+      receiptSnapshot: kind === "receipt" ? snapshotReceipt(booking, d.payments, paymentId!, issuedAt, d.user) : null,
       number: Math.max(0, ...documents.filter((item) => item.kind === kind).map((item) => item.number)) + 1,
     };
     documents.push(document);
@@ -257,7 +266,7 @@ export const demoBackend: Backend = {
     if (booking.depositCents > 0) {
       d.payments.push({
         id: id(), bookingId, kind: "deposit", amountCents: booking.depositCents,
-        method: null, status: "pending", linkUrl: null, paidAt: null, createdAt: now(),
+        method: null, status: "pending", linkUrl: null, paidAt: null, createdAt: now(), vatRateBp: null,
       });
     }
     if (booking.client.phone) log(bookingId, "confirmation");
@@ -273,7 +282,7 @@ export const demoBackend: Backend = {
     if (remainder > 0) {
       d.payments.push({
         id: id(), bookingId, kind: paid > 0 ? "balance" : "full", amountCents: remainder,
-        method: null, status: "pending", linkUrl: null, paidAt: null, createdAt: now(),
+        method: null, status: "pending", linkUrl: null, paidAt: null, createdAt: now(), vatRateBp: null,
       });
     }
     booking.status = "completed";
@@ -306,18 +315,21 @@ export const demoBackend: Backend = {
   },
 
   async markPaid(paymentId, method) {
-    Object.assign(mustFind(data().payments, paymentId, "Payment"), {
-      status: "paid", method, paidAt: now(),
+    const payment = mustFind(data().payments, paymentId, "Payment");
+    if (payment.status !== "pending") throw new Error("Payment is not pending");
+    Object.assign(payment, {
+      status: "paid", method, paidAt: now(), vatRateBp: data().user.vatRegistered ? data().user.vatRateBp : 0,
     });
     save();
   },
 
   async createExpense(draft) {
+    ConfirmExpenseInput.parse({ merchant: draft.merchant, amount_cents: draft.amountCents, vat_cents: draft.vatCents, category: draft.category, expense_date: draft.expenseDate });
     const d = data();
     const expenseId = id();
     if (draft.receipt) d.receipts[expenseId] = await blobToDataUrl(draft.receipt);
     d.expenses.push({
-      id: expenseId, merchant: draft.merchant, amountCents: draft.amountCents,
+      id: expenseId, merchant: draft.merchant, amountCents: draft.amountCents, vatCents: draft.vatCents,
       category: draft.category, expenseDate: draft.expenseDate,
       receiptKey: draft.receipt ? "demo" : null, status: "confirmed", createdAt: now(),
     });
@@ -325,6 +337,7 @@ export const demoBackend: Backend = {
   },
 
   async updateExpense(expenseId, draft) {
+    ConfirmExpenseInput.parse({ merchant: draft.merchant, amount_cents: draft.amountCents, vat_cents: draft.vatCents, category: draft.category, expense_date: draft.expenseDate });
     const { receipt: _unused, ...fields } = draft;
     Object.assign(mustFind(data().expenses, expenseId, "Expense"), fields);
     save();
@@ -376,6 +389,7 @@ export const demoBackend: Backend = {
   },
 
   async updateUser(changes) {
+    TaxSettings.parse({ ...data().user, ...changes });
     Object.assign(data().user, changes);
     save();
   },
@@ -397,12 +411,13 @@ export const demoBackend: Backend = {
         }),
       [],
       ["EXPENSES"],
-      ["date", "merchant", "category", "amount_eur", "has_receipt"],
+      ["date", "merchant", "category", "amount_eur", "has_receipt", "vat_eur"],
       ...d.expenses
         .filter((e) => inYear(e.expenseDate))
         .map((e) => [
           e.expenseDate!.slice(0, 10), e.merchant, e.category,
           ((e.amountCents ?? 0) / 100).toFixed(2), e.receiptKey ? "yes" : "no",
+          e.vatCents == null ? "" : (e.vatCents / 100).toFixed(2),
         ]),
     ];
     return new Blob([rows.map((row) => row.map(csvCell).join(",")).join("\n")], {

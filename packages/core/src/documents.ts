@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { Booking, Client, Payment, User } from "./types";
+import { inclusiveVat } from "./tax";
 
 export const DEFAULT_INVOICE_ACCENT = "#14532D";
 export const MAX_LOGO_BYTES = 300 * 1024;
@@ -19,6 +20,7 @@ export const CreateDocumentInput = z.object({ kind: DocumentKind, payment_id: z.
   .refine((input) => input.kind !== "receipt" || !!input.payment_id, { message: "Choose a paid payment for this receipt.", path: ["payment_id"] });
 
 export interface ReceiptSnapshot {
+  vatRateBp?: number | null;
   service: string;
   bookingDate: string;
   bookingTotalCents: number;
@@ -29,12 +31,14 @@ export interface ReceiptSnapshot {
 export function snapshotReceipt(
   booking: Pick<Booking, "id" | "service" | "startAt" | "priceCents">,
   payments: readonly Payment[], paymentId: string, issuedAt: string,
+  settings: Pick<User, "vatRegistered" | "vatRateBp"> = { vatRegistered: false, vatRateBp: null },
 ): ReceiptSnapshot {
   const received = payments.filter((payment) => payment.bookingId === booking.id && payment.status === "paid"
     && new Date(payment.paidAt ?? payment.createdAt).getTime() <= new Date(issuedAt).getTime());
   const payment = received.find((item) => item.id === paymentId);
   if (!payment) throw new Error("Choose a paid payment for this receipt.");
   return {
+    vatRateBp: payment.vatRateBp ?? (settings.vatRegistered ? settings.vatRateBp : null),
     service: booking.service, bookingDate: booking.startAt, bookingTotalCents: booking.priceCents,
     balanceDueCents: Math.max(0, booking.priceCents - received.reduce((sum, item) => sum + item.amountCents, 0)),
     payment: { date: payment.paidAt ?? payment.createdAt, amountCents: payment.amountCents, method: payment.method },
@@ -42,6 +46,7 @@ export function snapshotReceipt(
 }
 
 export interface BookingDocument {
+  vatRateBp: number | null;
   id: string;
   bookingId: string;
   kind: DocumentKind;
@@ -63,6 +68,9 @@ export function assembleBookingDocument(user: User, booking: Booking, client: Cl
   if (receipt && (!document.paymentId || !snapshot)) throw new Error("Choose a paid payment for this receipt.");
   const paid = snapshot ? snapshot.payment.amountCents : received.reduce((sum, payment) => sum + payment.amountCents, 0);
   const bookingTotal = snapshot?.bookingTotalCents ?? booking.priceCents;
+  const vatRateBp = receipt ? snapshot?.vatRateBp ?? null : document.vatRateBp ?? (user.vatRegistered ? user.vatRateBp : null);
+  const grossCents = receipt ? paid : bookingTotal;
+  const vatCents = vatRateBp === null ? 0 : inclusiveVat(grossCents, vatRateBp);
   const money = (cents: number) => new Intl.NumberFormat("en-IE", { style: "currency", currency: "EUR" }).format(cents / 100);
   const date = (iso: string) => new Intl.DateTimeFormat("en-IE", {
     day: "2-digit", month: "short", year: "numeric", timeZone: "Europe/Dublin",
@@ -84,6 +92,7 @@ export function assembleBookingDocument(user: User, booking: Booking, client: Cl
     footer: user.invoiceFooter ?? "",
     lineItem: { description: `${snapshot?.service ?? booking.service}${receipt ? " — payment received" : ""}`, amount: money(receipt ? paid : bookingTotal) },
     total: money(receipt ? paid : bookingTotal),
+    vat: vatRateBp === null ? null : { rate: `${vatRateBp / 100}%`, net: money(grossCents - vatCents), amount: money(vatCents), total: money(grossCents) },
     bookingTotal: money(bookingTotal),
     paidToDate: money(paid),
     balanceDue: money(snapshot?.balanceDueCents ?? Math.max(0, bookingTotal - paid)),
