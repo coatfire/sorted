@@ -1,4 +1,4 @@
-import { SignJWT, jwtVerify } from "jose";
+import { SignJWT, jwtVerify, type JWTPayload } from "jose";
 import type { MiddlewareHandler } from "hono";
 import { env } from "./env";
 import { eq } from "drizzle-orm";
@@ -38,19 +38,20 @@ export const requireAuth: MiddlewareHandler<{
   const header = c.req.header("Authorization");
   const token = header?.startsWith("Bearer ") ? header.slice(7) : null;
   if (!token) return c.json({ error: "Unauthorized" }, 401);
+  let payload: JWTPayload;
   try {
-    const { payload } = await jwtVerify(token, secret());
-    if (payload.purpose !== "session" || !payload.sub || !Number.isInteger(payload.sv)) {
-      return c.json({ error: "Unauthorized" }, 401);
-    }
-    const [user] = await db.select({ sessionVersion: schema.users.sessionVersion })
-      .from(schema.users).where(eq(schema.users.id, payload.sub));
-    if (!user || user.sessionVersion !== payload.sv) return c.json({ error: "Unauthorized" }, 401);
-    c.set("userId", payload.sub);
-    await next();
+    ({ payload } = await jwtVerify(token, secret()));
   } catch {
     return c.json({ error: "Unauthorized" }, 401);
   }
+  if (payload.purpose !== "session" || !payload.sub || !Number.isInteger(payload.sv)) {
+    return c.json({ error: "Unauthorized" }, 401);
+  }
+  const [user] = await db.select({ sessionVersion: schema.users.sessionVersion })
+    .from(schema.users).where(eq(schema.users.id, payload.sub));
+  if (!user || user.sessionVersion !== payload.sv) return c.json({ error: "Unauthorized" }, 401);
+  c.set("userId", payload.sub);
+  await next();
 };
 
 /** For /internal/* routes called by n8n. */

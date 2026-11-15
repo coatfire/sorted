@@ -181,6 +181,19 @@ describe("password auth", () => {
     }
   });
 
+  it("returns 500 on a session lookup failure and accepts the same session when the database recovers", async () => {
+    const [user] = await db.insert(schema.users).values({ email: email() }).returning();
+    const jwt = await issueJwt(user.id, user.sessionVersion);
+    const me = () => app.request("/api/auth/me", { headers: { Authorization: `Bearer ${jwt}` } });
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const select = vi.spyOn(db, "select").mockImplementationOnce(() => {
+      throw new Error("Database temporarily unavailable");
+    });
+    expect((await me()).status).toBe(500);
+    expect(select).toHaveBeenCalledOnce();
+    expect((await me()).status).toBe(200);
+  });
+
   it("omits password hashes from internal reminder and review responses too", async () => {
     vi.spyOn(env, "internalSecret").mockReturnValue("test-internal-secret");
     const address = email();
