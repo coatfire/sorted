@@ -69,6 +69,39 @@ describe("password auth", () => {
     expect((await login(address, nextPassword)).status).toBe(401);
   });
 
+  it("invalidates other signup links when the first is verified", async () => {
+    const address = email();
+    const first = await token(await signup(address));
+    const second = await token(await signup(address, nextPassword));
+    await session(await post("verify", { token: first }));
+    expect((await post("verify", { token: second })).status).toBe(401);
+    await session(await login(address));
+    expect((await login(address, nextPassword)).status).toBe(401);
+    const records = await db.select().from(schema.loginTokens).where(eq(schema.loginTokens.email, address));
+    expect(records).toHaveLength(2);
+    expect(records.every((record) => record.usedAt && record.pendingPasswordHash === null)).toBe(true);
+  });
+
+  it("invalidates pending signup links when resetting a password", async () => {
+    const address = email();
+    const pending = await token(await signup(address));
+    const reset = await token(await post("forgot", { email: address }));
+    await session(await post("reset", { token: reset, password: nextPassword }));
+    expect((await post("verify", { token: pending })).status).toBe(401);
+    await session(await login(address, nextPassword));
+    expect((await login(address)).status).toBe(401);
+  });
+
+  it("rejects an unused verify token when the user already has a password", async () => {
+    const address = email();
+    const pending = await token(await signup(address, nextPassword));
+    await db.update(schema.users).set({ passwordHash: await hashPassword(password), emailVerifiedAt: new Date() })
+      .where(eq(schema.users.email, address));
+    expect((await post("verify", { token: pending })).status).toBe(401);
+    await session(await login(address));
+    expect((await login(address, nextPassword)).status).toBe(401);
+  });
+
   it("uses the same 401 for wrong passwords, unknown emails, missing hashes and unverified users", async () => {
     const address = email();
     await post("verify", { token: await token(await signup(address)) });

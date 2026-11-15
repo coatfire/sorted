@@ -110,6 +110,7 @@ for (const purpose of ["verify", "reset"] as const) {
     const result = await db.transaction(async (tx) => {
       const [user] = await tx.select().from(schema.users).where(eq(schema.users.id, identity.userId)).for("update");
       if (!user) return null;
+      if (purpose === "verify" && user.passwordHash) return null;
       const [record] = await tx.select().from(schema.loginTokens).where(and(
         eq(schema.loginTokens.id, identity.tokenId), eq(schema.loginTokens.email, user.email),
         eq(schema.loginTokens.purpose, purpose), isNull(schema.loginTokens.usedAt),
@@ -118,7 +119,7 @@ for (const purpose of ["verify", "reset"] as const) {
       const passwordHash = purpose === "verify" ? record?.pendingPasswordHash : resetHash;
       if (!record || !passwordHash) return null;
       await tx.update(schema.loginTokens).set({ usedAt: new Date(), pendingPasswordHash: null }).where(and(
-        eq(schema.loginTokens.id, record.id), eq(schema.loginTokens.email, user.email),
+        eq(schema.loginTokens.email, user.email), isNull(schema.loginTokens.usedAt),
       ));
       const [updated] = await tx.update(schema.users).set({
         passwordHash, emailVerifiedAt: user.emailVerifiedAt ?? new Date(),
