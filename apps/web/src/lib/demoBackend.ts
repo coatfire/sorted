@@ -8,6 +8,7 @@ import type { Client, Expense, MessageLogEntry, Payment, BookingDocument } from 
 import { snapshotReceipt, snapshotDocument, TaxSettings, ConfirmExpenseInput, RecordPaymentInput, paymentPaidAt, irelandToday, addCalendarDays, CalendarDate, shiftDublinWeeks, RepeatInput, Services, bookingStage } from "@sorted/core";
 import type { Backend, BookingRow, Snapshot } from "./backend";
 import { blobToDataUrl } from "./image";
+import { settingsAutosaveRegistry } from "./settingsAutosaveSession";
 
 const KEY = "sorted_demo_v3";
 
@@ -471,10 +472,12 @@ export const demoBackend: Backend = {
   },
 
   async updateUser(changes) {
+    const requested = changes;
     TaxSettings.parse({ ...data().user, ...changes });
     if (changes.services !== undefined) changes = { ...changes, services: Services.parse(changes.services) };
     Object.assign(data().user, changes);
     save();
+    settingsAutosaveRegistry.notifySaved(demoBackend, data().user.id, requested);
   },
 
   async exportCsv(year) {

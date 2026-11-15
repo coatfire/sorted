@@ -69,6 +69,28 @@ export function createSettingsAutosave(save: (patch: UserChanges) => Promise<voi
       else timers.set(section, setTimeout(() => { void flush(section); }, delay));
     },
     flush,
+    discardSuperseded(keys: readonly (keyof UserChanges)[]) {
+      for (const [section, revisions] of fieldVersions) {
+        const discarded = keys.filter(key => revisions.has(key));
+        if (!discarded.length) continue;
+        versions.set(section, (versions.get(section) ?? 0) + 1);
+        const changes = failed.get(section);
+        for (const key of discarded) {
+          if (changes) delete changes[key];
+          revisions.set(key, (revisions.get(key) ?? 0) + 1);
+          for (const [queuedChanges, queuedSection] of queued) if (queuedSection === section) delete queuedChanges[key];
+          for (const [field, pendingChanges] of pending.get(section) ?? []) {
+            delete pendingChanges[key];
+            if (!Object.keys(pendingChanges).length) pending.get(section)?.delete(field);
+          }
+        }
+        if (!changes || !Object.keys(changes).length) {
+          failed.delete(section);
+          const saving = pending.get(section)?.size || [...queued].some(([patch, queuedSection]) => queuedSection === section && Object.keys(patch).length);
+          report(section, { phase: saving ? "saving" : invalid.get(section)?.size ? "invalid" : "saved" });
+        }
+      }
+    },
     getChanges(): UserChanges { return Object.assign({}, ...failed.values(), ...queued.keys(), ...[...pending.values()].flatMap(fields => [...fields.values()])); },
     flushAll() { for (const section of new Set([...pending.keys(), ...failed.keys()])) void flush(section); return queue.then(() => !blocked && !failed.size); },
   };

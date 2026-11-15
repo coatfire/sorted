@@ -1,9 +1,7 @@
 import { useEffect, useState } from "react";
 import { useData, useSession, useStore } from "./store";
 import { session as authSession } from "./api";
-import { createSettingsAutosaveRegistry, watchSettingsAutosave } from "./settingsAutosaveSession";
-
-const registry = createSettingsAutosaveRegistry();
+import { settingsAutosaveRegistry as registry, watchSettingsAutosave } from "./settingsAutosaveSession";
 
 export function useSettingsAutosave() {
   const { backend, refresh, toast } = useStore();

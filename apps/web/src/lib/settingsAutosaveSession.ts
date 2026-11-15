@@ -11,6 +11,9 @@ export function createSettingsAutosaveRegistry() {
       session.configure(save, refresh, notify);
       return session;
     },
+    notifySaved(owner: object, userId: string, patch: UserChanges) {
+      owners.get(owner)?.get(userId)?.savedElsewhere(patch);
+    },
   };
 }
 
@@ -18,7 +21,12 @@ function createSession(save: (patch: UserChanges) => Promise<void>, refresh: () 
   let actions = { save, refresh, notify };
   let states: Record<string, SaveState> = {};
   const listeners = new Set<(states: Record<string, SaveState>) => void>();
-  const saver = createSettingsAutosave(patch => actions.save(patch), () => actions.refresh(), (section, state) => {
+  const ownWrites = new Set<UserChanges>();
+  const saver = createSettingsAutosave(async patch => {
+    ownWrites.add(patch);
+    try { await actions.save(patch); }
+    finally { ownWrites.delete(patch); }
+  }, () => actions.refresh(), (section, state) => {
     states = { ...states, [section]: state };
     for (const listener of listeners) listener(states);
     if (state.phase === "error" && !listeners.size) actions.notify(state.committed
@@ -27,11 +35,16 @@ function createSession(save: (patch: UserChanges) => Promise<void>, refresh: () 
   });
   return {
     saver,
+    savedElsewhere(patch: UserChanges) {
+      if (!ownWrites.has(patch)) saver.discardSuperseded(Object.entries(patch).filter(([, value]) => value !== undefined).map(([key]) => key as keyof UserChanges));
+    },
     getStates: () => states,
     configure(nextSave: typeof save, nextRefresh: typeof refresh, nextNotify: typeof notify) { actions = { save: nextSave, refresh: nextRefresh, notify: nextNotify }; },
     subscribe(listener: (states: Record<string, SaveState>) => void) { listeners.add(listener); listener(states); return () => { listeners.delete(listener); }; },
   };
 }
+
+export const settingsAutosaveRegistry = createSettingsAutosaveRegistry();
 
 export function watchSettingsAutosave(session: ReturnType<ReturnType<typeof createSettingsAutosaveRegistry>["get"]>, listener: (states: Record<string, SaveState>) => void, page: EventTarget, document: EventTarget & { visibilityState: string }) {
   const unsubscribe = session.subscribe(listener);
