@@ -112,17 +112,17 @@ bookingRoutes.post("/:id/documents", async (c) => {
     if (kind === "quote" && booking.status !== "enquiry") return c.json({ error: "Quotes are only available for enquiries." }, 409);
     const paidPayments = await tx.select().from(schema.payments).where(and(
       eq(schema.payments.bookingId, bookingId), eq(schema.payments.userId, userId),
-    ));
-    if (kind === "receipt") {
-      const payment = paidPayments.find((payment) => payment.id === paymentId);
-      if (!payment) return c.json({ error: "Payment not found" }, 404);
-      if (payment.status !== "paid") return c.json({ error: "Choose a paid payment for this receipt." }, 400);
-    }
+    )).orderBy(schema.payments.id).for("update");
     const [existing] = await tx.select().from(schema.invoices).where(and(
       eq(schema.invoices.userId, userId), eq(schema.invoices.bookingId, bookingId), eq(schema.invoices.kind, kind),
       ...(kind === "receipt" ? [eq(schema.invoices.paymentId, paymentId!)] : []),
     ));
     if (existing) return c.json(existing);
+    if (kind === "receipt") {
+      const payment = paidPayments.find((payment) => payment.id === paymentId);
+      if (!payment) return c.json({ error: "Payment not found" }, 404);
+      if (payment.status !== "paid") return c.json({ error: "Choose a paid payment for this receipt." }, 400);
+    }
     const [sequence] = await tx.select({ next: sql<number>`coalesce(max(${schema.invoices.number}), 0) + 1` })
       .from(schema.invoices).where(and(eq(schema.invoices.userId, userId), eq(schema.invoices.kind, kind)));
     const issuedAt = new Date();
@@ -141,7 +141,7 @@ bookingRoutes.post("/:id/documents", async (c) => {
       { ...booking, startAt: booking.startAt.toISOString(), endAt: booking.endAt?.toISOString() ?? null, completedAt: booking.completedAt?.toISOString() ?? null, paymentRequestedAt: booking.paymentRequestedAt?.toISOString() ?? null, createdAt: booking.createdAt.toISOString() },
       { ...client, createdAt: client.createdAt.toISOString() },
       paidPayments.map((payment) => ({ ...payment, paidAt: payment.paidAt?.toISOString() ?? null, createdAt: payment.createdAt.toISOString() })),
-      { ...document, issuedAt: document.issuedAt.toISOString() },
+      { ...document, issuedAt: document.issuedAt.toISOString(), voidedAt: document.voidedAt?.toISOString() ?? null },
     );
     const [frozen] = await tx.update(schema.invoices).set({ documentSnapshot }).where(and(eq(schema.invoices.id, document.id), eq(schema.invoices.userId, userId))).returning();
     return c.json(frozen);

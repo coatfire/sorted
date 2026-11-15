@@ -10,6 +10,7 @@ import type {
   BookingDocument,
   DocumentKind,
   RecordPaymentInput,
+  EditPaymentInput,
   CalendarLinks,
   DriveBackup,
   Service,
@@ -86,6 +87,8 @@ export interface Backend {
   bookingPaymentLink(bookingId: string): Promise<string>;
   markPaid(paymentId: string, method: "cash" | "bank_transfer" | "revolut"): Promise<void>;
   recordPayment(bookingId: string, input: RecordPaymentInput): Promise<void>;
+  editPayment(paymentId: string, input: EditPaymentInput): Promise<void>;
+  undoPayment(paymentId: string): Promise<void>;
   createExpense(draft: ExpenseDraft): Promise<void>;
   updateExpense(id: string, draft: ExpenseDraft): Promise<void>;
   deleteExpense(id: string): Promise<void>;

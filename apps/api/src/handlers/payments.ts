@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { and, desc, eq } from "drizzle-orm";
-import { MarkPaidInput } from "@sorted/core";
+import { EditPaymentInput, MarkPaidInput } from "@sorted/core";
 import Stripe from "stripe";
 import { db, schema } from "../db";
 import { emitBookingEvent } from "../lib/events";
@@ -8,8 +8,45 @@ import { env } from "../lib/env";
 import { deactivatePaymentLink } from "../lib/stripe";
 import { effectivePaymentVatRate } from "../lib/tax";
 import type { AppEnv } from "../app";
+import { lockBookingWithClient, userTransaction } from "../lib/transaction";
 
 export const paymentRoutes = new Hono<AppEnv>();
+
+async function correctPayment(userId: string, id: string, input: EditPaymentInput | null) {
+  const result = await userTransaction(userId, async tx => {
+    const [owner] = await tx.select({ bookingId: schema.payments.bookingId }).from(schema.payments).where(and(eq(schema.payments.id, id), eq(schema.payments.userId, userId)));
+    if (!owner) return { error: "Payment not found", status: 404 as const };
+    const row = await lockBookingWithClient(tx, userId, owner.bookingId);
+    if (!row) return { error: "Payment not found", status: 404 as const };
+    const payments = await tx.select().from(schema.payments).where(and(eq(schema.payments.bookingId, row.booking.id), eq(schema.payments.userId, userId))).orderBy(schema.payments.id).for("update");
+    const current = payments.find(payment => payment.id === id);
+    if (!current) return { error: "Payment not found", status: 404 as const };
+    if (current.method === "stripe") return { error: "Paid by card — refund it in Stripe", status: 409 as const };
+    if (current.status !== "paid") return { error: "Only paid payments can be corrected.", status: 409 as const };
+    const receipts = await tx.select().from(schema.invoices).where(and(eq(schema.invoices.userId, userId), eq(schema.invoices.paymentId, id), eq(schema.invoices.kind, "receipt"))).orderBy(schema.invoices.id).for("update");
+    if (input && receipts.length) return { error: "A receipt was issued for this payment. Undo it and record it again.", status: 409 as const };
+    const total = payments.filter(payment => payment.status === "paid" && payment.id !== id).reduce((sum, payment) => sum + payment.amountCents, 0) + (input ? input.amount_cents ?? current.amountCents : 0);
+    if (input && total > row.booking.priceCents) return { error: "The total paid cannot exceed the booking price.", status: 409 as const };
+    const [payment] = await tx.update(schema.payments).set(input ? { amountCents: input.amount_cents, method: input.method, paidAt: input.paid_at ? new Date(input.paid_at) : undefined } : { status: "cancelled" }).where(and(eq(schema.payments.id, id), eq(schema.payments.userId, userId))).returning();
+    if (!input && receipts.length) await tx.update(schema.invoices).set({ voidedAt: new Date() }).where(and(eq(schema.invoices.userId, userId), eq(schema.invoices.paymentId, id), eq(schema.invoices.kind, "receipt")));
+    const pending = payments.filter(payment => payment.status === "pending");
+    const keep = pending.length === 1 && pending[0].amountCents === row.booking.priceCents - total;
+    const cancelled = !keep && pending.length ? await tx.update(schema.payments).set({ status: "cancelled" }).where(and(eq(schema.payments.userId, userId), eq(schema.payments.bookingId, row.booking.id), eq(schema.payments.status, "pending"))).returning({ linkId: schema.payments.stripePaymentLinkId }) : [];
+    return { payment, cancelled };
+  });
+  if ("error" in result) return Response.json({ error: result.error }, { status: result.status });
+  for (const { linkId } of result.cancelled) if (linkId) await deactivatePaymentLink(linkId);
+  await emitBookingEvent(userId, result.payment.bookingId, input ? "payment.corrected" : "payment.undone", { id: result.payment.id, kind: result.payment.kind, amountCents: result.payment.amountCents, linkUrl: result.payment.linkUrl });
+  return Response.json(result.payment);
+}
+
+paymentRoutes.patch("/:id", async c => {
+  const parsed = EditPaymentInput.safeParse(await c.req.json());
+  if (!parsed.success) return c.json({ error: parsed.error.flatten() }, 400);
+  return correctPayment(c.get("userId"), c.req.param("id"), parsed.data);
+});
+
+paymentRoutes.post("/:id/undo", c => correctPayment(c.get("userId"), c.req.param("id"), null));
 
 /** GET /api/payments?status=pending — the "who owes me" view */
 paymentRoutes.get("/", async (c) => {
@@ -29,10 +66,12 @@ paymentRoutes.get("/", async (c) => {
       payment: schema.payments,
       booking: schema.bookings,
       client: schema.clients,
+      receiptVoidedAt: schema.invoices.voidedAt,
     })
     .from(schema.payments)
     .innerJoin(schema.bookings, eq(schema.payments.bookingId, schema.bookings.id))
     .innerJoin(schema.clients, eq(schema.bookings.clientId, schema.clients.id))
+    .leftJoin(schema.invoices, and(eq(schema.invoices.paymentId, schema.payments.id), eq(schema.invoices.userId, userId), eq(schema.invoices.kind, "receipt")))
     .where(and(...conditions))
     .orderBy(desc(schema.payments.createdAt));
   return c.json(payments);

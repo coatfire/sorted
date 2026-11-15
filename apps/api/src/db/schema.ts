@@ -262,6 +262,7 @@ export const messageLog = pgTable(
 );
 
 export const invoices = pgTable("invoices", {
+  voidedAt: timestamp("voided_at", { withTimezone: true }),
   vatRateBp: integer("vat_rate_bp"),
   id: uuid("id").primaryKey().defaultRandom(),
   userId: uuid("user_id").notNull().references(() => users.id),

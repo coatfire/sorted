@@ -18,6 +18,13 @@ export const RecordPaymentInput = z.object({
 });
 export type RecordPaymentInput = z.infer<typeof RecordPaymentInput>;
 
+export const EditPaymentInput = z.object({
+  amount_cents: z.number().int().positive(),
+  method: PaymentMethod.exclude(["stripe"]),
+  paid_at: z.string().datetime({ offset: true }).refine(value => new Date(value).getTime() <= Date.now(), "Payment date cannot be in the future."),
+}).partial().refine(input => Object.values(input).some(value => value !== undefined), "Change at least one payment field.");
+export type EditPaymentInput = z.infer<typeof EditPaymentInput>;
+
 export function paymentPaidAt(paidOn: string | undefined, now = new Date()): Date {
   const date = PaidOn.parse(paidOn ?? irelandToday(now));
   const today = irelandToday(now);

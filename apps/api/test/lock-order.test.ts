@@ -38,7 +38,8 @@ it.each(["create", "record", "document", "confirm", "edit", "complete", "cancel"
   expect(tables[0]).toBe("users");
   expect(tables.every(table => order.includes(table))).toBe(true);
   expect(tables.map(table => order.indexOf(table))).toEqual(tables.map(table => order.indexOf(table)).sort((a, b) => a - b));
-  if (action === "confirm" || action === "document") expect(tables).toEqual(["users", "clients", "bookings"]);
+  if (action === "confirm") expect(tables).toEqual(["users", "clients", "bookings"]);
+  if (action === "document") expect(tables).toEqual(["users", "clients", "bookings", "payments"]);
   if (action === "anonymise") expect(tables).toEqual(order);
   for (const query of queries.filter(query => /from "(?:bookings|payments|invoices)"/.test(query) && query.includes("order by"))) {
     expect(query).toMatch(/order by "\w+"\."id"/);

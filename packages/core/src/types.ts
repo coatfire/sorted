@@ -269,6 +269,7 @@ export interface Booking {
 }
 
 export interface Payment {
+  receiptVoidedAt?: string | null;
   vatRateBp: number | null;
   id: string;
   bookingId: string;

@@ -37,7 +37,7 @@ export function ClientDetail() {
     .filter((booking) => booking.clientId === client.id)
     .sort((a, b) => b.startAt.localeCompare(a.startAt));
   const ids = new Set(theirs.map((booking) => booking.id));
-  const hasPaid = payments.some((payment) => ids.has(payment.bookingId) && payment.status === "paid");
+  const hasPaymentHistory = payments.some((payment) => ids.has(payment.bookingId) && (payment.status === "paid" || payment.paidAt !== null));
   const hasOpenBookings = theirs.some((booking) => booking.status === "enquiry" || booking.status === "confirmed");
   const sum = (status: "paid" | "pending") =>
     payments
@@ -54,7 +54,7 @@ export function ClientDetail() {
   }
 
   async function remove() {
-    if (await run(() => backend.deleteClient(client!.id), hasPaid ? "Client anonymised" : "Client deleted")) {
+    if (await run(() => backend.deleteClient(client!.id), hasPaymentHistory ? "Client anonymised" : "Client deleted")) {
       navigate("/", { replace: true });
     }
   }
@@ -148,14 +148,14 @@ export function ClientDetail() {
         <Sheet title="Delete client?" onClose={() => setDeleting(false)}>
           {hasOpenBookings ? (
             <p>Cancel or complete their open bookings first.</p>
-          ) : hasPaid ? (
-            <p>This client has paid payments. Their name will become “Deleted client”. Their phone, email and notes, messages, and booking notes and locations will be removed. Bookings and payments will be kept for your tax records. Receipts won’t be changed. This can’t be undone.</p>
+          ) : hasPaymentHistory ? (
+            <p>This client has payment records. Their name will become “Deleted client”. Their phone, email and notes, messages, and booking notes and locations will be removed. Bookings and payments will be kept for your tax records. Receipts won’t be changed. This can’t be undone.</p>
           ) : (
             <p>This client has no paid payments. The client, all their messages, payments and bookings will be permanently deleted. Receipts won’t be changed. This can’t be undone.</p>
           )}
           {!hasOpenBookings && (
             <Button kind="danger" disabled={busy} onClick={remove}>
-              {busy ? "Removing…" : hasPaid ? "Remove personal data" : "Delete client"}
+              {busy ? "Removing…" : hasPaymentHistory ? "Remove personal data" : "Delete client"}
             </Button>
           )}
           <Button kind="quiet" onClick={() => setDeleting(false)}>Cancel</Button>

@@ -1,16 +1,17 @@
 import { useEffect, useState } from "react";
 import { FollowUpLater } from "../FollowUp";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { assembleBookingDocument, bookingStage, type DocumentKind, type MessageLogEntry } from "@sorted/core";
+import { assembleBookingDocument, bookingStage, type DocumentKind, type MessageLogEntry, type Payment } from "@sorted/core";
 import { BackButton, Button, Card, EmptyState, Icon, MoneyText, Sheet, StatusChip } from "../components";
 import { PaymentActions } from "../PaymentActions";
 import { BookingMessageSheet } from "../BookingMessageSheet";
 import { RecordPaymentSheet } from "../RecordPaymentSheet";
+import { PaymentCorrectionSheet } from "../PaymentCorrectionSheet";
 import { BookingCalendarSheet } from "../BookingCalendarSheet";
 import { BookingSteps } from "../BookingSteps";
 import { bookingPaymentPhrase, pendingDepositCents, type BookingDetailAction } from "../lib/bookingDetail";
 import {
-  firstName, kindLabel, longDay, messageLabel, methodLabel, stamp, time,
+  euros, firstName, kindLabel, longDay, messageLabel, methodLabel, stamp, time,
 } from "../lib/format";
 import { useAction, useData, useStore, useSession } from "../lib/store";
 import { download } from "../lib/image";
@@ -24,6 +25,7 @@ export function BookingDetail() {
   const [documentBusy, setDocumentBusy] = useState(false);
   const [chooseReceipt, setChooseReceipt] = useState(false);
   const [recordPayment, setRecordPayment] = useState(false);
+  const [correctPayment, setCorrectPayment] = useState<Payment | null>(null);
   const [followUp, setFollowUp] = useState(false);
   const [calendar, setCalendar] = useState(false);
   const { busy, run } = useAction();
@@ -57,7 +59,7 @@ export function BookingDetail() {
 
   const client = booking.client;
   const bookingPayments = payments
-    .filter((payment) => payment.bookingId === booking.id && payment.status !== "cancelled")
+    .filter((payment) => payment.bookingId === booking.id && (payment.status !== "cancelled" || payment.paidAt !== null))
     .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
   const paid = bookingPayments
     .filter((payment) => payment.status === "paid")
@@ -172,18 +174,23 @@ export function BookingDetail() {
           {bookingPayments.length ? (
             bookingPayments.map((payment) => (
               <div className="payment-row" key={payment.id}>
-                <div>
+                {payment.status === "paid" && payment.method !== "stripe" ? <button type="button" className="payment-edit-row" aria-label={`Edit ${euros(payment.amountCents)} payment`} onClick={() => setCorrectPayment(payment)}>
+                  <span><strong>{kindLabel(payment.kind)}</strong><span>{[methodLabel(payment.method), payment.paidAt && stamp(payment.paidAt)].filter(Boolean).join(" · ")}</span></span>
+                  <span className="payment-amount"><MoneyText cents={payment.amountCents} /><span>Edit payment</span></span>
+                </button> : <><div>
                   <strong>{kindLabel(payment.kind)}</strong>
                   <span>
                     {payment.status === "paid"
                       ? [methodLabel(payment.method), payment.paidAt && stamp(payment.paidAt)].filter(Boolean).join(" · ")
-                      : payment.linkUrl ? "Payment link created — not paid yet" : "Not paid yet"}
+                      : payment.status === "cancelled" ? "Payment undone" : payment.linkUrl ? "Payment link created — not paid yet" : "Not paid yet"}
+                    {payment.status === "paid" && payment.method === "stripe" && " · Paid by card"}
                   </span>
                 </div>
                 <div className="payment-amount">
                   <MoneyText cents={payment.amountCents} />
-                  <StatusChip status={payment.status} />
-                </div>
+                  {payment.status === "cancelled" ? <span>Undone</span> : <StatusChip status={payment.status} />}
+                </div></>}
+                {payment.receiptVoidedAt && <Button kind="quiet" disabled={documentBusy} onClick={() => { void document("receipt", payment.id); }}>Voided receipt</Button>}
                 {payment.status === "pending" && features.paymentLinks && <PaymentActions payment={payment} booking={booking} showMarkPaid={false} />}
               </div>
             ))
@@ -258,6 +265,7 @@ export function BookingDetail() {
       {message && <BookingMessageSheet booking={booking} kind={message} requestLabel="Ask for payment" onClose={() => setMessage(null)} />}
       {calendar && <BookingCalendarSheet booking={booking} onClose={() => setCalendar(false)} />}
       {recordPayment && <RecordPaymentSheet bookingId={booking.id} outstanding={owedCents} onClose={() => setRecordPayment(false)} />}
+      {correctPayment && <PaymentCorrectionSheet payment={correctPayment} maximum={booking.priceCents - paid + correctPayment.amountCents} onClose={() => setCorrectPayment(null)} />}
       {chooseReceipt && <Sheet title="Choose a payment" onClose={() => setChooseReceipt(false)}>
         <p className="sheet-copy">Each payment has its own receipt number.</p>
         {paidPayments.map((payment) => <Button key={payment.id} kind="quiet" onClick={() => {
