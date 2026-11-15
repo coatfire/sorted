@@ -6,13 +6,13 @@ import { useData, useSession, useStore } from "./lib/store";
 export function DriveSettings() {
   const { user, features } = useData();
   const { mode } = useSession();
-  const { backend, toast } = useStore();
+  const { backend, toast, refresh } = useStore();
   const [drive, setDrive] = useState<{ requestToken: () => Promise<string>; backUp: typeof import("./lib/driveBackup").backUpToDrive }>();
   const [attempt, setAttempt] = useState(0);
   const [prepareError, setPrepareError] = useState(false);
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState<string>();
-  const [last, setLast] = useState(user.driveBackedUpAt);
+  const last = user.driveBackedUpAt;
   const enabled = mode === "api" && features.googleDrive;
   useEffect(() => {
     if (!enabled) return;
@@ -37,7 +37,7 @@ export function DriveSettings() {
         setBusy(true); setProgress("Connecting to Google…");
         try {
           const result = await drive.backUp(drive.requestToken(), backend, (done, total) => setProgress(`Backing up ${done} of ${total}…`));
-          if (result.driveBackedUpAt) { setLast(result.driveBackedUpAt); toast("Backup finished"); }
+          if (result.driveBackedUpAt) { await refresh(); toast("Backup finished"); }
           else toast("No files to back up yet.");
         } catch { toast("Backup didn't finish. Nothing was lost — try again.", "error"); }
         finally { setBusy(false); setProgress(undefined); }
