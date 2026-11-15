@@ -149,6 +149,9 @@ registered 0% rate), line items, totals, payment history, bank/Revolut details,
 logo, accent and footer. Reissues and Drive backups render this snapshot, not
 current settings, booking prices or client details. Legacy rows with no snapshot
 retain their existing live-render behaviour; no backfill is performed.
+GDPR client anonymisation replaces the client section of retained snapshots
+with `Deleted client` and no email/phone, in the same transaction as the live
+records. Financial, VAT and business data remain unchanged.
 
 ### Revolut payment details
 

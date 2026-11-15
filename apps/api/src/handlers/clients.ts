@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { and, desc, eq, ilike, inArray, or, sql } from "drizzle-orm";
+import { and, desc, eq, ilike, inArray, isNotNull, or, sql } from "drizzle-orm";
 import { CreateClientInput, UpdateClientInput } from "@sorted/core";
 import { db, schema } from "../db";
 import { deactivatePaymentLink } from "../lib/stripe";
@@ -115,9 +115,15 @@ clientRoutes.delete("/:id", async (c) => {
       or(eq(schema.messageLog.clientId, id), inArray(schema.messageLog.bookingId, ids)),
     ));
     if (payments.some((payment) => payment.status === "paid")) {
+      const anonymised = { name: "Deleted client", phone: null, email: null, notes: null };
       await tx.update(schema.clients)
-        .set({ name: "Deleted client", phone: null, email: null, notes: null }).where(clientScope);
+        .set(anonymised).where(clientScope);
       await tx.update(schema.bookings).set({ notes: null, location: null }).where(bookingScope);
+      await tx.update(schema.invoices).set({
+        documentSnapshot: sql`jsonb_set(${schema.invoices.documentSnapshot}, '{data,client}', ${JSON.stringify({ name: anonymised.name, email: anonymised.email, phone: anonymised.phone })}::jsonb)`,
+      }).where(and(
+        eq(schema.invoices.userId, userId), inArray(schema.invoices.bookingId, ids), isNotNull(schema.invoices.documentSnapshot),
+      ));
       return c.json({ outcome: "anonymised" });
     }
     const deletedPayments = await tx.delete(schema.payments).where(paymentScope).returning();
