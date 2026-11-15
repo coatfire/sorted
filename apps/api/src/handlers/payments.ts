@@ -5,6 +5,7 @@ import Stripe from "stripe";
 import { db, schema } from "../db";
 import { emitBookingEvent } from "../lib/events";
 import { env } from "../lib/env";
+import { deactivatePaymentLink } from "../lib/stripe";
 import type { AppEnv } from "../app";
 
 export const paymentRoutes = new Hono<AppEnv>();
@@ -74,11 +75,14 @@ paymentRoutes.post("/:id/link", async (c) => {
     });
     link = await stripe.paymentLinks.create({
       line_items: [{ price: price.id, quantity: 1 }],
-      metadata: { payment_id: row.payment.id },
-      payment_intent_data: { metadata: { payment_id: row.payment.id } },
+      restrictions: { completed_sessions: { limit: 1 } },
+      metadata: { payment_id: row.payment.id, user_id: userId },
+      payment_intent_data: {
+        metadata: { payment_id: row.payment.id, user_id: userId },
+      },
     });
-  } catch (err) {
-    console.error("[payments] Stripe link creation failed", err);
+  } catch {
+    console.error("[payments] Stripe link creation failed");
     return c.json({ error: "Stripe couldn't create the payment link" }, 502);
   }
   const [payment] = await db
@@ -88,7 +92,7 @@ paymentRoutes.post("/:id/link", async (c) => {
       stripePaymentLinkId: link.id,
       linkUrl: link.url,
     })
-    .where(eq(schema.payments.id, row.payment.id))
+    .where(and(eq(schema.payments.id, row.payment.id), eq(schema.payments.userId, userId)))
     .returning();
   await emitBookingEvent(userId, payment.bookingId, "payment.link_created", {
     id: payment.id,
@@ -124,8 +128,11 @@ paymentRoutes.post("/:id/mark-paid", async (c) => {
       method: parsed.data.method,
       paidAt: new Date(),
     })
-    .where(eq(schema.payments.id, current.id))
+    .where(and(eq(schema.payments.id, current.id), eq(schema.payments.userId, userId)))
     .returning();
+  if (payment.stripePaymentLinkId) {
+    await deactivatePaymentLink(payment.stripePaymentLinkId);
+  }
   await emitBookingEvent(userId, payment.bookingId, "payment.paid", {
     id: payment.id,
     kind: payment.kind,

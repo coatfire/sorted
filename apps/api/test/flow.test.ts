@@ -3,12 +3,36 @@
  * sole trader actually walks — log in, book, confirm, complete, get paid,
  * log an expense, export for the accountant.
  */
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { and, eq } from "drizzle-orm";
 import { app } from "../src/app";
 import { issueMagicLinkToken } from "../src/lib/auth";
 import { db, schema } from "../src/db";
 import * as events from "../src/lib/events";
+import { env } from "../src/lib/env";
+import { deactivatePaymentLink } from "../src/lib/stripe";
+
+const stripe = vi.hoisted(() => ({
+  createPrice: vi.fn(),
+  createLink: vi.fn(),
+  updateLink: vi.fn(),
+  constructEvent: vi.fn(),
+  retrieveIntent: vi.fn(),
+}));
+
+vi.mock("stripe", () => ({
+  default: class {
+    prices = { create: stripe.createPrice };
+    paymentLinks = { create: stripe.createLink, update: stripe.updateLink };
+    webhooks = { constructEvent: stripe.constructEvent };
+    paymentIntents = { retrieve: stripe.retrieveIntent };
+  },
+}));
+
+afterEach(() => {
+  vi.restoreAllMocks();
+  vi.resetAllMocks();
+});
 
 async function login(email: string) {
   const sent = await app.request("/api/auth/magic-link", {
@@ -377,6 +401,129 @@ describe("transactional writes", () => {
     }
     expect((await call(`/expenses/${expense.id}`, "DELETE")).status).toBe(204);
     expect((await call(`/expenses/${expense.id}`, "DELETE")).status).toBe(404);
+  });
+});
+
+describe("payment link safety", () => {
+  async function pendingDeposit() {
+    const call = await login(`safety-${crypto.randomUUID()}@example.com`);
+    const booking = await json<{ id: string; userId: string }>(await call("/bookings", "POST", {
+      client: { name: "Payment safety" },
+      service: "Hair",
+      start_at: new Date().toISOString(),
+      price_cents: 10000,
+      deposit_cents: 2000,
+    }));
+    await call(`/bookings/${booking.id}/confirm`, "POST");
+    const detail = await json<{ payments: { id: string }[] }>(await call(`/bookings/${booking.id}`));
+    const paymentId = detail.payments[0].id;
+    return { call, booking, paymentId };
+  }
+
+  function configureStripe() {
+    vi.spyOn(env, "stripeKey").mockReturnValue("sk_test_placeholder");
+    vi.spyOn(env, "stripeWebhookSecret").mockReturnValue("whsec_placeholder");
+    stripe.createPrice.mockResolvedValue({ id: "price_test" });
+    stripe.createLink.mockResolvedValue({ id: "plink_test", url: "https://example.com/pay" });
+    stripe.updateLink.mockResolvedValue({});
+  }
+
+  it("creates a single-use scoped link, reuses it, and hides it from another user", async () => {
+    const { call, booking, paymentId } = await pendingDeposit();
+    configureStripe();
+    const other = await login(`other-${crypto.randomUUID()}@example.com`);
+    expect((await other(`/payments/${paymentId}/link`, "POST")).status).toBe(404);
+    expect((await other(`/payments/${paymentId}/mark-paid`, "POST", { method: "cash" })).status).toBe(404);
+    expect((await call(`/payments/${paymentId}/link`, "POST")).status).toBe(200);
+    expect(stripe.createPrice).toHaveBeenCalledWith(expect.objectContaining({ unit_amount: 2000 }));
+    const metadata = { payment_id: paymentId, user_id: booking.userId };
+    expect(stripe.createLink).toHaveBeenCalledWith(expect.objectContaining({
+      restrictions: { completed_sessions: { limit: 1 } },
+      metadata,
+      payment_intent_data: { metadata },
+    }));
+    expect((await call(`/payments/${paymentId}/link`, "POST")).status).toBe(200);
+    expect(stripe.createLink).toHaveBeenCalledTimes(1);
+    const paid = await call(`/payments/${paymentId}/mark-paid`, "POST", { method: "cash" });
+    expect(paid.status).toBe(200);
+    expect(await json(paid)).toMatchObject({ id: paymentId, status: "paid", method: "cash" });
+    expect(stripe.updateLink).toHaveBeenCalledWith("plink_test", { active: false });
+  });
+
+  it.each(["complete", "cancel"])("deactivates voided links on %s without changing the response", async (action) => {
+    const { call, booking, paymentId } = await pendingDeposit();
+    configureStripe();
+    await call(`/payments/${paymentId}/link`, "POST");
+    const response = await call(`/bookings/${booking.id}/${action}`, "POST");
+    expect(response.status).toBe(200);
+    expect(stripe.updateLink).toHaveBeenCalledWith("plink_test", { active: false });
+    const detail = await json<{ payments: { id: string; status: string }[] }>(await call(`/bookings/${booking.id}`));
+    expect(detail.payments.find((payment) => payment.id === paymentId)?.status).toBe("cancelled");
+    if (action === "complete") {
+      expect(await json(response)).toMatchObject({ payment: { kind: "full", amountCents: 10000, status: "pending" } });
+    } else {
+      expect(await json(response)).toMatchObject({ id: booking.id, status: "cancelled" });
+    }
+  });
+
+  it("does nothing without a key and never throws on deactivation failure", async () => {
+    vi.spyOn(env, "stripeKey").mockReturnValue(undefined);
+    await expect(deactivatePaymentLink("plink_test")).resolves.toBeUndefined();
+    expect(stripe.updateLink).not.toHaveBeenCalled();
+    configureStripe();
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    stripe.updateLink.mockRejectedValue(new Error("unavailable"));
+    await expect(deactivatePaymentLink("plink_test")).resolves.toBeUndefined();
+    expect(error).toHaveBeenCalledWith("[payments] Stripe link deactivation failed", "plink_test");
+  });
+
+  it("returns an honest error if link creation fails", async () => {
+    const { call, paymentId } = await pendingDeposit();
+    configureStripe();
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    stripe.createLink.mockRejectedValue(new Error("unavailable"));
+    expect((await call(`/payments/${paymentId}/link`, "POST")).status).toBe(502);
+  });
+
+  it("only accepts pending payments with matching user metadata and logs late payments", async () => {
+    const { call, booking, paymentId } = await pendingDeposit();
+    configureStripe();
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    async function webhook(metadata: Record<string, string>) {
+      stripe.constructEvent.mockReturnValue({
+        type: "checkout.session.completed",
+        data: { object: { id: "cs_test", metadata } },
+      });
+      const response = await app.request("/api/webhooks/stripe", {
+        method: "POST", headers: { "stripe-signature": "test" }, body: "raw body",
+      });
+      expect(response.status).toBe(200);
+      expect(await response.json()).toEqual({ received: true });
+    }
+    async function payment() {
+      const [row] = await db.select().from(schema.payments).where(and(
+        eq(schema.payments.id, paymentId), eq(schema.payments.userId, booking.userId),
+      ));
+      return row;
+    }
+    await webhook({ payment_id: paymentId });
+    expect(error).toHaveBeenCalledWith(paymentId, "cs_test");
+    await webhook({});
+    expect(error).toHaveBeenCalledWith("missing", "cs_test");
+    await webhook({ payment_id: paymentId, user_id: crypto.randomUUID() });
+    expect((await payment()).status).toBe("pending");
+    await webhook({ payment_id: paymentId, user_id: booking.userId });
+    const paid = await payment();
+    expect(paid.status).toBe("paid");
+    await webhook({ payment_id: paymentId, user_id: booking.userId });
+    expect((await payment()).paidAt).toEqual(paid.paidAt);
+
+    const cancelled = await pendingDeposit();
+    await cancelled.call(`/bookings/${cancelled.booking.id}/cancel`, "POST");
+    await webhook({ payment_id: cancelled.paymentId, user_id: cancelled.booking.userId });
+    expect(error).toHaveBeenCalledWith(cancelled.paymentId, "cs_test");
+    const detail = await json<{ payments: { status: string }[] }>(await cancelled.call(`/bookings/${cancelled.booking.id}`));
+    expect(detail.payments[0].status).toBe("cancelled");
   });
 });
 
