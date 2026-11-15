@@ -12,20 +12,21 @@ export async function issueJwt(userId: string): Promise<string> {
     .sign(secret());
 }
 
-export async function issueMagicLinkToken(userId: string): Promise<string> {
+export async function issueMagicLinkToken(userId: string, tokenId: string): Promise<string> {
   return new SignJWT({ sub: userId, purpose: "magic-link" })
     .setProtectedHeader({ alg: "HS256" })
+    .setJti(tokenId)
     .setIssuedAt()
     .setExpirationTime("15m")
     .sign(secret());
 }
 
-export async function verifyMagicLinkToken(token: string): Promise<string> {
+export async function verifyMagicLinkToken(token: string): Promise<{ userId: string; tokenId: string }> {
   const { payload } = await jwtVerify(token, secret());
-  if (payload.purpose !== "magic-link" || !payload.sub) {
+  if (payload.purpose !== "magic-link" || !payload.sub || !payload.jti) {
     throw new Error("Invalid magic link");
   }
-  return String(payload.sub);
+  return { userId: payload.sub, tokenId: payload.jti };
 }
 
 /** Sets c.get("userId") or returns 401. Applied to all /api/* routes. */

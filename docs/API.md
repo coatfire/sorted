@@ -16,9 +16,18 @@ which integrations are configured, so the UI only offers what works.
 | Method | Path                | Notes |
 |--------|---------------------|-------|
 | POST   | /auth/magic-link    | body `{email}` → emails a 15-min login link (logged if no email provider; returned as `dev_link` in local dev) |
-| POST   | /auth/verify        | body `{token}` → `{jwt, user}` |
+| POST   | /auth/verify        | body `{token}` → `{jwt, user}`; consumes the link exactly once |
 | GET    | /auth/me            | current user |
 | PATCH  | /auth/me            | business settings: `name`, `business_name`, `phone`, `review_link` |
+
+Login links expire after 15 minutes and are single-use, including simultaneous
+verification attempts. Expired, already-used, or invalid links return
+`401 { "error": "Invalid or expired login link" }`.
+
+`POST /auth/magic-link` allows three requests per email address (case-insensitive)
+within the last 15 minutes. The fourth returns
+`429 { "error": "Too many login links requested. Check your email, or try again in 15 minutes." }`.
+Used links still count toward this limit.
 
 ## Clients
 | Method | Path          | Notes |

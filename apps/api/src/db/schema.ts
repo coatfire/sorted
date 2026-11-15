@@ -73,6 +73,17 @@ export const users = pgTable("users", {
     .defaultNow(),
 });
 
+export const loginTokens = pgTable(
+  "login_tokens",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    email: text("email").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    usedAt: timestamp("used_at", { withTimezone: true }),
+  },
+  (t) => [index("login_tokens_email_idx").on(t.email)],
+);
+
 export const clients = pgTable(
   "clients",
   {
