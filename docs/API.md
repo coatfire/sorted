@@ -33,9 +33,18 @@ otherwise `features.googleSignIn` is false and start/exchange return 404.
   subject is not reassigned.
 - Success redirects to `{APP_URL}/login/google?code=…` with an opaque single-use
   two-minute code, **never a session JWT**. Only its SHA-256 hash is stored in
-  `login_codes`, bound to the user's session version.
-- `POST /auth/google/exchange`, body `{code}`, atomically consumes it and returns
-  the usual `{jwt,user}`. Invalid, expired, used or revoked codes return 401.
+  `login_codes`, bound to the user's session version. The callback also generates
+  a random browser binding: its SHA-256 hash is stored alongside the code, and
+  the value is put in a separate HttpOnly, Secure, SameSite=Lax cookie scoped
+  to `/api/auth/google` for 120 seconds.
+- `POST /auth/google/exchange`, body `{code}`, requires that browser-binding
+  cookie and atomically consumes a code only when both hashes match, then clears
+  the binding cookie and returns the usual `{jwt,user}`. The web explicitly sends
+  credentials on this request (the production API and web share an origin).
+  Missing or mismatched cookies return the same generic 401 without consuming
+  the code, so forwarding a login link cannot sign another browser in.
+  Invalid, expired, used or revoked codes also return 401. Pre-0013 codes with
+  no binding are rejected; restart Google sign-in to obtain a bound code.
   Start and exchange each allow ten attempts per proxy-reported IP per fifteen
   minutes; exchange returns 429 when limited. Deploy behind a trusted proxy
   which sets `X-Forwarded-For` (otherwise callers share the fallback limit).

@@ -117,6 +117,7 @@ export const loginAttempts = pgTable("login_attempts", {
 
 export const loginCodes = pgTable("login_codes", {
   codeHash: text("code_hash").primaryKey(),
+  bindingHash: text("binding_hash"),
   userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   sessionVersion: integer("session_version").notNull(),
   expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),

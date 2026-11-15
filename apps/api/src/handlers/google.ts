@@ -12,6 +12,7 @@ import type { AppEnv } from "../app";
 
 export const googleRoutes = new Hono<AppEnv>();
 const cookieName = "sorted_google_oauth";
+const bindingCookieName = "sorted_google_binding";
 const cookieOptions = { path: "/api/auth/google", httpOnly: true, secure: true, sameSite: "Lax" as const };
 const secret = () => new TextEncoder().encode(env.jwtSecret());
 const random = () => randomBytes(32).toString("base64url");
@@ -79,7 +80,7 @@ googleRoutes.get("/callback", async (c) => {
     });
     const identity = GoogleIdentity.parse(verified.payload);
     if (identity.nonce !== flow.nonce) throw new Error("Invalid nonce");
-    const exchangeCode = random();
+    const exchangeCode = random(), binding = random();
     await db.transaction(async (tx) => {
       let [user] = await tx.select().from(schema.users).where(eq(schema.users.googleSub, identity.sub)).for("update");
       if (!user) {
@@ -93,8 +94,9 @@ googleRoutes.get("/callback", async (c) => {
         [user] = await tx.update(schema.users).set({ googleSub: identity.sub, emailVerifiedAt: user.emailVerifiedAt ?? new Date() })
           .where(eq(schema.users.id, user.id)).returning();
       }
-      await tx.insert(schema.loginCodes).values({ codeHash: hash(exchangeCode), userId: user.id, sessionVersion: user.sessionVersion, expiresAt: new Date(Date.now() + 2 * 60000) });
+      await tx.insert(schema.loginCodes).values({ codeHash: hash(exchangeCode), bindingHash: hash(binding), userId: user.id, sessionVersion: user.sessionVersion, expiresAt: new Date(Date.now() + 2 * 60000) });
     });
+    setCookie(c, bindingCookieName, binding, { ...cookieOptions, maxAge: 120 });
     return c.redirect(`${env.appUrl()}/login/google?code=${encodeURIComponent(exchangeCode)}`);
   } catch { return c.redirect(errorUrl()); }
 });
@@ -105,13 +107,16 @@ googleRoutes.post("/exchange", async (c) => {
     const ip = c.req.header("x-forwarded-for")?.split(",")[0].trim() || "unknown";
     if (await limited("exchange", ip)) return c.json({ error: "Too many login attempts. Try again in 15 minutes." }, 429);
     const input = z.object({ code: z.string().regex(/^[A-Za-z0-9_-]{43}$/) }).parse(await c.req.json());
+    const binding = getCookie(c, bindingCookieName);
+    if (!binding) return c.json({ error: "Couldn't sign in with Google. Try again or use your email." }, 401);
     const user = await db.transaction(async (tx) => {
-      const [code] = await tx.delete(schema.loginCodes).where(and(eq(schema.loginCodes.codeHash, hash(input.code)), gt(schema.loginCodes.expiresAt, new Date()))).returning();
+      const [code] = await tx.delete(schema.loginCodes).where(and(eq(schema.loginCodes.codeHash, hash(input.code)), eq(schema.loginCodes.bindingHash, hash(binding)), gt(schema.loginCodes.expiresAt, new Date()))).returning();
       if (!code) return null;
       const [owner] = await tx.select().from(schema.users).where(eq(schema.users.id, code.userId)).for("update");
       return owner?.sessionVersion === code.sessionVersion ? owner : null;
     });
     if (!user) return c.json({ error: "Couldn't sign in with Google. Try again or use your email." }, 401);
+    deleteCookie(c, bindingCookieName, cookieOptions);
     return c.json({ jwt: await issueJwt(user.id, user.sessionVersion), user: publicUser(user) });
   } catch { return c.json({ error: "Couldn't sign in with Google. Try again or use your email." }, 401); }
 });

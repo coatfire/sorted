@@ -44,7 +44,8 @@ async function flow(overrides: JWTPayload = {}) {
   });
   vi.stubGlobal("fetch", fetchMock);
   const callback = (state = auth.searchParams.get("state")!, withCookie = true) => app.request(`/api/auth/google/callback?code=google-authorization-code&state=${state}`, { headers: withCookie ? { Cookie: cookie } : {} });
-  const exchange = (code: string) => app.request("/api/auth/google/exchange", { method: "POST", headers: { "Content-Type": "application/json", "x-forwarded-for": ip }, body: JSON.stringify({ code }) });
+  let bindingCookie = "";
+  const exchange = (code: string, browserCookie = bindingCookie) => app.request("/api/auth/google/exchange", { method: "POST", headers: { "Content-Type": "application/json", "x-forwarded-for": ip, ...(browserCookie ? { Cookie: browserCookie } : {}) }, body: JSON.stringify({ code }) });
   const code = async () => {
     const response = await callback();
     expect(response.status).toBe(302);
@@ -54,6 +55,11 @@ async function flow(overrides: JWTPayload = {}) {
     expect(value).toMatch(/^[A-Za-z0-9_-]{43}$/);
     expect(response.headers.get("Cache-Control")).toBe("no-store");
     expect(response.headers.get("Set-Cookie")).toContain("Max-Age=0");
+    const binding = response.headers.getSetCookie().find((cookie) => cookie.startsWith("sorted_google_binding="))!;
+    for (const value of ["HttpOnly", "Secure", "SameSite=Lax", "Path=/api/auth/google", "Max-Age=120"]) expect(binding).toContain(value);
+    bindingCookie = binding.split(";")[0];
+    const [record] = await db.select().from(schema.loginCodes).where(eq(schema.loginCodes.codeHash, createHash("sha256").update(value).digest("hex")));
+    expect(record.bindingHash).toBe(createHash("sha256").update(bindingCookie.split("=")[1]).digest("hex"));
     return value;
   };
   return { start, auth, cookie, payload, sub, email, fetchMock, callback, exchange, code };
@@ -102,6 +108,31 @@ describe("Google sign-in", () => {
     expect(updated).toMatchObject({ googleSub: f.sub, passwordHash: existing.passwordHash, email });
     expect(updated.emailVerifiedAt).toBeTruthy();
     expect(await db.select().from(schema.users).where(eq(schema.users.email, email.toLowerCase()))).toHaveLength(0);
+  });
+  it("rejects a transferred exchange link without consuming it, then accepts only its callback browser", async () => {
+    const owner = await flow();
+    const code = await owner.code();
+    const other = await flow();
+    const callback = await other.callback();
+    const otherCookie = callback.headers.getSetCookie().find((cookie) => cookie.startsWith("sorted_google_binding="))!.split(";")[0];
+    const missing = await owner.exchange(code, "");
+    const mismatched = await owner.exchange(code, otherCookie);
+    expect(missing.status).toBe(401);
+    expect(mismatched.status).toBe(401);
+    expect(await missing.json()).toEqual(await mismatched.json());
+    const codeHash = createHash("sha256").update(code).digest("hex");
+    expect(await db.select().from(schema.loginCodes).where(eq(schema.loginCodes.codeHash, codeHash))).toHaveLength(1);
+    const valid = await owner.exchange(code);
+    expect(valid.status).toBe(200);
+    expect(valid.headers.get("Set-Cookie")).toContain("sorted_google_binding=;");
+    expect(valid.headers.get("Set-Cookie")).toContain("Max-Age=0");
+    expect(await db.select().from(schema.loginCodes).where(eq(schema.loginCodes.codeHash, codeHash))).toHaveLength(0);
+  });
+  it("rejects pre-binding codes rather than allowing an unbound exchange", async () => {
+    const f = await flow();
+    const code = await f.code();
+    await db.update(schema.loginCodes).set({ bindingHash: null }).where(eq(schema.loginCodes.codeHash, createHash("sha256").update(code).digest("hex")));
+    expect((await f.exchange(code)).status).toBe(401);
   });
   it("resolves by Google subject first even when the Google email changes", async () => {
     const sub = crypto.randomUUID();

@@ -14,7 +14,7 @@ const expenseBody = (draft: ExpenseDraft) => ({
 export const apiBackend: Backend = {
   health: () => api<Health>("/health"),
   googleStart: () => window.location.assign(apiUrl("/auth/google/start")),
-  googleExchange: (code) => post("/auth/google/exchange", { code }),
+  googleExchange: (code) => api("/auth/google/exchange", { method: "POST", credentials: "include", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ code }) }),
   calendar: () => api<CalendarLinks>("/calendar"),
   resetCalendar: () => post<CalendarLinks>("/calendar/reset"),
   document: (bookingId, kind, paymentId) => post<BookingDocument>(`/bookings/${bookingId}/documents`, { kind, payment_id: paymentId }),
