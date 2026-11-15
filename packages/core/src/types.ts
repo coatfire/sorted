@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { InvoiceLogo, InvoiceAccent, IrishVatNumber } from "./documents";
 import { normaliseIban, normaliseBic, validIban, validBic } from "./bank";
 
 // ─── Enums ────────────────────────────────────────────────────────────────
@@ -124,6 +125,10 @@ export const UpdateBookingInput = z.object({
 export type UpdateBookingInput = z.infer<typeof UpdateBookingInput>;
 
 export const UpdateUserInput = z.object({
+  invoice_logo: InvoiceLogo.nullable().optional(),
+  invoice_accent: InvoiceAccent.nullable().optional(),
+  invoice_footer: z.string().max(1000).nullable().optional(),
+  vat_number: IrishVatNumber.nullable().optional(),
   booking_confirmation_template: z.string().max(4000).nullable().optional(),
   payment_request_template: z.string().max(4000).nullable().optional(),
   name: z.string().max(200).nullable().optional(),
@@ -186,6 +191,10 @@ export const ConfirmExpenseInput = z.object(expenseFields);
 // ISO timestamp strings). Request bodies above are snake_case.
 
 export interface User {
+  invoiceLogo: string | null;
+  invoiceAccent: string | null;
+  invoiceFooter: string | null;
+  vatNumber: string | null;
   bookingConfirmationTemplate: string | null;
   paymentRequestTemplate: string | null;
   id: string;

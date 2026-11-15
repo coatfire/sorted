@@ -6,8 +6,11 @@ import {
   timestamp,
   jsonb,
   index,
+  uniqueIndex,
   pgEnum,
 } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
+import type { ReceiptSnapshot } from "@sorted/core";
 
 // Enums mirror packages/core/src/types.ts — keep in sync.
 export const bookingStatus = pgEnum("booking_status", [
@@ -71,6 +74,10 @@ export const users = pgTable("users", {
   bic: text("bic"),
   bookingConfirmationTemplate: text("booking_confirmation_template"),
   paymentRequestTemplate: text("payment_request_template"),
+  invoiceLogo: text("invoice_logo"),
+  invoiceAccent: text("invoice_accent"),
+  invoiceFooter: text("invoice_footer"),
+  vatNumber: text("vat_number"),
   name: text("name"),
   businessName: text("business_name"),
   phone: text("phone"), // E.164
@@ -230,3 +237,19 @@ export const messageLog = pgTable(
   },
   (t) => [index("message_log_booking_idx").on(t.bookingId)],
 );
+
+export const invoices = pgTable("invoices", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  userId: uuid("user_id").notNull().references(() => users.id),
+  // Number allocations outlive deleted unpaid bookings.
+  bookingId: uuid("booking_id").notNull(),
+  paymentId: uuid("payment_id"),
+  receiptSnapshot: jsonb("receipt_snapshot").$type<ReceiptSnapshot>(),
+  kind: text("kind").$type<"invoice" | "receipt">().notNull(),
+  number: integer("number").notNull(),
+  issuedAt: timestamp("issued_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [
+  uniqueIndex("invoices_user_kind_number_idx").on(t.userId, t.kind, t.number),
+  uniqueIndex("invoices_user_booking_invoice_idx").on(t.userId, t.bookingId).where(sql`${t.kind} = 'invoice'`),
+  uniqueIndex("invoices_user_payment_receipt_idx").on(t.userId, t.paymentId).where(sql`${t.kind} = 'receipt'`),
+]);

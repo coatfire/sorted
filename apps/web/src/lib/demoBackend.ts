@@ -4,13 +4,15 @@
  * someone tries here is what they get after signing up. "Messages" and
  * payment links are simulated — nothing leaves the browser.
  */
-import type { Client, Expense, MessageLogEntry, Payment } from "@sorted/core";
+import type { Client, Expense, MessageLogEntry, Payment, BookingDocument } from "@sorted/core";
+import { snapshotReceipt } from "@sorted/core";
 import type { Backend, BookingRow, Snapshot } from "./backend";
 import { blobToDataUrl } from "./image";
 
 const KEY = "sorted_demo_v3";
 
 interface DemoData extends Snapshot {
+  documents: BookingDocument[];
   messages: MessageLogEntry[];
   receipts: Record<string, string>; // expense id → data URL
 }
@@ -105,6 +107,7 @@ function seed(): DemoData {
       currency: "EUR", createdAt: at(-200, 9),
       emailVerifiedAt: at(-200, 9), address: null, iban: null, bic: null,
       bookingConfirmationTemplate: null, paymentRequestTemplate: null,
+      invoiceLogo: null, invoiceAccent: null, invoiceFooter: null, vatNumber: null,
     },
     features: { automation: true, paymentLinks: true },
     clients: [sarah, aoife, emma, ryan, niamh, laura],
@@ -136,6 +139,7 @@ function seed(): DemoData {
       message(b.niamh, "payment_request", at(-4, 13, 5)),
     ],
     receipts: {},
+    documents: [],
   };
 }
 
@@ -189,13 +193,33 @@ const voidPending = (bookingId: string) => {
 const csvCell = (value: unknown) => `"${String(value ?? "").replaceAll('"', '""')}"`;
 
 export const demoBackend: Backend = {
+  async document(bookingId, kind, paymentId) {
+    const d = data();
+    const booking = mustFind(d.bookings, bookingId, "Booking");
+    if (kind === "receipt" && !d.payments.some((payment) => payment.id === paymentId && payment.bookingId === bookingId && payment.status === "paid")) {
+      throw new Error("Choose a paid payment for this receipt.");
+    }
+    const documents = d.documents ??= [];
+    const existing = documents.find((document) => document.bookingId === bookingId && document.kind === kind && (kind === "invoice" || document.paymentId === paymentId));
+    if (existing) return structuredClone(existing);
+    const issuedAt = now();
+    const document: BookingDocument = {
+      id: id(), bookingId, kind, issuedAt,
+      paymentId: kind === "receipt" ? paymentId! : null,
+      receiptSnapshot: kind === "receipt" ? snapshotReceipt(booking, d.payments, paymentId!, issuedAt) : null,
+      number: Math.max(0, ...documents.filter((item) => item.kind === kind).map((item) => item.number)) + 1,
+    };
+    documents.push(document);
+    save();
+    return structuredClone(document);
+  },
   signup: async () => ({ ok: true, dev_link: "/verify?token=demo" }),
   login: async () => ({ jwt: "demo", user: data().user }),
   verify: async () => ({ jwt: "demo", user: data().user }),
   forgot: async () => ({ ok: true, dev_link: "/reset?token=demo" }),
   resetPassword: async () => ({ jwt: "demo", user: data().user }),
   async load() {
-    const { messages: _m, receipts: _r, ...snapshot } = data();
+    const { messages: _m, receipts: _r, documents: _d, ...snapshot } = data();
     return structuredClone(snapshot);
   },
 

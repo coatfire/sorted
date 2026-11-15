@@ -1,4 +1,4 @@
-import type { Booking, Client, Expense, Health, MessageLogEntry, Payment, User } from "@sorted/core";
+import type { Booking, Client, Expense, Health, MessageLogEntry, Payment, User, BookingDocument } from "@sorted/core";
 import { api, apiBlob, patch, post } from "./api";
 import type { Backend, ExpenseDraft } from "./backend";
 import { blobToDataUrl } from "./image";
@@ -11,6 +11,7 @@ const expenseBody = (draft: ExpenseDraft) => ({
 });
 
 export const apiBackend: Backend = {
+  document: (bookingId, kind, paymentId) => post<BookingDocument>(`/bookings/${bookingId}/documents`, { kind, payment_id: paymentId }),
   signup: (email, password) => post("/auth/signup", { email, password }),
   login: (email, password) => post("/auth/login", { email, password }),
   verify: (token) => post("/auth/verify", { token }),
@@ -117,6 +118,10 @@ export const apiBackend: Backend = {
       bic: changes.bic,
       booking_confirmation_template: changes.bookingConfirmationTemplate,
       payment_request_template: changes.paymentRequestTemplate,
+      invoice_logo: changes.invoiceLogo,
+      invoice_accent: changes.invoiceAccent,
+      invoice_footer: changes.invoiceFooter,
+      vat_number: changes.vatNumber,
     });
   },
 

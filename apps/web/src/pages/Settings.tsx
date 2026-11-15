@@ -3,10 +3,12 @@ import { useNavigate } from "react-router-dom";
 import {
   normalisePhone, normaliseIban, normaliseBic, validIban, validBic,
   DEFAULT_BOOKING_CONFIRMATION_TEMPLATE, DEFAULT_PAYMENT_REQUEST_TEMPLATE, MESSAGE_PLACEHOLDERS,
+  DEFAULT_INVOICE_ACCENT, InvoiceAccent, IrishVatNumber,
 } from "@sorted/core";
 import { BackButton, Button, Card, Field, Icon, PageHeader } from "../components";
 import { useAction, useData, useSession, useStore } from "../lib/store";
 import { useValidation } from "../lib/useValidation";
+import { prepareInvoiceLogo } from "../lib/image";
 
 export function Settings({ welcome = false }: { welcome?: boolean }) {
   const { user, features } = useData();
@@ -14,6 +16,8 @@ export function Settings({ welcome = false }: { welcome?: boolean }) {
   const { mode, signOut } = useSession();
   const { busy, run } = useAction();
   const navigate = useNavigate();
+  const [logoBusy, setLogoBusy] = useState(false);
+  const [logoError, setLogoError] = useState<string>();
   const [form, setForm] = useState({
     businessName: user.businessName ?? "",
     name: user.name ?? "",
@@ -24,11 +28,17 @@ export function Settings({ welcome = false }: { welcome?: boolean }) {
     bic: user.bic ?? "",
     bookingConfirmationTemplate: user.bookingConfirmationTemplate ?? DEFAULT_BOOKING_CONFIRMATION_TEMPLATE,
     paymentRequestTemplate: user.paymentRequestTemplate ?? DEFAULT_PAYMENT_REQUEST_TEMPLATE,
+    invoiceLogo: user.invoiceLogo ?? null,
+    invoiceAccent: user.invoiceAccent ?? DEFAULT_INVOICE_ACCENT,
+    invoiceFooter: user.invoiceFooter ?? "",
+    vatNumber: user.vatNumber ?? "",
   });
   const set = (field: keyof typeof form) => (event: { target: { value: string } }) => {
     setForm({ ...form, [field]: event.target.value });
   };
   const validation = useValidation({
+    invoiceAccent: () => !InvoiceAccent.safeParse(form.invoiceAccent).success ? "Enter a hex colour, like #14532D." : undefined,
+    vatNumber: () => form.vatNumber.trim() && !IrishVatNumber.safeParse(form.vatNumber).success ? "Enter a valid Irish VAT number." : undefined,
     phone: () => form.phone.trim() && !normalisePhone(form.phone)
       ? "That mobile number doesn’t look right. Try it like 087 123 4567." : undefined,
     name: () => welcome && !form.name.trim() ? "Enter your name." : undefined,
@@ -39,6 +49,7 @@ export function Settings({ welcome = false }: { welcome?: boolean }) {
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (logoBusy || logoError) return;
     if (!validation.validate(event.currentTarget)) return;
     const phone = form.phone.trim() ? normalisePhone(form.phone) : null;
     let reviewLink: string | null = form.reviewLink.trim() || null;
@@ -56,6 +67,10 @@ export function Settings({ welcome = false }: { welcome?: boolean }) {
           ...(!welcome ? {
             bookingConfirmationTemplate: form.bookingConfirmationTemplate === DEFAULT_BOOKING_CONFIRMATION_TEMPLATE ? null : form.bookingConfirmationTemplate,
             paymentRequestTemplate: form.paymentRequestTemplate === DEFAULT_PAYMENT_REQUEST_TEMPLATE ? null : form.paymentRequestTemplate,
+            invoiceLogo: form.invoiceLogo,
+            invoiceAccent: InvoiceAccent.parse(form.invoiceAccent) === DEFAULT_INVOICE_ACCENT ? null : InvoiceAccent.parse(form.invoiceAccent),
+            invoiceFooter: form.invoiceFooter.trim() || null,
+            vatNumber: form.vatNumber.trim() ? IrishVatNumber.parse(form.vatNumber) : null,
           } : {}),
         }),
       "Settings saved",
@@ -100,6 +115,36 @@ export function Settings({ welcome = false }: { welcome?: boolean }) {
           </Field>}
         </Card>
         {!welcome && <section className="settings-section">
+          <p className="eyebrow">Invoices &amp; receipts</p>
+          <Card className="form-card">
+            <Field label="Logo" helper="PNG or JPEG. Resized to 400px; under 300KB after compression." error={logoError}>
+              <input name="invoiceLogo" type="file" accept="image/png,image/jpeg" disabled={logoBusy} onChange={async (event) => {
+                const input = event.currentTarget;
+                const file = input.files?.[0];
+                if (!file) return;
+                setLogoBusy(true);
+                setLogoError(undefined);
+                try { const logo = await prepareInvoiceLogo(file); setForm((current) => ({ ...current, invoiceLogo: logo })); }
+                catch (error) { setLogoError(error instanceof Error ? error.message : "Couldn't read that logo."); }
+                finally { setLogoBusy(false); input.value = ""; }
+              }} />
+            </Field>
+            {form.invoiceLogo && <img className="invoice-logo-preview" src={form.invoiceLogo} alt="Your invoice logo" />}
+            {(form.invoiceLogo || logoError) && <Button type="button" kind="quiet" disabled={logoBusy} onClick={() => {
+              setForm({ ...form, invoiceLogo: null }); setLogoError(undefined);
+            }}>Remove logo</Button>}
+            <Field label="Accent colour" {...validation.field("invoiceAccent")}>
+              <input name="invoiceAccent" value={form.invoiceAccent} onChange={set("invoiceAccent")} placeholder={DEFAULT_INVOICE_ACCENT} spellCheck={false} />
+            </Field>
+            <Field label="Footer text">
+              <textarea name="invoiceFooter" rows={3} maxLength={1000} value={form.invoiceFooter} onChange={set("invoiceFooter")} />
+            </Field>
+            <Field label="VAT number (optional)" {...validation.field("vatNumber")}>
+              <input name="vatNumber" value={form.vatNumber} onChange={set("vatNumber")} placeholder="IE1234567AB" autoCapitalize="characters" />
+            </Field>
+          </Card>
+        </section>}
+        {!welcome && <section className="settings-section">
           <p className="eyebrow">Message templates</p>
           <p className="sheet-copy">For drafts you send yourself by WhatsApp or email.</p>
           <Card className="form-card">
@@ -113,7 +158,7 @@ export function Settings({ welcome = false }: { welcome?: boolean }) {
             <Button type="button" kind="quiet" aria-label="Reset payment request to default" onClick={() => setForm({ ...form, paymentRequestTemplate: DEFAULT_PAYMENT_REQUEST_TEMPLATE })}>Reset to default</Button>
           </Card>
         </section>}
-        <Button type="submit" disabled={busy}>
+        <Button type="submit" disabled={busy || logoBusy}>
           <Icon name="check" /> {busy ? "Saving…" : welcome ? "Save and get started" : "Save settings"}
         </Button>
       </form>

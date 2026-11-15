@@ -147,6 +147,8 @@ authRoutes.patch("/me", requireAuth, async (c) => {
     address: input.address, iban: input.iban, bic: input.bic,
     bookingConfirmationTemplate: input.booking_confirmation_template,
     paymentRequestTemplate: input.payment_request_template,
+    invoiceLogo: input.invoice_logo, invoiceAccent: input.invoice_accent,
+    invoiceFooter: input.invoice_footer, vatNumber: input.vat_number,
   }).where(eq(schema.users.id, c.get("userId"))).returning();
   if (!user) return c.json({ error: "Not found" }, 404);
   return c.json(publicUser(user));
