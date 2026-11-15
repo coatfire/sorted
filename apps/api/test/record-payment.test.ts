@@ -79,6 +79,32 @@ describe("record instalment payments", () => {
     expect((await response.json() as { payment: Payment }).payment.vatRateBp).toBe(0);
   });
 
+  it("preserves the earliest cancelled pending debt's age across part payments", async () => {
+    const f = await fixture("completed");
+    const oldest = new Date("2026-01-10T12:00:00Z");
+    await db.update(schema.payments).set({ createdAt: new Date("2026-02-10T12:00:00Z") })
+      .where(and(eq(schema.payments.id, f.deposit.id), eq(schema.payments.userId, f.user.id)));
+    await db.insert(schema.payments).values([
+      { userId: f.user.id, bookingId: f.booking.id, kind: "balance", amountCents: 8000, createdAt: oldest },
+      { userId: f.user.id, bookingId: f.booking.id, kind: "balance", amountCents: 10000, status: "cancelled", createdAt: new Date("2025-12-01T12:00:00Z") },
+    ]);
+    for (const remainder of [7000, 4000]) {
+      expect((await f.record(3000)).status).toBe(201);
+      expect((await f.payments()).filter((row) => row.status === "pending"))
+        .toMatchObject([{ kind: "balance", amountCents: remainder, createdAt: oldest }]);
+    }
+  });
+
+  it("uses completion time for a replacement balance when no pending row exists", async () => {
+    const f = await fixture("completed");
+    const completedAt = new Date("2026-01-10T12:00:00Z");
+    await db.update(schema.bookings).set({ completedAt }).where(and(eq(schema.bookings.id, f.booking.id), eq(schema.bookings.userId, f.user.id)));
+    await db.update(schema.payments).set({ status: "cancelled" }).where(and(eq(schema.payments.id, f.deposit.id), eq(schema.payments.userId, f.user.id)));
+    expect((await f.record(3000)).status).toBe(201);
+    expect((await f.payments()).filter((row) => row.status === "pending"))
+      .toMatchObject([{ kind: "balance", amountCents: 7000, createdAt: completedAt }]);
+  });
+
   it("serialises competing instalments against the remaining balance", async () => {
     const f = await fixture();
     const responses = await Promise.all([f.record(6000), f.record(6000)]);

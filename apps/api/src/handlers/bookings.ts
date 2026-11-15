@@ -55,10 +55,11 @@ bookingRoutes.post("/:id/payments", async (c) => {
     }).returning();
     const voided = await tx.update(schema.payments).set({ status: "cancelled" }).where(and(
       eq(schema.payments.bookingId, bookingId), eq(schema.payments.userId, userId), eq(schema.payments.status, "pending"),
-    )).returning({ linkId: schema.payments.stripePaymentLinkId });
+    )).returning({ linkId: schema.payments.stripePaymentLinkId, createdAt: schema.payments.createdAt });
     const remainder = outstanding - payment.amountCents;
     if (booking.status === "completed" && remainder > 0) {
-      await tx.insert(schema.payments).values({ userId, bookingId, kind: "balance", amountCents: remainder });
+      const createdAt = voided.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime())[0]?.createdAt ?? booking.completedAt ?? undefined;
+      await tx.insert(schema.payments).values({ userId, bookingId, kind: "balance", amountCents: remainder, createdAt });
     }
     return { payment, booking, voided };
   });
