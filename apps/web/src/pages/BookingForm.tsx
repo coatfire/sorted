@@ -108,7 +108,7 @@ export function BookingForm() {
     if (!validation.validate(event.currentTarget)) return;
     const priceCents = parseEuros(form.price);
     const depositCents = form.deposit.trim() ? parseEuros(form.deposit) : 0;
-    const startAt = bookingAtDublinTime(form.date, form.time);
+    const startAt = bookingAtDublinTime(form.date, form.time, editing?.startAt);
     let phone: string | undefined;
     if (!client && form.clientPhone.trim()) {
       const normalised = normalisePhone(form.clientPhone);

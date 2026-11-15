@@ -20,6 +20,13 @@ async function fixture() {
 }
 
 describe("Dublin repeat dates", () => {
+  it.each(["2026-10-25T00:30:12.123Z", "2026-10-25T01:30:12.123Z"])("preserves the original autumn instant %s when editing without changing the date or time", (original) => {
+    const fields = dublinDateTime(original);
+    expect(fields).toEqual({ date: "2026-10-25", time: "01:30" });
+    expect(bookingAtDublinTime(fields.date, fields.time, original).toISOString()).toBe(original);
+    expect(bookingAtDublinTime(fields.date, "02:30", original).toISOString()).toBe("2026-10-25T02:30:00.000Z");
+    expect(bookingAtDublinTime("2026-10-26", fields.time, original).toISOString()).toBe("2026-10-26T01:30:00.000Z");
+  });
   it("keeps the wall clock through autumn and spring, including seconds", () => {
     expect(shiftDublinWeeks("2026-10-18T09:00:12.123Z", 1).toISOString()).toBe("2026-10-25T10:00:12.123Z");
     expect(shiftDublinWeeks("2026-03-22T10:00:00Z", 1).toISOString()).toBe("2026-03-29T09:00:00.000Z");

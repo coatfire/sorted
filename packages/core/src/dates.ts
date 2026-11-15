@@ -44,9 +44,13 @@ export function dublinDateTime(value: Date | string) {
   return { date: wall.slice(0, 10), time: wall.slice(11, 16) };
 }
 
-export function bookingAtDublinTime(date: string, time: string): Date {
+export function bookingAtDublinTime(date: string, time: string, original?: string): Date {
   CalendarDate.parse(date);
   if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(time)) throw new Error("Pick a valid time.");
+  if (original) {
+    const initial = dublinDateTime(original);
+    if (date === initial.date && time === initial.time) return new Date(original);
+  }
   const wall = Date.parse(`${date}T${time}:00Z`);
   return fromWallTime(wall, wall);
 }
