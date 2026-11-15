@@ -6,19 +6,20 @@ import { euros, firstName, methodLabel, whatsappLink } from "./lib/format";
 import { useAction, useData, useStore } from "./lib/store";
 
 /** The two things you can do with money you're owed: chase it, or record it. */
-export function PaymentActions({ payment, booking, showMarkPaid = true }: { payment: Payment; booking: BookingRow; showMarkPaid?: boolean }) {
+export function PaymentActions({ payment, booking, showMarkPaid = true, owedCents }: { booking: BookingRow; showMarkPaid?: boolean } & ({ payment: Payment; owedCents?: never } | { payment?: never; owedCents: number })) {
   const { backend, toast } = useStore();
   const { features, user } = useData();
   const { busy, run, error, committed } = useAction();
   const [sheet, setSheet] = useState<"paid" | "link" | null>(null);
-  const [link, setLink] = useState(payment.linkUrl);
+  const [link, setLink] = useState(payment?.linkUrl ?? null);
+  const amountCents = owedCents ?? payment!.amountCents;
   const client = booking.client;
 
   async function openLink() {
     if (!link) {
       let created = "";
       const ok = await run(async () => {
-        created = await backend.paymentLink(payment.id);
+        created = owedCents !== undefined ? await backend.bookingPaymentLink(booking.id) : await backend.paymentLink(payment!.id);
       });
       if (!ok) return;
       setLink(created);
@@ -37,26 +38,28 @@ export function PaymentActions({ payment, booking, showMarkPaid = true }: { paym
 
   const message =
     `Hi ${firstName(client.name)}, here's the payment link for your ${booking.service} ` +
-    `(${euros(payment.amountCents)}): ${link}` +
+    `(${euros(amountCents)}): ${link}` +
     (user.businessName ? `\n— ${user.businessName}` : "");
 
   return (
     <>
       <div className="inline-actions">
         {features.paymentLinks && (
-          <Button kind="soft" disabled={busy} onClick={openLink}>
+          <Button kind="soft" disabled={busy || Boolean(committed && error)} onClick={openLink}>
             <Icon name="message" size={17} /> Payment link
           </Button>
         )}
-        {showMarkPaid && <Button kind="quiet" disabled={busy} onClick={() => setSheet("paid")}>
+        {showMarkPaid && <Button kind="quiet" disabled={busy || Boolean(committed && error)} onClick={() => setSheet("paid")}>
           <Icon name="check" size={17} /> Mark paid
         </Button>}
       </div>
+      {error && !sheet && <p className="sheet-copy" role="alert">{error}</p>}
+      {error && committed && !sheet && <Button kind="quiet" onClick={() => window.location.reload()}>Reload</Button>}
 
       {sheet === "paid" && (
         <Sheet title="How were you paid?" onClose={() => setSheet(null)}>
           <p className="sheet-copy">
-            <MoneyText cents={payment.amountCents} /> from {client.name}
+            <MoneyText cents={amountCents} /> from {client.name}
           </p>
           {error && <p className="sheet-copy" role="alert">{error}</p>}
           {committed && error && <Button kind="soft" onClick={() => window.location.reload()}>Reload</Button>}
@@ -66,7 +69,7 @@ export function PaymentActions({ payment, booking, showMarkPaid = true }: { paym
               kind="soft"
               disabled={busy || Boolean(committed && error)}
               onClick={async () => {
-                if (await run(() => backend.markPaid(payment.id, method), "Marked paid")) {
+                if (await run(() => owedCents !== undefined ? backend.recordPayment(booking.id, { amount_cents: owedCents, method }) : backend.markPaid(payment!.id, method), "Marked paid")) {
                   setSheet(null);
                 }
               }}
@@ -81,7 +84,7 @@ export function PaymentActions({ payment, booking, showMarkPaid = true }: { paym
       {sheet === "link" && link && (
         <Sheet title="Payment link" onClose={() => setSheet(null)}>
           <p className="sheet-copy">
-            {client.name} can pay <MoneyText cents={payment.amountCents} /> by card. It’ll flip to
+            {client.name} can pay <MoneyText cents={amountCents} /> by card. It’ll flip to
             paid here on its own.
             {features.automation && client.phone && " Sorted has sent it on WhatsApp."}
           </p>

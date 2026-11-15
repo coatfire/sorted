@@ -83,6 +83,7 @@ export interface Backend {
   document(bookingId: string, kind: DocumentKind, paymentId?: string): Promise<BookingDocument>;
   /** Creates (or returns the existing) payment link URL. */
   paymentLink(paymentId: string): Promise<string>;
+  bookingPaymentLink(bookingId: string): Promise<string>;
   markPaid(paymentId: string, method: "cash" | "bank_transfer" | "revolut"): Promise<void>;
   recordPayment(bookingId: string, input: RecordPaymentInput): Promise<void>;
   createExpense(draft: ExpenseDraft): Promise<void>;

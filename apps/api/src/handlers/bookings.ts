@@ -30,8 +30,31 @@ import { deactivatePaymentLink } from "../lib/stripe";
 import { effectivePaymentVatRate } from "../lib/tax";
 import { lockBookingWithClient, userTransaction } from "../lib/transaction";
 import type { AppEnv } from "../app";
+import { env } from "../lib/env";
+import { createPaymentLink } from "./payments";
 
 export const bookingRoutes = new Hono<AppEnv>();
+
+bookingRoutes.post("/:id/payment-link", async (c) => {
+  const userId = c.get("userId"), bookingId = c.req.param("id");
+  if (!env.stripeKey()) return c.json({ error: "Stripe is not configured" }, 503);
+  const result = await userTransaction(userId, async tx => {
+    const [booking] = await tx.select().from(schema.bookings).where(and(eq(schema.bookings.id, bookingId), eq(schema.bookings.userId, userId))).for("update");
+    if (!booking) return c.json({ error: "Booking not found" }, 404);
+    if (booking.status !== "confirmed" && booking.status !== "completed") return c.json({ error: "This booking cannot take payments." }, 409);
+    const payments = await tx.select().from(schema.payments).where(and(eq(schema.payments.bookingId, bookingId), eq(schema.payments.userId, userId))).orderBy(schema.payments.id).for("update");
+    const owedCents = Math.max(0, booking.priceCents - payments.filter(payment => payment.status === "paid").reduce((sum, payment) => sum + payment.amountCents, 0));
+    if (!owedCents) return c.json({ error: "This booking is already paid in full." }, 409);
+    const pending = payments.filter(payment => payment.status === "pending");
+    if (pending.length === 1 && pending[0].amountCents === owedCents) return { payment: pending[0], voided: [] };
+    const voided = await tx.update(schema.payments).set({ status: "cancelled" }).where(and(eq(schema.payments.bookingId, bookingId), eq(schema.payments.userId, userId), eq(schema.payments.status, "pending"))).returning({ linkId: schema.payments.stripePaymentLinkId });
+    const [payment] = await tx.insert(schema.payments).values({ userId, bookingId, kind: "custom", amountCents: owedCents }).returning();
+    return { payment, voided };
+  });
+  if (result instanceof Response) return result;
+  for (const payment of result.voided) if (payment.linkId) await deactivatePaymentLink(payment.linkId);
+  return createPaymentLink(userId, result.payment.id);
+});
 
 bookingRoutes.post("/:id/payments", async (c) => {
   const parsed = RecordPaymentInput.safeParse(await c.req.json());

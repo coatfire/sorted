@@ -653,6 +653,37 @@ describe("payment link safety", () => {
     stripe.updateLink.mockResolvedValue({});
   }
 
+  it.each([true, false])("makes a booking-level full-balance link, pending deposit present: %s", async pending => {
+    const { call, booking, paymentId } = await pendingDeposit();
+    configureStripe();
+    if (!pending) await db.delete(schema.payments).where(eq(schema.payments.id, paymentId));
+    const other = await login(`other-booking-link-${crypto.randomUUID()}@example.com`);
+    expect((await other(`/bookings/${booking.id}/payment-link`, "POST")).status).toBe(404);
+    const response = await call(`/bookings/${booking.id}/payment-link`, "POST");
+    expect(response.status).toBe(200);
+    const payment = await json<{ id: string; amountCents: number; linkUrl: string }>(response);
+    expect(payment.amountCents).toBe(10000);
+    expect(payment.linkUrl).toBe("https://example.com/pay");
+    expect((await call(`/bookings/${booking.id}/payment-link`, "POST")).status).toBe(200);
+    expect(stripe.createLink).toHaveBeenCalledTimes(1);
+    const detail = await json<{ payments: { id: string; status: string; amountCents: number }[] }>(await call(`/bookings/${booking.id}`));
+    expect(detail.payments.filter(row => row.status === "pending")).toEqual([expect.objectContaining({ id: payment.id, amountCents: 10000 })]);
+    if (pending) expect(detail.payments.find(row => row.id === paymentId)?.status).toBe("cancelled");
+    expect((await call(`/bookings/${booking.id}/payments`, "POST", { amount_cents: 10000, method: "cash" })).status).toBe(201);
+    expect((await call(`/bookings/${booking.id}/payment-link`, "POST")).status).toBe(409);
+  });
+
+  it("does not create pending rows when booking links are unavailable or the booking is cancelled", async () => {
+    const { call, booking } = await pendingDeposit();
+    vi.spyOn(env, "stripeKey").mockReturnValue(undefined);
+    expect((await call(`/bookings/${booking.id}/payment-link`, "POST")).status).toBe(503);
+    configureStripe();
+    await call(`/bookings/${booking.id}/cancel`, "POST");
+    expect((await call(`/bookings/${booking.id}/payment-link`, "POST")).status).toBe(409);
+    const detail = await json<{ payments: { status: string }[] }>(await call(`/bookings/${booking.id}`));
+    expect(detail.payments.filter(row => row.status === "pending")).toEqual([]);
+  });
+
   it("creates a single-use scoped link, reuses it, and hides it from another user", async () => {
     const { call, booking, paymentId } = await pendingDeposit();
     configureStripe();
@@ -660,13 +691,13 @@ describe("payment link safety", () => {
     expect((await other(`/payments/${paymentId}/link`, "POST")).status).toBe(404);
     expect((await other(`/payments/${paymentId}/mark-paid`, "POST", { method: "cash" })).status).toBe(404);
     expect((await call(`/payments/${paymentId}/link`, "POST")).status).toBe(200);
-    expect(stripe.createPrice).toHaveBeenCalledWith(expect.objectContaining({ unit_amount: 2000 }));
+    expect(stripe.createPrice).toHaveBeenCalledWith(expect.objectContaining({ unit_amount: 2000 }), { idempotencyKey: `payment-price-${paymentId}` });
     const metadata = { payment_id: paymentId, user_id: booking.userId };
     expect(stripe.createLink).toHaveBeenCalledWith(expect.objectContaining({
       restrictions: { completed_sessions: { limit: 1 } },
       metadata,
       payment_intent_data: { metadata },
-    }));
+    }), { idempotencyKey: `payment-link-${paymentId}` });
     expect((await call(`/payments/${paymentId}/link`, "POST")).status).toBe(200);
     expect(stripe.createLink).toHaveBeenCalledTimes(1);
     const paid = await call(`/payments/${paymentId}/mark-paid`, "POST", { method: "cash" });

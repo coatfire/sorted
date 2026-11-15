@@ -21,6 +21,18 @@ async function fixture(status: "confirmed" | "completed" | "cancelled" | "enquir
 }
 
 describe("record instalment payments", () => {
+  it.each([true, false])("settles Money's full owed amount once, with pending deposit present: %s", async pending => {
+    const f = await fixture("confirmed");
+    if (!pending) await db.delete(schema.payments).where(eq(schema.payments.id, f.deposit.id));
+    expect((await f.record(10000, { method: "revolut" })).status).toBe(201);
+    const rows = await f.payments();
+    expect(rows.filter(row => row.status === "paid").reduce((sum, row) => sum + row.amountCents, 0)).toBe(10000);
+    expect(rows.filter(row => row.status === "pending")).toHaveLength(0);
+    if (pending) expect(rows.find(row => row.id === f.deposit.id)?.status).toBe("cancelled");
+    expect((await f.record(10000)).status).toBe(400);
+    expect((await f.payments()).filter(row => row.status === "paid")).toHaveLength(1);
+  });
+
   it("records the €55 cash balance on a completed €80 booking with a paid €25 deposit on 15 November", async () => {
     vi.setSystemTime(new Date("2026-11-15T14:00:00Z"));
     const f = await fixture("completed");

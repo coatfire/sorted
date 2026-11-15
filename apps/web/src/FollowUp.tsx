@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { addCalendarDays, calendarDaysBetween, CalendarDate, irelandToday } from "@sorted/core";
-import { Button, Card, Field, Sheet } from "./components";
+import { Button, Field, Sheet } from "./components";
 import type { BookingRow } from "./lib/backend";
 import { firstName, longDay, whatsappLink } from "./lib/format";
 import { useAction, useData, useStore } from "./lib/store";
@@ -42,23 +42,20 @@ function FollowUpMessage({ booking, onClose }: { booking: BookingRow; onClose: (
   </Sheet>;
 }
 
-export function FollowUps() {
-  const { bookings } = useData();
+export function FollowUps({ bookings: due }: { bookings: BookingRow[] }) {
   const [selected, setSelected] = useState<{ booking: BookingRow; action: "message" | "later" } | null>(null);
   const today = irelandToday();
-  const due = bookings.filter((booking) => booking.status === "enquiry" && booking.followUpOn && booking.followUpOn <= today)
-    .sort((a, b) => a.followUpOn!.localeCompare(b.followUpOn!));
   if (!due.length) return null;
-  return <section className="list-section">
-    <div className="section-heading"><h2>Follow up</h2><span className="count-badge due">{due.length}</span></div>
+  return <div className="attention-group">
+    <h3>Follow up</h3>
     {due.map((booking) => {
       const days = calendarDaysBetween(booking.followUpOn!, today);
-      return <Card className="follow-up-card" key={booking.id}>
-        <Link className="follow-up-main" to={`/bookings/${booking.id}`}><strong>{booking.client.name}</strong><span>{booking.service}</span><span className="due-text">{days === 0 ? "Due today" : `${days} ${days === 1 ? "day" : "days"} overdue`}</span></Link>
-        <div className="action-pair"><Button onClick={() => setSelected({ booking, action: "message" })}>Message</Button><Button kind="soft" onClick={() => setSelected({ booking, action: "later" })}>Later</Button></div>
-      </Card>;
+      return <div className="attention-followup" key={booking.id}>
+        <Link className="attention-followup-main" to={`/bookings/${booking.id}`}><strong>{booking.client.name}</strong><span>{booking.service} · {days === 0 ? "Due today" : `${days} ${days === 1 ? "day" : "days"} overdue`}</span></Link>
+        <div className="attention-followup-actions"><Button kind="quiet" onClick={() => setSelected({ booking, action: "message" })}>Message</Button><Button kind="quiet" onClick={() => setSelected({ booking, action: "later" })}>Remind me later</Button></div>
+      </div>;
     })}
     {selected?.action === "message" && <FollowUpMessage booking={selected.booking} onClose={() => setSelected(null)} />}
     {selected?.action === "later" && <FollowUpLater booking={selected.booking} onClose={() => setSelected(null)} />}
-  </section>;
+  </div>;
 }

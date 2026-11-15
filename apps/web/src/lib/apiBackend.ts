@@ -87,6 +87,11 @@ export const apiBackend: Backend = {
     return payment.linkUrl!;
   },
 
+  async bookingPaymentLink(bookingId) {
+    const payment = await post<Payment>(`/bookings/${bookingId}/payment-link`);
+    return payment.linkUrl!;
+  },
+
   markPaid: (paymentId, method) => post(`/payments/${paymentId}/mark-paid`, { method }),
   recordPayment: (bookingId, input) => post(`/bookings/${bookingId}/payments`, input),
 

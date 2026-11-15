@@ -354,6 +354,22 @@ export const demoBackend: Backend = {
     return payment.linkUrl;
   },
 
+  async bookingPaymentLink(bookingId) {
+    const d = data(), booking = mustFind(d.bookings, bookingId, "Booking");
+    if (booking.status !== "confirmed" && booking.status !== "completed") throw new Error("This booking cannot take payments.");
+    const { owedCents } = bookingStage(booking, d.payments);
+    if (!owedCents) throw new Error("This booking is already paid in full.");
+    const pending = d.payments.filter(payment => payment.bookingId === bookingId && payment.status === "pending");
+    let payment = pending.length === 1 && pending[0].amountCents === owedCents ? pending[0] : undefined;
+    if (!payment) {
+      voidPending(bookingId);
+      payment = { id: id(), bookingId, kind: "custom", amountCents: owedCents, status: "pending", method: null, linkUrl: null, paidAt: null, createdAt: now(), vatRateBp: null };
+      d.payments.push(payment);
+      save();
+    }
+    return this.paymentLink(payment.id);
+  },
+
   async markPaid(paymentId, method) {
     const payment = mustFind(data().payments, paymentId, "Payment");
     if (payment.status !== "pending") throw new Error("Payment is not pending");
