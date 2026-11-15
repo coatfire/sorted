@@ -148,25 +148,27 @@ expenseRoutes.patch("/:id", async (c) => {
 });
 
 expenseRoutes.delete("/:id", async (c) => {
-  const [expense] = await db
-    .delete(schema.expenses)
-    .where(
-      and(
-        eq(schema.expenses.id, c.req.param("id")),
-        eq(schema.expenses.userId, c.get("userId")),
-      ),
-    )
-    .returning();
-  if (!expense) return c.json({ error: "Expense not found" }, 404);
-  if (expense.receiptKey) {
-    await db
-      .delete(schema.receipts)
+  return db.transaction(async (tx) => {
+    const [expense] = await tx
+      .delete(schema.expenses)
       .where(
         and(
-          eq(sql`${schema.receipts.id}::text`, expense.receiptKey),
-          eq(schema.receipts.userId, c.get("userId")),
+          eq(schema.expenses.id, c.req.param("id")),
+          eq(schema.expenses.userId, c.get("userId")),
         ),
-      );
-  }
-  return c.body(null, 204);
+      )
+      .returning();
+    if (!expense) return c.json({ error: "Expense not found" }, 404);
+    if (expense.receiptKey) {
+      await tx
+        .delete(schema.receipts)
+        .where(
+          and(
+            eq(sql`${schema.receipts.id}::text`, expense.receiptKey),
+            eq(schema.receipts.userId, c.get("userId")),
+          ),
+        );
+    }
+    return c.body(null, 204);
+  });
 });

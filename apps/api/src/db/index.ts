@@ -1,29 +1,31 @@
-import { neon } from "@neondatabase/serverless";
-import { drizzle, type NeonHttpDatabase } from "drizzle-orm/neon-http";
+import { createRequire as createLocalRequire } from "node:module";
+import postgres from "postgres";
+import { drizzle, type PostgresJsDatabase } from "drizzle-orm/postgres-js";
 import * as schema from "./schema";
 
 /**
  * Two drivers, one query API:
- *  - DATABASE_URL set   → Neon over HTTP (production, or dev against Neon)
+ *  - DATABASE_URL set   → Supabase Postgres via postgres-js
  *  - DATABASE_URL unset → PGlite, an embedded Postgres. Persists to
  *    apps/api/.data in dev, in-memory under test. Migrations are applied on
  *    boot so `pnpm dev` works with nothing installed.
  *
- * PGlite is loaded lazily and marked external in the Lambda bundle, so it
- * never ships to production.
+ * Local-only drivers are required at runtime so bundlers cannot hoist their
+ * PGlite imports into the production entrypoint.
  */
-type Db = NeonHttpDatabase<typeof schema>;
+type Db = PostgresJsDatabase<typeof schema>;
 
 async function connect(): Promise<Db> {
   const url = process.env.DATABASE_URL;
-  if (url) return drizzle(neon(url), { schema });
+  if (url) return drizzle(postgres(url, { prepare: false, max: 2 }), { schema });
 
-  if (process.env.AWS_LAMBDA_FUNCTION_NAME || process.env.NODE_ENV === "production") {
+  if (process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME || process.env.NODE_ENV === "production") {
     throw new Error("DATABASE_URL is required in production");
   }
-  const { PGlite } = await import("@electric-sql/pglite");
-  const { drizzle: drizzlePglite } = await import("drizzle-orm/pglite");
-  const { migrate } = await import("drizzle-orm/pglite/migrator");
+  const requireLocal = createLocalRequire(import.meta.url);
+  const { PGlite }: typeof import("@electric-sql/pglite") = requireLocal("@electric-sql/pglite");
+  const { drizzle: drizzlePglite }: typeof import("drizzle-orm/pglite") = requireLocal("drizzle-orm/pglite");
+  const { migrate }: typeof import("drizzle-orm/pglite/migrator") = requireLocal("drizzle-orm/pglite/migrator");
   const dir = new URL("../../", import.meta.url).pathname;
   const dataDir = process.env.VITEST
     ? undefined // in-memory
