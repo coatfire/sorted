@@ -208,17 +208,47 @@ After save, a short success state replaces the old confirmation decision:
   Enquiry creation emits none. Creation never records a deposit as paid.
 
 ### 3. Booking detail — `/bookings/:id` (M1–M3)
-Stacked sections:
-- **Header:** service, client name (→ client detail), date/time, location,
-  status chip.
-- **Actions (contextual to status):**
-  - enquiry → `Confirm & notify` / `Edit` / `Cancel`
-  - confirmed → `Mark complete` (primary) / `Edit` / `Cancel`
-  - completed → payment actions only
-- **Money card:** price, deposit, list of payment rows each with amount ·
-  kind · chip, and per-pending-row buttons `[Send payment link] [Mark paid]`.
-  "Mark paid" opens a sheet: Cash / Bank transfer. Header line: "€120 of
-  €350 paid".
+Stacked sections: header → details → Next step → More → optional notes →
+Money → Client messages. Lead with at most one primary page action.
+- **Header:** client name and service, work-status chip plus separate payment
+  wording: **Confirmed · €20 deposit due**, **Completed · €55 to pay**,
+  **Completed · Paid in full**, or simply **Enquiry / Confirmed / Cancelled**.
+  Details retain date/time, location/directions and the client link/mobile.
+- **Stage:** shared core `bookingStage(booking, payments, now)` sums only this
+  booking's paid payments and clamps owed cents at zero. Confirmed dates after
+  today in Europe/Dublin are upcoming; today/past dates are due, irrespective
+  of appointment time. Completed jobs are owing or paid; work status is separate.
+- **Next step**, directly below details:
+  - enquiry: primary **Confirm booking** (or **Confirm & notify <name>** using
+    existing automation/mobile wording and caption); quiet **Send quote** and
+    **Change follow-up**, with the follow-up date or **No follow-up set** here.
+  - upcoming with money owed: pending **€X deposit due**, or **€X still to pay**
+    when the outstanding money is not a pending deposit; primary **Add payment**
+    and quiet **Ask for payment**. Deposit wording never exceeds total owed.
+  - upcoming with nothing owed: **Next: <Ireland weekday/date/time>**, soft
+    **Send confirmation**, and no primary.
+  - due: primary **Mark complete**; when owed, **€X still to pay** and quiet
+    **Add payment**.
+  - owing: **€X left to pay**, primary **Add payment**, quiet **Ask for payment**.
+  - paid: **Paid in full**, primary **Book again**, quiet **Receipt**.
+  - cancelled: soft **Book again**, with no primary.
+- **More:** a compact list of quiet icon rows, each at least 44px high, not a
+  stack of large buttons. Preserve availability and avoid duplicate actions:
+  **Invoice**, **Receipt** (unless in Next step), **Add to calendar**,
+  **Send confirmation** (unless in Next step), **Book again** (unless in Next
+  step; never for enquiries), **Edit** (enquiry/confirmed), **Mark complete**
+  (upcoming only, retaining early completion), and payment actions not already
+  in Next step. **Ask for payment** remains available for enquiries/due jobs
+  with money owed. **Add payment** remains here for confirmed/completed jobs
+  when not in Next step, including zero owed; overpayment validation is unchanged.
+  **Cancel enquiry/booking** is last, danger-coloured, and only for open jobs.
+  No calendar or confirmation action for cancelled jobs. Receipt remains disabled
+  without a paid payment, with explanatory text. Respect reduced-motion preferences.
+- **Money card:** price, deposit and payment rows with amount, kind and Paid/Due
+  chips. Paid rows retain method/date; pending rows optionally offer **Payment
+  link** when enabled. Header: **€120 of €350 paid**. No standalone Record/Request
+  payment buttons and no per-row Mark paid on booking detail. Money's quick
+  Mark paid sheet still offers Cash / Bank transfer / Revolut.
 - **Add to calendar:** non-cancelled bookings offer a button opening a Sheet
   with **iPhone / phone calendar** (share an `.ics` file where supported,
   otherwise download) and **Google Calendar** (a prefilled event). Explain
@@ -231,24 +261,27 @@ Stacked sections:
   few hours to show in Google.” **Reset links** requires confirmation:
   “Old links will stop working.” In demo, disable the controls and show
   “Available when you sign in”; never show fake subscription URLs.
-- **Record payment:** confirmed/completed bookings with money owed offer a
-  44px-minimum button opening a Sheet with a euro-prefixed decimal amount
+- **Add payment:** the Next step/More action opens the existing **Record payment**
+  Sheet with a euro-prefixed decimal amount
   (defaults to all outstanding), method (Cash / Bank transfer / Revolut), and
   date (defaults to today in Ireland; no future dates). Validate on blur,
   clear errors on edit, focus the first invalid field on submit. Success:
   "Payment recorded". Custom rows are labelled "Payment" and each can have
-  its own Receipt. At paid ≥ price show **Paid in full** and hide the button.
+  its own Receipt. At paid ≥ price show **Paid in full**; Add payment moves to
+  More instead of disappearing. Existing limits still prevent overpayments.
   This is the only record/mark-paid action on booking detail; Money keeps its
   quick Mark paid sheet with Cash / Bank transfer / Revolut. Failed saves stay
   open with an inline error. If saving succeeds but reloading fails, explain
   that it was saved, keep the sheet open, and offer Reload instead of letting
   the person record the same payment again.
-- **Request payment:** the manual-draft Sheet has an editable **Amount to
+- **Ask for payment:** the manual-draft Sheet has an editable **Amount to
   request**, initially the balance, from €0.01 to the balance. The draft's
   balance placeholder uses this amount. Include a pending payment link only
   when its amount matches the requested amount; disable draft actions for
-  invalid amounts. Manual drafts are never logged as sent.
-- **Quote:** enquiries have a primary **Quote** action using the same PDF
+  invalid amounts. Opening a draft records nothing; after opening, retain
+  **Did you send it?**, **Yes, I sent it** and **Not yet**. Only explicit Yes
+  records the request timestamp; manual drafts are never logged as sent.
+- **Quote:** enquiries have a quiet **Send quote** action in Next step using the same PDF
   share/download flow and branding as invoices. Title **Quote**, stable
   **QTE-0001** number and issue date, **Valid until** (issue date + 30 days),
   service/date/price at issue time and VAT breakdown, deposit if positive, and
