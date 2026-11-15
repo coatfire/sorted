@@ -10,3 +10,4 @@ export * from "./dates";
 export * from "./calendar";
 export * from "./revolut";
 export * from "./services";
+export * from "./bookingStage";

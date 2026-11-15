@@ -5,7 +5,7 @@
  * payment links are simulated — nothing leaves the browser.
  */
 import type { Client, Expense, MessageLogEntry, Payment, BookingDocument } from "@sorted/core";
-import { snapshotReceipt, snapshotDocument, TaxSettings, ConfirmExpenseInput, RecordPaymentInput, paymentPaidAt, irelandToday, addCalendarDays, CalendarDate, shiftDublinWeeks, RepeatInput, Services } from "@sorted/core";
+import { snapshotReceipt, snapshotDocument, TaxSettings, ConfirmExpenseInput, RecordPaymentInput, paymentPaidAt, irelandToday, addCalendarDays, CalendarDate, shiftDublinWeeks, RepeatInput, Services, bookingStage } from "@sorted/core";
 import type { Backend, BookingRow, Snapshot } from "./backend";
 import { blobToDataUrl } from "./image";
 
@@ -305,7 +305,7 @@ export const demoBackend: Backend = {
     const booking = mustFind(d.bookings, bookingId, "Booking");
     const paid = paidFor(bookingId);
     voidPending(bookingId);
-    const remainder = Math.max(booking.priceCents - paid, 0);
+    const remainder = bookingStage(booking, d.payments).owedCents;
     if (remainder > 0) {
       d.payments.push({
         id: id(), bookingId, kind: paid > 0 ? "balance" : "full", amountCents: remainder,
@@ -368,7 +368,7 @@ export const demoBackend: Backend = {
     const d = data();
     const booking = mustFind(d.bookings, bookingId, "Booking");
     if (booking.status !== "confirmed" && booking.status !== "completed") throw new Error("Payments can only be recorded for confirmed or completed bookings.");
-    const outstanding = booking.priceCents - paidFor(bookingId);
+    const outstanding = bookingStage(booking, d.payments).owedCents;
     if (parsed.amount_cents > outstanding) throw new Error(`That's more than the ${new Intl.NumberFormat("en-IE", { style: "currency", currency: "EUR" }).format(Math.max(0, outstanding) / 100)} still owed.`);
     d.payments.push({
       id: id(), bookingId, kind: "custom", status: "paid", method: parsed.method, amountCents: parsed.amount_cents,

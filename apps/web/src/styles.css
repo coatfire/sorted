@@ -553,11 +553,24 @@ a.button { text-decoration: none; }
 .back-button span { font-size: 1.55rem; line-height: 1; }
 .detail-hero {
   display: flex;
+  flex-direction: column;
   align-items: flex-start;
   justify-content: space-between;
   gap: 14px;
 }
 .detail-hero h1 { font-size: 2.35rem; }
+.booking-status { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.booking-payment-phrase { color: var(--muted); font-size: 0.82rem; }
+.next-step-card { display: flex; flex-direction: column; gap: 14px; padding: 18px; }
+.next-step-card h2 { font-size: 1.65rem; line-height: 1.15; }
+.next-step-card .button-caption { margin: 0; line-height: 1.5; }
+.next-step-secondary { display: flex; flex-wrap: wrap; gap: 4px 14px; }
+.next-step-secondary .button { width: auto; min-height: 44px; padding: 8px 0; border: 0; background: transparent; font-size: 0.84rem; }
+.booking-more-list { padding: 0 16px; }
+.booking-more-action { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 44px; padding: 12px 0; border: 0; background: transparent; color: var(--ink); font: inherit; font-size: 0.86rem; text-align: left; cursor: pointer; }
+.booking-more-action + .booking-more-action { border-top: 1px solid var(--line); }
+.booking-more-action:disabled { opacity: 0.5; cursor: default; }
+.booking-more-action.is-danger { color: var(--danger); }
 .detail-card { padding: 4px 18px; }
 .detail-line {
   display: flex;

@@ -8,11 +8,12 @@ import { centsToInput, parseEuros, longDay, time, whatsappLink } from "./lib/for
 import { useValidation } from "./lib/useValidation";
 import { useAction, useData, useStore } from "./lib/store";
 
-export function BookingMessageSheet({ booking, kind, onClose, initialAmountCents }: {
+export function BookingMessageSheet({ booking, kind, onClose, initialAmountCents, requestLabel = "Request payment" }: {
   booking: BookingRow;
   kind: "confirmation" | "payment_request";
   onClose: () => void;
   initialAmountCents?: number;
+  requestLabel?: string;
 }) {
   const { user, payments, features } = useData();
   const { backend } = useStore();
@@ -49,7 +50,7 @@ export function BookingMessageSheet({ booking, kind, onClose, initialAmountCents
   const email = client.email ? `mailto:${encodeURIComponent(client.email).replace(/%40/g, "@")}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(message)}` : null;
 
   return (
-    <Sheet title={confirmation ? "Send confirmation" : "Request payment"} onClose={onClose}>
+    <Sheet title={confirmation ? "Send confirmation" : requestLabel} onClose={onClose}>
       <p className="sheet-copy">Opens a draft in your app. Review it and tap send there.{!confirmation && " Come back here to confirm whether you sent it."}</p>
       {!confirmation && <Field label="Amount to request" {...validation.field("amount")}>
         <div className="money-input"><span>€</span><input name="amount" inputMode="decimal" required value={amount} onChange={(event) => setAmount(event.target.value)} /></div>

@@ -1,14 +1,16 @@
 import { useEffect, useState } from "react";
 import { FollowUpLater } from "../FollowUp";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { assembleBookingDocument, type DocumentKind, type MessageLogEntry } from "@sorted/core";
+import { assembleBookingDocument, bookingStage, type DocumentKind, type MessageLogEntry } from "@sorted/core";
 import { BackButton, Button, Card, EmptyState, Icon, MoneyText, Sheet, StatusChip } from "../components";
 import { PaymentActions } from "../PaymentActions";
 import { BookingMessageSheet } from "../BookingMessageSheet";
 import { RecordPaymentSheet } from "../RecordPaymentSheet";
 import { BookingCalendarSheet } from "../BookingCalendarSheet";
+import { BookingSteps } from "../BookingSteps";
+import { bookingPaymentPhrase, pendingDepositCents, type BookingDetailAction } from "../lib/bookingDetail";
 import {
-  confirmCopy, firstName, kindLabel, longDay, messageLabel, methodLabel, stamp, time,
+  firstName, kindLabel, longDay, messageLabel, methodLabel, stamp, time,
 } from "../lib/format";
 import { useAction, useData, useStore, useSession } from "../lib/store";
 import { download } from "../lib/image";
@@ -62,8 +64,9 @@ export function BookingDetail() {
     .reduce((sum, payment) => sum + payment.amountCents, 0);
   const paidPayments = bookingPayments.filter((payment) => payment.status === "paid");
   const hasPaidPayment = paidPayments.length > 0;
-  const open = booking.status === "enquiry" || booking.status === "confirmed";
-  const confirm = confirmCopy(client, features.automation);
+  const { stage, owedCents } = bookingStage(booking, payments, new Date());
+  const depositDue = pendingDepositCents(booking, payments, owedCents);
+  const paymentPhrase = bookingPaymentPhrase(stage, owedCents, depositDue);
 
   async function document(kind: DocumentKind, paymentId?: string) {
     if (!booking) return;
@@ -85,6 +88,27 @@ export function BookingDetail() {
     } finally { setDocumentBusy(false); }
   }
 
+  function action(action: BookingDetailAction) {
+    if (!booking) return;
+    switch (action) {
+      case "confirm": void run(() => backend.confirmBooking(booking.id), "Booking confirmed"); break;
+      case "complete": void run(() => backend.completeBooking(booking.id), "Marked complete"); break;
+      case "invoice": case "quote": void document(action); break;
+      case "receipt":
+        if (paidPayments.length === 1) void document("receipt", paidPayments[0].id);
+        else setChooseReceipt(true);
+        break;
+      case "followUp": setFollowUp(true); break;
+      case "calendar": setCalendar(true); break;
+      case "confirmation": setMessage("confirmation"); break;
+      case "again": navigate(`/bookings/new?again=${booking.id}`); break;
+      case "edit": navigate(`/bookings/${booking.id}/edit`); break;
+      case "cancel": setConfirmCancel(true); break;
+      case "payment": setRecordPayment(true); break;
+      case "ask": setMessage("payment_request"); break;
+    }
+  }
+
   return (
     <div className="page detail-page">
       <BackButton />
@@ -93,7 +117,10 @@ export function BookingDetail() {
           <p className="eyebrow">{client.name}</p>
           <h1>{booking.service}</h1>
         </div>
-        <StatusChip status={booking.status} />
+        <div className="booking-status">
+          <StatusChip status={booking.status} />
+          {paymentPhrase && <span className="booking-payment-phrase">· {paymentPhrase}</span>}
+        </div>
       </div>
 
       <Card className="detail-card">
@@ -119,59 +146,15 @@ export function BookingDetail() {
         </div>
       </Card>
 
-      {booking.status === "enquiry" && <Card className="settings-card"><h2>Follow up on</h2><p>{booking.followUpOn ? longDay(`${booking.followUpOn}T12:00:00`) : "No follow-up set"}</p><Button kind="soft" onClick={() => setFollowUp(true)}>Change follow-up</Button></Card>}
-      {followUp && <FollowUpLater booking={booking} onClose={() => setFollowUp(false)} />}
-      {booking.status !== "cancelled" && (
-        <Button kind="soft" onClick={() => setCalendar(true)}>Add to calendar</Button>
-      )}
-
-      {booking.status !== "cancelled" && (
-        <Button kind="soft" onClick={() => setMessage("confirmation")}>
-          <Icon name="message" /> Send confirmation
-        </Button>
-      )}
-
-      {booking.status === "enquiry" && <Button disabled={documentBusy} onClick={() => document("quote")}>Quote</Button>}
-      <div className="action-pair">
-        <Button kind="quiet" disabled={documentBusy} onClick={() => document("invoice")}>Invoice</Button>
-        <Button kind="quiet" disabled={documentBusy || !hasPaidPayment} aria-describedby={!hasPaidPayment ? "receipt-unavailable" : undefined} onClick={() => {
-          if (paidPayments.length === 1) void document("receipt", paidPayments[0].id);
-          else setChooseReceipt(true);
-        }}>Receipt</Button>
-      </div>
-      {!hasPaidPayment && <p className="sheet-copy" id="receipt-unavailable">Record a payment to create a receipt.</p>}
-      {booking.status !== "enquiry" && <Button kind="soft" onClick={() => navigate(`/bookings/new?again=${booking.id}`)}>Book again</Button>}
+      <BookingSteps booking={booking} stage={stage} owedCents={owedCents} depositCents={depositDue}
+        hasPaidPayment={hasPaidPayment} automation={features.automation} busy={busy}
+        documentBusy={documentBusy} onAction={action} />
 
       {booking.notes && (
         <Card className="notes-card">
           <p className="eyebrow">Notes</p>
           <p>{booking.notes}</p>
         </Card>
-      )}
-
-      {open && (
-        <div className="action-stack">
-          {booking.status === "enquiry" ? (
-            <>
-              <Button disabled={busy} onClick={() => run(() => backend.confirmBooking(booking.id), "Booking confirmed")}>
-                <Icon name={confirm.caption ? "check" : "message"} /> {confirm.label}
-              </Button>
-              {confirm.caption && <p className="button-caption">{confirm.caption}</p>}
-            </>
-          ) : (
-            <Button disabled={busy} onClick={() => run(() => backend.completeBooking(booking.id), "Marked complete")}>
-              <Icon name="check" /> Mark complete
-            </Button>
-          )}
-          <div className="action-pair">
-            <Button kind="quiet" onClick={() => navigate(`/bookings/${booking.id}/edit`)}>
-              <Icon name="edit" size={17} /> Edit
-            </Button>
-            <Button kind="danger" onClick={() => setConfirmCancel(true)}>
-              Cancel {booking.status === "enquiry" ? "enquiry" : "booking"}
-            </Button>
-          </div>
-        </div>
       )}
 
       <section className="detail-section">
@@ -207,7 +190,7 @@ export function BookingDetail() {
           ) : (
             <p className="empty-inline">
               {booking.status === "completed"
-                ? "Nothing is due."
+                ? stage === "owing" ? "The balance is still to pay." : "Nothing is due."
                 : booking.status === "cancelled"
                   ? "Cancelled — nothing is due."
                   : booking.status === "enquiry"
@@ -218,15 +201,7 @@ export function BookingDetail() {
             </p>
           )}
         </Card>
-        {paid >= booking.priceCents && <p className="sheet-copy"><strong>Paid in full</strong></p>}
-        {(booking.status === "confirmed" || booking.status === "completed") && paid < booking.priceCents && (
-          <Button kind="soft" onClick={() => setRecordPayment(true)}>Record payment</Button>
-        )}
-        {booking.status !== "cancelled" && booking.priceCents > paid && (
-          <Button kind="soft" onClick={() => setMessage("payment_request")}>
-            <Icon name="message" /> Request payment
-          </Button>
-        )}
+        {owedCents === 0 && <p className="sheet-copy"><strong>Paid in full</strong></p>}
       </section>
 
       <section className="detail-section">
@@ -252,7 +227,7 @@ export function BookingDetail() {
           ) : (
             <EmptyState icon="message" title="No messages sent" small>
               {!features.automation
-                ? "Automatic messages aren’t connected yet. Use Send confirmation or Request payment to open a draft. Manual sends aren’t tracked here."
+                ? "Automatic messages aren’t connected yet. Use Send confirmation or Ask for payment to open a draft. Manual sends aren’t tracked here."
                 : !client.phone
                   ? `Add a mobile for ${firstName(client.name)} and Sorted will send confirmations and reminders.`
                   : "Confirmations, reminders and payment requests will show here as they’re sent."}
@@ -279,9 +254,10 @@ export function BookingDetail() {
           <Button kind="quiet" onClick={() => setConfirmCancel(false)}>Keep it</Button>
         </Sheet>
       )}
-      {message && <BookingMessageSheet booking={booking} kind={message} onClose={() => setMessage(null)} />}
+      {followUp && <FollowUpLater booking={booking} onClose={() => setFollowUp(false)} />}
+      {message && <BookingMessageSheet booking={booking} kind={message} requestLabel="Ask for payment" onClose={() => setMessage(null)} />}
       {calendar && <BookingCalendarSheet booking={booking} onClose={() => setCalendar(false)} />}
-      {recordPayment && <RecordPaymentSheet bookingId={booking.id} outstanding={Math.max(0, booking.priceCents - paid)} onClose={() => setRecordPayment(false)} />}
+      {recordPayment && <RecordPaymentSheet bookingId={booking.id} outstanding={owedCents} onClose={() => setRecordPayment(false)} />}
       {chooseReceipt && <Sheet title="Choose a payment" onClose={() => setChooseReceipt(false)}>
         <p className="sheet-copy">Each payment has its own receipt number.</p>
         {paidPayments.map((payment) => <Button key={payment.id} kind="quiet" onClick={() => {
