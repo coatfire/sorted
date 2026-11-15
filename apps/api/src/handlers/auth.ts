@@ -49,31 +49,25 @@ authRoutes.post("/magic-link", async (c) => {
   if (!parsed.success) return c.json({ error: "Valid email required" }, 400);
   const { email } = parsed.data;
 
-  // Insert first, then count: concurrent requests each see the others' rows,
-  // so a burst can't slip past the limit.
-  const [loginToken] = await db.insert(schema.loginTokens).values({ email }).returning();
-  const [recent] = await db
+  const result = await db.transaction(async (tx) => {
+    await tx.insert(schema.users).values({ email }).onConflictDoNothing();
+    const [user] = await tx.select().from(schema.users)
+      .where(eq(schema.users.email, email)).for("update");
+    const [recent] = await tx
     .select({ count: count() })
     .from(schema.loginTokens)
     .where(and(
       eq(schema.loginTokens.email, email),
       gte(schema.loginTokens.createdAt, new Date(Date.now() - 15 * 60 * 1000)),
     ));
-  if (recent.count > 3) {
-    await db.delete(schema.loginTokens).where(eq(schema.loginTokens.id, loginToken.id));
+    if (recent.count >= 3) return null;
+    const [loginToken] = await tx.insert(schema.loginTokens).values({ email }).returning();
+    return { user, loginToken };
+  });
+  if (!result) {
     return c.json({ error: "Too many login links requested. Check your email, or try again in 15 minutes." }, 429);
   }
-
-  let [user] = await db
-    .select()
-    .from(schema.users)
-    .where(eq(schema.users.email, email));
-  if (!user) {
-    [user] = await db
-      .insert(schema.users)
-      .values({ email })
-      .returning();
-  }
+  const { user, loginToken } = result;
 
   const token = await issueMagicLinkToken(user.id, loginToken.id);
   const link = `${env.appUrl()}/login?token=${token}`;

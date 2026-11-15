@@ -88,6 +88,14 @@ describe("auth", () => {
     expect((await requestLink("separate-limit@example.com")).status).toBe(200);
   });
 
+  it("serializes concurrent requests for a new email", async () => {
+    const email = "concurrent-links@example.com";
+    const responses = await Promise.all(Array.from({ length: 6 }, () => requestLink(email)));
+    expect(responses.map((response) => response.status).sort()).toEqual([200, 200, 200, 429, 429, 429]);
+    const rows = await db.select().from(schema.loginTokens).where(eq(schema.loginTokens.email, email));
+    expect(rows).toHaveLength(3);
+  });
+
   it("does not count requests older than fifteen minutes", async () => {
     const email = "old-links@example.com";
     await db.insert(schema.loginTokens).values(Array.from({ length: 3 }, () => ({
