@@ -13,7 +13,7 @@ export function authError(error: unknown) {
 
 export function Login() {
   const { mode, signIn, startDemo } = useSession();
-  const { backend } = useStore();
+  const { authBackend: backend } = useStore();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -21,7 +21,7 @@ export function Login() {
   const validation = useValidation({});
   const navigate = useNavigate();
 
-  if (mode) return <Navigate to="/" replace />;
+  if (mode === "api") return <Navigate to="/" replace />;
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();

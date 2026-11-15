@@ -34,6 +34,7 @@ interface DataValue {
   /** Showing the last snapshot we managed to load (offline / API down). */
   stale: boolean;
   backend: Backend;
+  authBackend: Pick<Backend, "signup" | "login" | "verify" | "forgot" | "resetPassword">;
   refresh: () => Promise<void>;
   resetDemo: () => Promise<void>;
   toast: (message: string, tone?: "ok" | "error") => void;
@@ -141,6 +142,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       loadError,
       stale,
       backend,
+      authBackend: apiBackend,
       refresh,
       async resetDemo() {
         resetDemo();

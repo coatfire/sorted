@@ -27,7 +27,7 @@ function CheckEmail({ email, devLink }: { email: string; devLink?: string }) {
 }
 
 function PasswordForm({ reset = false }: { reset?: boolean }) {
-  const { backend } = useStore();
+  const { authBackend: backend } = useStore();
   const { signIn } = useSession();
   const [params] = useSearchParams();
   const navigate = useNavigate();
@@ -93,7 +93,7 @@ export function Signup() { return <PasswordForm />; }
 export function Reset() { return <PasswordForm reset />; }
 
 export function Forgot() {
-  const { backend } = useStore();
+  const { authBackend: backend } = useStore();
   const [email, setEmail] = useState("");
   const [sent, setSent] = useState<{ dev_link?: string } | null>(null);
   const [busy, setBusy] = useState(false);
@@ -128,7 +128,7 @@ export function Forgot() {
 }
 
 export function Verify() {
-  const { backend } = useStore();
+  const { authBackend: backend } = useStore();
   const { signIn } = useSession();
   const [params] = useSearchParams();
   const token = params.get("token");
