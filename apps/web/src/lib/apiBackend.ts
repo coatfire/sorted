@@ -11,7 +11,7 @@ const expenseBody = (draft: ExpenseDraft) => ({
 });
 
 export const apiBackend: Backend = {
-  document: (bookingId, kind) => post<BookingDocument>(`/bookings/${bookingId}/documents`, { kind }),
+  document: (bookingId, kind, paymentId) => post<BookingDocument>(`/bookings/${bookingId}/documents`, { kind, payment_id: paymentId }),
   signup: (email, password) => post("/auth/signup", { email, password }),
   login: (email, password) => post("/auth/login", { email, password }),
   verify: (token) => post("/auth/verify", { token }),

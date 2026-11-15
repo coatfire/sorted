@@ -43,6 +43,13 @@
       "when": 1794735417396,
       "tag": "0005_amusing_white_queen",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1794736137699,
+      "tag": "0006_worthless_living_tribunal",
+      "breakpoints": true
     }
   ]
 }

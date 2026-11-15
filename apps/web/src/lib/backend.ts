@@ -63,7 +63,7 @@ export interface Backend {
   completeBooking(id: string): Promise<void>;
   cancelBooking(id: string): Promise<void>;
   messages(bookingId: string): Promise<MessageLogEntry[]>;
-  document(bookingId: string, kind: DocumentKind): Promise<BookingDocument>;
+  document(bookingId: string, kind: DocumentKind, paymentId?: string): Promise<BookingDocument>;
   /** Creates (or returns the existing) payment link URL. */
   paymentLink(paymentId: string): Promise<string>;
   markPaid(paymentId: string, method: "cash" | "bank_transfer"): Promise<void>;

@@ -16,6 +16,7 @@ export function BookingDetail() {
   const { bookings, payments, features, user } = useData();
   const { backend, toast } = useStore();
   const [documentBusy, setDocumentBusy] = useState(false);
+  const [chooseReceipt, setChooseReceipt] = useState(false);
   const { busy, run } = useAction();
   const [confirmCancel, setConfirmCancel] = useState(false);
   const [message, setMessage] = useState<"confirmation" | "payment_request" | null>(null);
@@ -52,15 +53,16 @@ export function BookingDetail() {
   const paid = bookingPayments
     .filter((payment) => payment.status === "paid")
     .reduce((sum, payment) => sum + payment.amountCents, 0);
-  const hasPaidPayment = bookingPayments.some((payment) => payment.status === "paid");
+  const paidPayments = bookingPayments.filter((payment) => payment.status === "paid");
+  const hasPaidPayment = paidPayments.length > 0;
   const open = booking.status === "enquiry" || booking.status === "confirmed";
   const confirm = confirmCopy(client, features.automation);
 
-  async function document(kind: DocumentKind) {
+  async function document(kind: DocumentKind, paymentId?: string) {
     if (!booking) return;
     setDocumentBusy(true);
     try {
-      const record = await backend.document(booking.id, kind);
+      const record = await backend.document(booking.id, kind, paymentId);
       const data = assembleBookingDocument(user, booking, booking.client, payments, record);
       const { createBookingPdf } = await import("../lib/bookingPdf");
       const blob = await createBookingPdf(data);
@@ -118,7 +120,10 @@ export function BookingDetail() {
 
       <div className="action-pair">
         <Button kind="quiet" disabled={documentBusy} onClick={() => document("invoice")}>Invoice</Button>
-        <Button kind="quiet" disabled={documentBusy || !hasPaidPayment} aria-describedby={!hasPaidPayment ? "receipt-unavailable" : undefined} onClick={() => document("receipt")}>Receipt</Button>
+        <Button kind="quiet" disabled={documentBusy || !hasPaidPayment} aria-describedby={!hasPaidPayment ? "receipt-unavailable" : undefined} onClick={() => {
+          if (paidPayments.length === 1) void document("receipt", paidPayments[0].id);
+          else setChooseReceipt(true);
+        }}>Receipt</Button>
       </div>
       {!hasPaidPayment && <p className="sheet-copy" id="receipt-unavailable">Record a payment to create a receipt.</p>}
 
@@ -255,6 +260,15 @@ export function BookingDetail() {
         </Sheet>
       )}
       {message && <BookingMessageSheet booking={booking} kind={message} onClose={() => setMessage(null)} />}
+      {chooseReceipt && <Sheet title="Choose a payment" onClose={() => setChooseReceipt(false)}>
+        <p className="sheet-copy">Each payment has its own receipt number.</p>
+        {paidPayments.map((payment) => <Button key={payment.id} kind="quiet" onClick={() => {
+          setChooseReceipt(false);
+          void document("receipt", payment.id);
+        }}>
+          <MoneyText cents={payment.amountCents} /> · {stamp(payment.paidAt ?? payment.createdAt)} · {methodLabel(payment.method)}
+        </Button>)}
+      </Sheet>}
     </div>
   );
 }

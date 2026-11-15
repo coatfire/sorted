@@ -5,6 +5,7 @@
  * payment links are simulated — nothing leaves the browser.
  */
 import type { Client, Expense, MessageLogEntry, Payment, BookingDocument } from "@sorted/core";
+import { snapshotReceipt } from "@sorted/core";
 import type { Backend, BookingRow, Snapshot } from "./backend";
 import { blobToDataUrl } from "./image";
 
@@ -192,17 +193,20 @@ const voidPending = (bookingId: string) => {
 const csvCell = (value: unknown) => `"${String(value ?? "").replaceAll('"', '""')}"`;
 
 export const demoBackend: Backend = {
-  async document(bookingId, kind) {
+  async document(bookingId, kind, paymentId) {
     const d = data();
-    mustFind(d.bookings, bookingId, "Booking");
-    if (kind === "receipt" && !d.payments.some((payment) => payment.bookingId === bookingId && payment.status === "paid")) {
-      throw new Error("Record a payment before creating a receipt.");
+    const booking = mustFind(d.bookings, bookingId, "Booking");
+    if (kind === "receipt" && !d.payments.some((payment) => payment.id === paymentId && payment.bookingId === bookingId && payment.status === "paid")) {
+      throw new Error("Choose a paid payment for this receipt.");
     }
     const documents = d.documents ??= [];
-    const existing = documents.find((document) => document.bookingId === bookingId && document.kind === kind);
+    const existing = documents.find((document) => document.bookingId === bookingId && document.kind === kind && (kind === "invoice" || document.paymentId === paymentId));
     if (existing) return structuredClone(existing);
+    const issuedAt = now();
     const document: BookingDocument = {
-      id: id(), bookingId, kind, issuedAt: now(),
+      id: id(), bookingId, kind, issuedAt,
+      paymentId: kind === "receipt" ? paymentId! : null,
+      receiptSnapshot: kind === "receipt" ? snapshotReceipt(booking, d.payments, paymentId!, issuedAt) : null,
       number: Math.max(0, ...documents.filter((item) => item.kind === kind).map((item) => item.number)) + 1,
     };
     documents.push(document);

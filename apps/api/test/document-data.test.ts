@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   assembleBookingDocument, documentNumber, InvoiceLogo, UpdateUserInput, MAX_LOGO_BYTES,
+  snapshotReceipt,
   type User, type Booking, type Client, type Payment, type BookingDocument,
 } from "@sorted/core";
 
@@ -15,7 +16,7 @@ const booking: Booking = {
   id: "booking", clientId: client.id, service: "Bridal makeup", startAt: "2026-07-01T23:30:00Z", endAt: null,
   priceCents: 12050, depositCents: 2000, status: "confirmed", location: null, notes: null, gcalEventId: null, completedAt: null, createdAt: user.createdAt,
 };
-const document: BookingDocument = { id: "document", bookingId: booking.id, kind: "invoice", number: 1, issuedAt: "2026-07-02T12:00:00Z" };
+const document: BookingDocument = { id: "document", bookingId: booking.id, kind: "invoice", number: 1, issuedAt: "2026-07-02T12:00:00Z", paymentId: null, receiptSnapshot: null };
 const paid: Payment = { id: "paid", bookingId: booking.id, kind: "deposit", status: "paid", amountCents: 2000, paidAt: "2026-07-01T12:00:00Z", method: "bank_transfer", linkUrl: null, createdAt: user.createdAt };
 
 describe("document data", () => {
@@ -28,7 +29,7 @@ describe("document data", () => {
   });
 
   it("receipts acknowledge only payments received, not an unpaid balance", () => {
-    const data = assembleBookingDocument(user, booking, client, [paid], { ...document, kind: "receipt", number: 23 });
+    const data = assembleBookingDocument(user, booking, client, [paid], { ...document, kind: "receipt", number: 23, paymentId: paid.id, receiptSnapshot: snapshotReceipt(booking, [paid], paid.id, document.issuedAt) });
     expect(data).toMatchObject({ number: "RCT-0023", total: "€20.00", bookingTotal: "€120.50", balanceDue: "€100.50", iban: null, bic: null });
     expect(data.lineItem).toEqual({ description: "Bridal makeup — payment received", amount: "€20.00" });
     expect(documentNumber("invoice", 10000)).toBe("INV-10000");
@@ -43,9 +44,25 @@ describe("document data", () => {
   });
 
   it("rejects empty receipts and mismatched booking or client data", () => {
-    expect(() => assembleBookingDocument(user, booking, client, [], { ...document, kind: "receipt" })).toThrow("Record a payment");
+    expect(() => assembleBookingDocument(user, booking, client, [], { ...document, kind: "receipt" })).toThrow("Choose a paid payment");
     expect(() => assembleBookingDocument(user, booking, client, [paid], { ...document, bookingId: "other" })).toThrow("does not match");
     expect(() => assembleBookingDocument(user, booking, { ...client, id: "other" }, [paid], document)).toThrow("does not match");
+  });
+
+  it("freezes a receipt's payment and financial details even after later payments and booking edits", () => {
+    const receipt: BookingDocument = { ...document, kind: "receipt", paymentId: paid.id, receiptSnapshot: snapshotReceipt(booking, [paid], paid.id, document.issuedAt) };
+    const before = assembleBookingDocument(user, booking, client, [paid], receipt);
+    const balance: Payment = { ...paid, id: "balance", amountCents: 10050, method: "cash", paidAt: "2026-07-03T12:00:00Z" };
+    expect(snapshotReceipt(booking, [paid, balance], paid.id, document.issuedAt)).toEqual(receipt.receiptSnapshot);
+    expect(assembleBookingDocument(user, { ...booking, priceCents: 30000, service: "Changed service" }, client, [paid, balance], receipt)).toEqual(before);
+    expect(before).toMatchObject({ total: "€20.00", bookingTotal: "€120.50", balanceDue: "€100.50", payments: [{ amount: "€20.00", method: "Bank transfer" }] });
+    const next = assembleBookingDocument(user, booking, client, [paid, balance], {
+      ...receipt, number: 2, paymentId: balance.id, issuedAt: "2026-07-04T12:00:00Z",
+      receiptSnapshot: snapshotReceipt(booking, [paid, balance], balance.id, "2026-07-04T12:00:00Z"),
+    });
+    expect(next).toMatchObject({ number: "RCT-0002", total: "€100.50", balanceDue: "€0.00", payments: [{ amount: "€100.50", method: "Cash" }] });
+    expect(() => snapshotReceipt(booking, [{ ...paid, status: "pending" }], paid.id, document.issuedAt)).toThrow("Choose a paid payment");
+    expect(() => snapshotReceipt(booking, [paid], "foreign", document.issuedAt)).toThrow("Choose a paid payment");
   });
 });
 

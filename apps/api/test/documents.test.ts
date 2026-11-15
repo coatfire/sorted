@@ -47,10 +47,16 @@ describe("booking document numbering", () => {
     const document = await first.json() as BookingDocument;
     expect(document.number).toBe(1);
     expect(await (await f.request(b.id, { kind: "invoice" })).json()).toEqual(document);
-    await db.insert(schema.payments).values({ userId: f.user.id, bookingId: b.id, kind: "deposit", status: "paid", amountCents: 2000 });
-    const receipt = await (await f.request(b.id, { kind: "receipt" })).json() as BookingDocument;
+    const [payment] = await db.insert(schema.payments).values({ userId: f.user.id, bookingId: b.id, kind: "deposit", status: "paid", amountCents: 2000 }).returning();
+    const receipt = await (await f.request(b.id, { kind: "receipt", payment_id: payment.id })).json() as BookingDocument;
     expect(receipt).toMatchObject({ kind: "receipt", number: 1 });
     expect(receipt.id).not.toBe(document.id);
+    expect(await (await f.request(b.id, { kind: "receipt", payment_id: payment.id })).json()).toEqual(receipt);
+    const [balance] = await db.insert(schema.payments).values({ userId: f.user.id, bookingId: b.id, kind: "balance", status: "paid", amountCents: 10000 }).returning();
+    expect(await (await f.request(b.id, { kind: "receipt", payment_id: payment.id })).json()).toEqual(receipt);
+    const next = await (await f.request(b.id, { kind: "receipt", payment_id: balance.id })).json() as BookingDocument;
+    expect(next).toMatchObject({ kind: "receipt", number: 2, paymentId: balance.id, receiptSnapshot: { balanceDueCents: 0, payment: { amountCents: 10000 } } });
+    expect(receipt.receiptSnapshot).toMatchObject({ balanceDueCents: 10000, payment: { amountCents: 2000 } });
     expect((await (await f.request((await f.booking()).id, { kind: "invoice" })).json() as BookingDocument).number).toBe(2);
   });
 
@@ -95,11 +101,16 @@ describe("booking document numbering", () => {
     const f = await fixture();
     const other = await fixture();
     const b = await f.booking();
-    await db.insert(schema.payments).values([
+    const [pending, foreign] = await db.insert(schema.payments).values([
       { userId: f.user.id, bookingId: b.id, kind: "deposit", status: "pending", amountCents: 2000 },
       { userId: other.user.id, bookingId: b.id, kind: "deposit", status: "paid", amountCents: 2000 },
-    ]);
+    ]).returning();
     expect((await f.request(b.id, { kind: "receipt" })).status).toBe(400);
+    expect((await f.request(b.id, { kind: "receipt", payment_id: pending.id })).status).toBe(400);
+    expect((await f.request(b.id, { kind: "receipt", payment_id: foreign.id })).status).toBe(404);
+    expect((await f.request(b.id, { kind: "receipt", payment_id: crypto.randomUUID() })).status).toBe(404);
+    const [another] = await db.insert(schema.payments).values({ userId: f.user.id, bookingId: (await f.booking()).id, kind: "full", status: "paid", amountCents: 12000 }).returning();
+    expect((await f.request(b.id, { kind: "receipt", payment_id: another.id })).status).toBe(404);
     expect((await f.request(b.id, { kind: "invalid" })).status).toBe(400);
     expect((await f.request(b.id, {})).status).toBe(400);
   });
