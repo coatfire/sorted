@@ -61,9 +61,9 @@ how to baseline it first.
 
 ## Optional AWS Lambda deployment
 ```bash
-pnpm build         # → dist/index.mjs (single bundled ESM file)
+pnpm build         # → dist/lambda/index.mjs (single bundled ESM file)
 ```
-Create a Lambda (nodejs20.x, arm64, 512MB, 15s timeout), upload dist/,
+Create a Lambda (nodejs20.x, arm64, 512MB, 15s timeout), upload dist/lambda/,
 handler `index.handler`, enable a Function URL (auth NONE — the app does its
 own auth), and set the server-side env vars above: `DATABASE_URL`,
 `JWT_SECRET`, `APP_URL` and `CORS_ORIGIN` at minimum. Run `pnpm db:migrate`
