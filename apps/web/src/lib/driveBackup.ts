@@ -25,26 +25,30 @@ function loadIdentity() {
   }).catch((error: unknown) => { scriptLoading = undefined; throw error; });
 }
 
-async function requestToken(clientId: string): Promise<string> {
+export async function prepareDriveBackup(clientId: string) {
   await loadIdentity();
-  return new Promise((resolve, reject) => {
-    const identity = google();
-    if (!identity) { reject(new Error("Google unavailable")); return; }
-    identity.accounts.oauth2.initTokenClient({
+  const identity = google();
+  if (!identity) throw new Error("Google unavailable");
+  let pending: { resolve: (token: string) => void; reject: (error: Error) => void } | undefined;
+  const client = identity.accounts.oauth2.initTokenClient({
       client_id: clientId, scope, include_granted_scopes: false,
       callback: (response) => {
-        if (response.error || !response.access_token || !response.scope?.split(" ").includes(scope)) reject(new Error("Google permission unavailable"));
-        else resolve(response.access_token);
+        if (response.error || !response.access_token || !response.scope?.split(" ").includes(scope)) pending?.reject(new Error("Google permission unavailable"));
+        else pending?.resolve(response.access_token);
+        pending = undefined;
       },
-      error_callback: () => reject(new Error("Google sign-in closed")),
-    }).requestAccessToken();
+      error_callback: () => { pending?.reject(new Error("Google sign-in closed")); pending = undefined; },
+  });
+  return () => new Promise<string>((resolve, reject) => {
+    pending = { resolve, reject };
+    client.requestAccessToken();
   });
 }
 
 interface DriveFile { id: string; name: string; mimeType: string }
 
-export async function backUpToDrive(clientId: string, backend: Backend, progress: (done: number, total: number) => void) {
-  let token: string | undefined = await requestToken(clientId);
+export async function backUpToDrive(tokenResponse: Promise<string>, backend: Backend, progress: (done: number, total: number) => void) {
+  let token: string | undefined = await tokenResponse;
   try {
     const request = async (url: string, init: RequestInit = {}) => {
       const response = await fetch(`https://www.googleapis.com/${url}`, { ...init, headers: { ...init.headers, Authorization: `Bearer ${token}` } });

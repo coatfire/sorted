@@ -33,7 +33,9 @@ Authenticated, tenant-scoped and disabled (404) without `GOOGLE_CLIENT_ID`:
 Both endpoints send `Cache-Control: no-store`. No Google access or refresh token
 is sent to Sorted's API, stored in the database or persisted by the app. The
 browser requests only `drive.file`, with incremental scopes disabled, on an
-explicit Settings button tap. Google Identity Services is lazy-loaded.
+explicit Settings button tap. The enabled Settings card lazy-loads Google
+Identity Services and prepares its token client on mount; only a tap requests
+a token and starts the backup.
 
 Backups use an app-created `Sorted` folder marked for this Sorted user so two
 Sorted accounts sharing a Google account cannot skip each other's numbered files.

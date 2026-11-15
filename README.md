@@ -100,7 +100,9 @@ origin, as previously requested. For local testing also add `http://localhost:51
 Configure the consent screen/test users as required by Google's publishing status.
 The only requested Drive scope is `https://www.googleapis.com/auth/drive.file`.
 
-The browser lazy-loads Google Identity Services on a button tap and keeps its
+The enabled Settings card preloads Google Identity Services and prepares its
+token client. The button says “Getting ready…” and stays disabled until ready;
+the tap then opens Google's popup synchronously. The browser keeps its
 short-lived access token in memory only. PDFs use the existing renderer, photos
 are copied in their original format, and yearly accountant CSVs use `exportCsv`.
 Files live in app-created Sorted folders, separated per Sorted account. Existing
@@ -114,4 +116,5 @@ CSP check: the repository currently sets no Content-Security-Policy in
 `vercel.json`, the web HTML or API middleware. If a deployment adds one, allow
 `https://accounts.google.com` for GIS scripts, connections and frames (and GIS
 styles as needed), and `https://www.googleapis.com` for Drive connections. No
-Google script is loaded merely by opening Settings.
+Google script is loaded when the feature is disabled or in demo mode. Opening
+an enabled card prepares Google, but never opens a popup or starts a backup.

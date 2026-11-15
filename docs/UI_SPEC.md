@@ -319,7 +319,12 @@ kit; resist adding more.
 - Explain that issued invoices, receipts, quotes, expense photos and yearly CSVs
   go into a Sorted folder in their Google Drive. It runs only when tapped,
   never automatically. Google consent requests access only to app-created files.
-- Load Google Identity Services and the backup module on tap, not on page load.
+- Preload Google Identity Services and the lazy backup module when the enabled,
+  signed-in card mounts. Prepare the token client before enabling the button;
+  show **Getting ready…** while loading. Request the token synchronously on tap
+  to preserve the browser's user gesture. Do not open a popup or run a backup on
+  mount, and load nothing in demo or when disabled. Preparation failure offers
+  **Try again** with the normal failure wording.
   Keep the button disabled during a run, and announce **Backing up 12 of 40…**.
 - Show **Last backed up: today** / **Last backed up: N days ago** only after a
   completed backup (remembered across visits). Success: **Backup finished**.
