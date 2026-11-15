@@ -12,7 +12,7 @@ export function TaxEstimateCard() {
       <p className="tax-estimate-caveat">Estimate based on the details you entered — not tax advice.</p>
       {estimate.vatRegistered && <>
         <p className="eyebrow">VAT · {estimate.periodLabel}</p>
-        <div className="tax-estimate-row"><span>VAT on sales ({estimate.vatRateBp! / 100}%)</span><MoneyText cents={estimate.salesVatCents} /></div>
+        <div className="tax-estimate-row"><span>VAT on sales{estimate.salesVatRateBp !== null ? ` (${estimate.salesVatRateBp / 100}%)` : ""}</span><MoneyText cents={estimate.salesVatCents} /></div>
         <div className="tax-estimate-row"><span>VAT paid (reclaimable)</span><MoneyText cents={estimate.purchaseVatCents} /></div>
         <div className="tax-estimate-row"><strong>{estimate.vatDueCents < 0 ? "Estimated VAT refund" : "Estimated VAT due"}</strong><MoneyText cents={Math.abs(estimate.vatDueCents)} /></div>
       </>}
