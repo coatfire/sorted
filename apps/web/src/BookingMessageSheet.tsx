@@ -16,8 +16,9 @@ export function BookingMessageSheet({ booking, kind, onClose, initialAmountCents
 }) {
   const { user, payments, features } = useData();
   const { backend } = useStore();
-  const { run } = useAction();
-  const openedDraft = () => { if (kind === "payment_request") void run(() => backend.paymentRequested(booking.id)); };
+  const { run, busy, error, committed } = useAction();
+  const [draftOpened, setDraftOpened] = useState(false);
+  const openedDraft = () => { if (kind === "payment_request") setDraftOpened(true); };
   const client = booking.client;
   const theirs = payments.filter((payment) => payment.bookingId === booking.id && payment.status !== "cancelled");
   const paid = theirs.filter((payment) => payment.status === "paid").reduce((sum, payment) => sum + payment.amountCents, 0);
@@ -48,7 +49,7 @@ export function BookingMessageSheet({ booking, kind, onClose, initialAmountCents
 
   return (
     <Sheet title={confirmation ? "Send confirmation" : "Request payment"} onClose={onClose}>
-      <p className="sheet-copy">Opens a draft in your app. Review it and tap send there. Sorted won’t mark it as sent.</p>
+      <p className="sheet-copy">Opens a draft in your app. Review it and tap send there.{!confirmation && " Come back here to confirm whether you sent it."}</p>
       {!confirmation && <Field label="Amount to request" {...validation.field("amount")}>
         <div className="money-input"><span>€</span><input name="amount" inputMode="decimal" required value={amount} onChange={(event) => setAmount(event.target.value)} /></div>
       </Field>}
@@ -69,7 +70,16 @@ export function BookingMessageSheet({ booking, kind, onClose, initialAmountCents
           <p className="sheet-copy" id="confirmation-no-email">{!validAmount ? "Enter a valid amount to open a draft." : "No email address added for this client. Add one in their details."}</p>
         </>
       )}
-      <Button kind="quiet" onClick={onClose}>Done</Button>
+      {draftOpened && <>
+        <h3>Did you send it?</h3>
+        {error && <p className="sheet-copy" role="alert">{error}</p>}
+        {committed && error && <Button kind="soft" onClick={() => window.location.reload()}>Reload</Button>}
+        <Button disabled={busy || committed} onClick={async () => {
+          if (await run(() => backend.paymentRequested(booking.id), "Marked as asked")) onClose();
+        }}>Yes, I sent it</Button>
+        <Button kind="quiet" disabled={busy} onClick={onClose}>Not yet</Button>
+      </>}
+      {!draftOpened && <Button kind="quiet" onClick={onClose}>Done</Button>}
     </Sheet>
   );
 }

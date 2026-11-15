@@ -6,7 +6,7 @@ import type { BookingRow } from "../lib/backend";
 import { Button, Card, EmptyState, Icon, MoneyText, PageHeader } from "../components";
 import { PaymentActions } from "../PaymentActions";
 import { TaxEstimateCard } from "../TaxEstimateCard";
-import { daysBetween, euros, kindLabel } from "../lib/format";
+import { euros, jobDateLabel, kindLabel } from "../lib/format";
 import { download } from "../lib/image";
 import { useAction, useData, useStore } from "../lib/store";
 
@@ -64,7 +64,6 @@ export function Money() {
         {pending.length ? (
           <div className="owed-list">
             {pending.map(({ payment, booking }) => {
-              const days = daysBetween(new Date(payment.createdAt), new Date());
               return (
                 <Card className="owed-card" key={payment.id}>
                   <Link to={`/bookings/${booking.id}`} className="owed-main">
@@ -72,8 +71,7 @@ export function Money() {
                     <div>
                       <strong>{booking.client.name}</strong>
                       <span>
-                        {booking.service} · {kindLabel(payment.kind).toLowerCase()} ·{" "}
-                        {days <= 0 ? "today" : days === 1 ? "1 day" : `${days} days`}
+                        {booking.service} · {kindLabel(payment.kind)} · {jobDateLabel(booking.startAt)}
                       </span>
                     </div>
                     <MoneyText cents={payment.amountCents} />

@@ -10,7 +10,7 @@ import { BookingCalendarSheet } from "../BookingCalendarSheet";
 import {
   confirmCopy, firstName, kindLabel, longDay, messageLabel, methodLabel, stamp, time,
 } from "../lib/format";
-import { useAction, useData, useStore } from "../lib/store";
+import { useAction, useData, useStore, useSession } from "../lib/store";
 import { download } from "../lib/image";
 
 export function BookingDetail() {
@@ -18,6 +18,7 @@ export function BookingDetail() {
   const navigate = useNavigate();
   const { bookings, payments, features, user } = useData();
   const { backend, toast } = useStore();
+  const { mode } = useSession();
   const [documentBusy, setDocumentBusy] = useState(false);
   const [chooseReceipt, setChooseReceipt] = useState(false);
   const [recordPayment, setRecordPayment] = useState(false);
@@ -200,7 +201,7 @@ export function BookingDetail() {
                   <MoneyText cents={payment.amountCents} />
                   <StatusChip status={payment.status} />
                 </div>
-                {payment.status === "pending" && <PaymentActions payment={payment} booking={booking} />}
+                {payment.status === "pending" && features.paymentLinks && <PaymentActions payment={payment} booking={booking} showMarkPaid={false} />}
               </div>
             ))
           ) : (
@@ -230,9 +231,10 @@ export function BookingDetail() {
 
       <section className="detail-section">
         <div className="section-heading compact">
-          <div><p className="eyebrow">Sent for you</p><h2>Client messages</h2></div>
+          <div><p className="eyebrow">{mode === "demo" ? "Sample activity" : "Sent for you"}</p><h2>Client messages</h2></div>
         </div>
         <Card className="timeline-card">
+          {mode === "demo" && <p className="sheet-copy">Sample activity — nothing was sent</p>}
           {messages === null ? (
             <div className="skeleton skeleton-row" />
           ) : messages.length ? (

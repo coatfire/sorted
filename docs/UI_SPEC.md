@@ -225,6 +225,11 @@ Stacked sections:
   clear errors on edit, focus the first invalid field on submit. Success:
   "Payment recorded". Custom rows are labelled "Payment" and each can have
   its own Receipt. At paid ≥ price show **Paid in full** and hide the button.
+  This is the only record/mark-paid action on booking detail; Money keeps its
+  quick Mark paid sheet with Cash / Bank transfer / Revolut. Failed saves stay
+  open with an inline error. If saving succeeds but reloading fails, explain
+  that it was saved, keep the sheet open, and offer Reload instead of letting
+  the person record the same payment again.
 - **Request payment:** the manual-draft Sheet has an editable **Amount to
   request**, initially the balance, from €0.01 to the balance. The draft's
   balance placeholder uses this amount. Include a pending payment link only
@@ -241,6 +246,7 @@ Stacked sections:
   Tue 14:02 · ✓ Reminder sent Fri 10:00". Failed sends show `--danger` with
   the reason. This card is what makes the automation trustworthy — the
   vendor can *see* what their client was sent.
+  In demo, label the timeline **Sample activity — nothing was sent**.
 - Cancel = confirm dialog stating consequences plainly: "Removes it from
   your calendar. Pending payment links will be cancelled."
 
@@ -250,13 +256,15 @@ Two stacked zones:
 Outstanding cards have a primary **Send reminder** button opening the existing
 payment-request Sheet with that payment's amount, still editable up to the
 unpaid balance. Show **Not asked yet**, **Asked today**, or **Asked n days ago**
-using Ireland-local days and the booking's most recent draft-opening timestamp.
-WhatsApp/Email taps in any payment-request Sheet record that time, not delivery.
+using Ireland-local days and the booking's most recent user-confirmed request timestamp.
+WhatsApp/Email taps record nothing. After opening a draft, ask **Did you send
+it?** with **Yes, I sent it** (records the time) and **Not yet** (records nothing).
 Keep the explanation that the user reviews and sends in their own app; never
 show “Sent” for a manual draft. Keep existing payment-recording actions.
 
 - **Owed to you** (M2): hero number = total outstanding (amber), then rows:
-  client · service · amount · days-since-completed, each with
+  client · service · amount · job date (e.g. **Deposit · job on Wed 18 Nov**
+  or **Balance · job was 2 days ago**, using Ireland-local days), each with
   `[Send link] [Mark paid]`. Sorted oldest first — that's the chase order.
   Empty state: "Nobody owes you anything. Lovely." (green tick).
 - **This year** (M6): income / expenses / **profit** as three figures,

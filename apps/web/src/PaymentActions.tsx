@@ -2,14 +2,14 @@ import { useState } from "react";
 import type { Payment } from "@sorted/core";
 import { Button, Icon, MoneyText, Sheet } from "./components";
 import type { BookingRow } from "./lib/backend";
-import { euros, firstName, whatsappLink } from "./lib/format";
+import { euros, firstName, methodLabel, whatsappLink } from "./lib/format";
 import { useAction, useData, useStore } from "./lib/store";
 
 /** The two things you can do with money you're owed: chase it, or record it. */
-export function PaymentActions({ payment, booking }: { payment: Payment; booking: BookingRow }) {
+export function PaymentActions({ payment, booking, showMarkPaid = true }: { payment: Payment; booking: BookingRow; showMarkPaid?: boolean }) {
   const { backend, toast } = useStore();
   const { features, user } = useData();
-  const { busy, run } = useAction();
+  const { busy, run, error, committed } = useAction();
   const [sheet, setSheet] = useState<"paid" | "link" | null>(null);
   const [link, setLink] = useState(payment.linkUrl);
   const client = booking.client;
@@ -48,9 +48,9 @@ export function PaymentActions({ payment, booking }: { payment: Payment; booking
             <Icon name="message" size={17} /> Payment link
           </Button>
         )}
-        <Button kind="quiet" disabled={busy} onClick={() => setSheet("paid")}>
+        {showMarkPaid && <Button kind="quiet" disabled={busy} onClick={() => setSheet("paid")}>
           <Icon name="check" size={17} /> Mark paid
-        </Button>
+        </Button>}
       </div>
 
       {sheet === "paid" && (
@@ -58,18 +58,20 @@ export function PaymentActions({ payment, booking }: { payment: Payment; booking
           <p className="sheet-copy">
             <MoneyText cents={payment.amountCents} /> from {client.name}
           </p>
-          {(["cash", "bank_transfer"] as const).map((method) => (
+          {error && <p className="sheet-copy" role="alert">{error}</p>}
+          {committed && error && <Button kind="soft" onClick={() => window.location.reload()}>Reload</Button>}
+          {(["cash", "bank_transfer", "revolut"] as const).map((method) => (
             <Button
               key={method}
               kind="soft"
-              disabled={busy}
+              disabled={busy || Boolean(committed && error)}
               onClick={async () => {
                 if (await run(() => backend.markPaid(payment.id, method), "Marked paid")) {
                   setSheet(null);
                 }
               }}
             >
-              {method === "cash" ? "Cash" : "Bank transfer"}
+              {methodLabel(method)}
             </Button>
           ))}
           <Button kind="quiet" onClick={() => setSheet(null)}>Not yet</Button>

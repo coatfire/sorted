@@ -164,8 +164,9 @@ may be assigned a follow-up date. Confirming or cancelling clears it.
 `POST /bookings/:id/payment-requested` (authenticated, no body) records the
 current time in `paymentRequestedAt` and returns the booking. Missing or foreign
 bookings return 404. It emits no event and creates no message-log entry: opening
-a draft is not proof the user sent it. All payment-request draft actions call
-this endpoint, including reminders from Money.
+a draft is not proof the user sent it. Payment-request sheets (including Money
+reminders) call this only after the user answers **Yes, I sent it**. Opening a
+WhatsApp/Email draft or choosing **Not yet** records nothing.
 
 Today selects enquiries with `followUpOn <= today` in Europe/Dublin, oldest
 follow-up date first. Rescheduling uses PATCH with `follow_up_on`.
@@ -199,7 +200,7 @@ Enquiry event descriptions include `Follow up: YYYY-MM-DD` when a follow-up date
 |--------|--------------------------|-------|
 | GET    | /payments                | `?status=pending` = the "who owes me" view |
 | POST   | /payments/:id/link       | creates Stripe Payment Link (503 if Stripe isn't configured), stores url, emits `payment.link_created` (n8n WhatsApps it) |
-| POST   | /payments/:id/mark-paid  | manual: body `{method}` (cash/bank_transfer). Emits `payment.paid` |
+| POST   | /payments/:id/mark-paid  | manual: body `{method}` (cash/bank_transfer/revolut). Emits `payment.paid` |
 | POST   | /bookings/:id/payments   | Record any instalment: `{ amount_cents: positive integer, method: "cash" | "bank_transfer" | "revolut", paid_on?: "YYYY-MM-DD" }`. Returns 201 `{ payment, booking }` in camelCase; payment kind is `custom`, status `paid`, VAT rate frozen. Emits `payment.paid`. |
 
 Recording a payment requires a confirmed or completed booking (409 otherwise), owned by the caller (404 otherwise). The transaction locks the booking, rejects amounts above price minus paid payments (400 with the amount still owed), cancels all pending rows and deactivates their Stripe links after commit. A completed booking with money still owed gets one fresh pending balance row; confirmed bookings have no pending rows until completion. Fully paid bookings have none. Existing pending-row mark-paid remains available.
