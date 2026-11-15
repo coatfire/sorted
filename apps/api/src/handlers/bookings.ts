@@ -15,6 +15,7 @@ import {
   BookingStatus,
   CreateBookingInput,
   UpdateBookingInput,
+  CreateDocumentInput,
 } from "@sorted/core";
 import { db, schema } from "../db";
 import { emitBookingEvent, emitEvent } from "../lib/events";
@@ -22,6 +23,42 @@ import { deactivatePaymentLink } from "../lib/stripe";
 import type { AppEnv } from "../app";
 
 export const bookingRoutes = new Hono<AppEnv>();
+
+bookingRoutes.post("/:id/documents", async (c) => {
+  const parsed = CreateDocumentInput.safeParse(await c.req.json());
+  if (!parsed.success) return c.json({ error: parsed.error.flatten() }, 400);
+  const userId = c.get("userId");
+  const bookingId = c.req.param("id");
+  const { kind } = parsed.data;
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await db.transaction(async (tx) => {
+        const [booking] = await tx.select({ id: schema.bookings.id }).from(schema.bookings)
+          .where(and(eq(schema.bookings.id, bookingId), eq(schema.bookings.userId, userId))).for("update");
+        if (!booking) return c.json({ error: "Booking not found" }, 404);
+        if (kind === "receipt") {
+          const [paid] = await tx.select({ id: schema.payments.id }).from(schema.payments).where(and(
+            eq(schema.payments.bookingId, bookingId), eq(schema.payments.userId, userId), eq(schema.payments.status, "paid"),
+          )).limit(1);
+          if (!paid) return c.json({ error: "Record a payment before creating a receipt." }, 400);
+        }
+        const [existing] = await tx.select().from(schema.invoices).where(and(
+          eq(schema.invoices.userId, userId), eq(schema.invoices.bookingId, bookingId), eq(schema.invoices.kind, kind),
+        ));
+        if (existing) return c.json(existing);
+        const [sequence] = await tx.select({ next: sql<number>`coalesce(max(${schema.invoices.number}), 0) + 1` })
+          .from(schema.invoices).where(and(eq(schema.invoices.userId, userId), eq(schema.invoices.kind, kind)));
+        const [document] = await tx.insert(schema.invoices).values({ userId, bookingId, kind, number: Number(sequence.next) }).returning();
+        return c.json(document);
+      });
+    } catch (error) {
+      const code = error && typeof error === "object"
+        ? ("code" in error ? error.code : "cause" in error && error.cause && typeof error.cause === "object" && "code" in error.cause ? error.cause.code : null)
+        : null;
+      if (code !== "23505" || attempt >= 2) throw error;
+    }
+  }
+});
 
 /** GET /api/bookings?from=&to=&status= */
 bookingRoutes.get("/", async (c) => {

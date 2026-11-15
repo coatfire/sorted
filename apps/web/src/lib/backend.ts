@@ -7,6 +7,8 @@ import type {
   MessageLogEntry,
   Payment,
   User,
+  BookingDocument,
+  DocumentKind,
 } from "@sorted/core";
 
 export type BookingRow = Booking & { client: Client };
@@ -61,6 +63,7 @@ export interface Backend {
   completeBooking(id: string): Promise<void>;
   cancelBooking(id: string): Promise<void>;
   messages(bookingId: string): Promise<MessageLogEntry[]>;
+  document(bookingId: string, kind: DocumentKind): Promise<BookingDocument>;
   /** Creates (or returns the existing) payment link URL. */
   paymentLink(paymentId: string): Promise<string>;
   markPaid(paymentId: string, method: "cash" | "bank_transfer"): Promise<void>;
@@ -81,6 +84,10 @@ export interface Backend {
     bic: string | null;
     bookingConfirmationTemplate?: string | null;
     paymentRequestTemplate?: string | null;
+    invoiceLogo?: string | null;
+    invoiceAccent?: string | null;
+    invoiceFooter?: string | null;
+    vatNumber?: string | null;
   }): Promise<void>;
   exportCsv(year: number): Promise<Blob>;
 }
