@@ -282,6 +282,162 @@ describe("booking → payment → report", () => {
   });
 });
 
+describe("client deletion", () => {
+  async function fixture(paid = false, status: "completed" | "cancelled" | "enquiry" | "confirmed" = "completed") {
+    const call = await login(`delete-${crypto.randomUUID()}@example.com`);
+    const { id: userId } = await json<{ id: string }>(await call("/auth/me"));
+    const [client] = await db.insert(schema.clients).values({
+      userId, name: "Private client", phone: "+353871234567", email: "private@example.com", notes: "Private notes",
+    }).returning();
+    const [booking] = await db.insert(schema.bookings).values({
+      userId, clientId: client.id, service: "Hair", startAt: new Date(), priceCents: 12000,
+      status, location: "Private address", notes: "Private booking notes",
+    }).returning();
+    const [payment] = await db.insert(schema.payments).values({
+      userId, bookingId: booking.id, kind: "full", amountCents: 12000,
+      status: paid ? "paid" : "pending", paidAt: paid ? new Date() : null,
+      method: paid ? "cash" : null,
+    }).returning();
+    await db.insert(schema.messageLog).values([
+      { userId, clientId: client.id, template: "confirmation" },
+      { userId, bookingId: booking.id, template: "confirmation" },
+      { userId, clientId: client.id, bookingId: booking.id, template: "confirmation" },
+    ]);
+    const [receipt] = await db.insert(schema.receipts).values({
+      userId, contentType: "image/png", dataBase64: "aGVsbG8=",
+    }).returning();
+    return { call, userId, client, booking, payment, receipt };
+  }
+
+  it("deletes messages, payments, bookings and client, but leaves receipts alone", async () => {
+    const { call, userId, client, receipt } = await fixture(false, "cancelled");
+    expect(await json<{ outcome: string }>(await call(`/clients/${client.id}`, "DELETE", { confirm: true })))
+      .toEqual({ outcome: "deleted" });
+    expect((await call(`/clients/${client.id}`)).status).toBe(404);
+    expect(await json<unknown[]>(await call("/bookings"))).toEqual([]);
+    expect(await json<unknown[]>(await call("/payments"))).toEqual([]);
+    expect(await db.select().from(schema.messageLog).where(eq(schema.messageLog.userId, userId))).toEqual([]);
+    expect(await db.select().from(schema.receipts).where(eq(schema.receipts.userId, userId))).toEqual([receipt]);
+  });
+
+  it("anonymises paid clients and preserves all payments, year totals, and receipts", async () => {
+    const { call, userId, client, booking, payment, receipt } = await fixture(true);
+    const before = await json<unknown>(await call("/reports/summary"));
+    expect(await json<{ outcome: string }>(await call(`/clients/${client.id}`, "DELETE", { confirm: true })))
+      .toEqual({ outcome: "anonymised" });
+    const [anonymous] = await db.select().from(schema.clients).where(and(
+      eq(schema.clients.id, client.id), eq(schema.clients.userId, userId),
+    ));
+    expect(anonymous).toEqual({ ...client, name: "Deleted client", phone: null, email: null, notes: null });
+    expect(await db.select().from(schema.bookings).where(eq(schema.bookings.userId, userId)))
+      .toEqual([{ ...booking, notes: null, location: null }]);
+    expect(await db.select().from(schema.payments).where(eq(schema.payments.userId, userId))).toEqual([payment]);
+    expect(await db.select().from(schema.messageLog).where(eq(schema.messageLog.userId, userId))).toEqual([]);
+    expect(await db.select().from(schema.receipts).where(eq(schema.receipts.userId, userId))).toEqual([receipt]);
+    expect(await json<unknown>(await call("/reports/summary"))).toEqual(before);
+    const csv = await (await call("/reports/export")).text();
+    expect(csv).toContain('"Deleted client","Hair","full","cash","120.00"');
+    expect(csv).not.toContain("Private client");
+  });
+
+  it("deactivates only deleted pending links, after the client deletion commits", async () => {
+    const { call, userId, client, booking, payment } = await fixture();
+    vi.spyOn(env, "stripeKey").mockReturnValue("sk_test_placeholder");
+    await db.update(schema.payments).set({ stripePaymentLinkId: "plink_delete_1" }).where(and(
+      eq(schema.payments.id, payment.id), eq(schema.payments.userId, userId),
+    ));
+    await db.insert(schema.payments).values([
+      { userId, bookingId: booking.id, kind: "balance", amountCents: 12000, stripePaymentLinkId: "plink_delete_2" },
+      { userId, bookingId: booking.id, kind: "balance", amountCents: 12000, stripePaymentLinkId: "plink_cancelled", status: "cancelled" },
+      { userId, bookingId: booking.id, kind: "balance", amountCents: 12000 },
+    ]);
+    let committed = false;
+    const transaction: typeof db.transaction = db.transaction.bind(db);
+    vi.spyOn(db, "transaction").mockImplementationOnce(async (callback, config) => {
+      const result = await transaction(callback, config);
+      committed = true;
+      return result;
+    });
+    const committedAtDeactivation: boolean[] = [];
+    stripe.updateLink.mockImplementation(async () => {
+      committedAtDeactivation.push(committed);
+      return {};
+    });
+    const response = await call(`/clients/${client.id}`, "DELETE", { confirm: true });
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ outcome: "deleted" });
+    expect(stripe.updateLink).toHaveBeenCalledTimes(2);
+    expect(stripe.updateLink).toHaveBeenCalledWith("plink_delete_1", { active: false });
+    expect(stripe.updateLink).toHaveBeenCalledWith("plink_delete_2", { active: false });
+    expect(committedAtDeactivation).toEqual([true, true]);
+    expect((await call(`/clients/${client.id}`)).status).toBe(404);
+  });
+
+  it("does not deactivate retained pending links when anonymising a paid client", async () => {
+    const { call, userId, client, booking } = await fixture(true);
+    vi.spyOn(env, "stripeKey").mockReturnValue("sk_test_placeholder");
+    const [pending] = await db.insert(schema.payments).values({
+      userId, bookingId: booking.id, kind: "balance", amountCents: 12000, stripePaymentLinkId: "plink_retained",
+    }).returning();
+    const response = await call(`/clients/${client.id}`, "DELETE", { confirm: true });
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ outcome: "anonymised" });
+    expect(stripe.updateLink).not.toHaveBeenCalled();
+    expect(await db.select().from(schema.payments).where(and(
+      eq(schema.payments.id, pending.id), eq(schema.payments.userId, userId),
+    ))).toEqual([pending]);
+  });
+
+  it("requires explicit confirmation, including for an empty client", async () => {
+    const call = await login(`empty-delete-${crypto.randomUUID()}@example.com`);
+    const client = await json<{ id: string }>(await call("/clients", "POST", { name: "Empty client" }));
+    for (const body of [undefined, null, {}, { confirm: false }, { confirm: "true" }]) {
+      expect((await call(`/clients/${client.id}`, "DELETE", body)).status).toBe(400);
+    }
+    expect((await call(`/clients/${client.id}`)).status).toBe(200);
+    expect((await call(`/clients/${client.id}`, "DELETE", { confirm: true })).status).toBe(200);
+    expect((await call(`/clients/${client.id}`, "DELETE", { confirm: true })).status).toBe(404);
+  });
+
+  it.each(["enquiry", "confirmed"] as const)("refuses clients with %s bookings without changing data", async (status) => {
+    const { call, userId, client } = await fixture(true, status);
+    const before = await json<unknown>(await call(`/clients/${client.id}`));
+    const response = await call(`/clients/${client.id}`, "DELETE", { confirm: true });
+    expect(response.status).toBe(409);
+    expect(await response.json()).toEqual({ error: "Cancel or complete their open bookings first." });
+    expect(await json<unknown>(await call(`/clients/${client.id}`))).toEqual(before);
+    expect(await db.select().from(schema.messageLog).where(eq(schema.messageLog.userId, userId))).toHaveLength(3);
+  });
+
+  it("does not let another tenant delete or anonymise a client", async () => {
+    const { call, userId, client } = await fixture(true);
+    const other = await login(`delete-other-${crypto.randomUUID()}@example.com`);
+    const before = await json<unknown>(await call(`/clients/${client.id}`));
+    expect((await other(`/clients/${client.id}`, "DELETE", { confirm: true })).status).toBe(404);
+    expect(await json<unknown>(await call(`/clients/${client.id}`))).toEqual(before);
+    expect(await db.select().from(schema.messageLog).where(eq(schema.messageLog.userId, userId))).toHaveLength(3);
+  });
+
+  it.each([false, true])("rolls back all writes if the transaction fails (paid=%s)", async (paid) => {
+    const { call, userId, client, payment } = await fixture(paid);
+    vi.spyOn(env, "stripeKey").mockReturnValue("sk_test_placeholder");
+    await db.update(schema.payments).set({ stripePaymentLinkId: "plink_rollback" }).where(and(
+      eq(schema.payments.id, payment.id), eq(schema.payments.userId, userId),
+    ));
+    const before = await json<unknown>(await call(`/clients/${client.id}`));
+    const transaction: typeof db.transaction = db.transaction.bind(db);
+    vi.spyOn(db, "transaction").mockImplementationOnce((callback, config) => transaction(async (tx) => {
+      await callback(tx);
+      throw new Error("Simulated deletion failure");
+    }, config));
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    expect((await call(`/clients/${client.id}`, "DELETE", { confirm: true })).status).toBe(500);
+    expect(stripe.updateLink).not.toHaveBeenCalled();
+    expect(await json<unknown>(await call(`/clients/${client.id}`))).toEqual(before);
+    expect(await db.select().from(schema.messageLog).where(eq(schema.messageLog.userId, userId))).toHaveLength(3);
+  });
+});
+
 describe("transactional writes", () => {
   function failTransaction() {
     const transaction: typeof db.transaction = db.transaction.bind(db);

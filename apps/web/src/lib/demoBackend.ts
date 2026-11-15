@@ -319,6 +319,31 @@ export const demoBackend: Backend = {
     save();
   },
 
+  async deleteClient(clientId) {
+    const d = data();
+    const client = mustFind(d.clients, clientId, "Client");
+    const bookings = d.bookings.filter((booking) => booking.clientId === clientId);
+    if (bookings.some((booking) => booking.status === "enquiry" || booking.status === "confirmed")) {
+      throw new Error("Cancel or complete their open bookings first.");
+    }
+    const ids = new Set(bookings.map((booking) => booking.id));
+    d.messages = d.messages.filter((message) => !message.bookingId || !ids.has(message.bookingId));
+    if (d.payments.some((payment) => ids.has(payment.bookingId) && payment.status === "paid")) {
+      const anonymous = { name: "Deleted client", phone: null, email: null, notes: null };
+      Object.assign(client, anonymous);
+      for (const booking of bookings) {
+        Object.assign(booking.client, anonymous);
+        booking.notes = null;
+        booking.location = null;
+      }
+    } else {
+      d.payments = d.payments.filter((payment) => !ids.has(payment.bookingId));
+      d.bookings = d.bookings.filter((booking) => booking.clientId !== clientId);
+      d.clients = d.clients.filter((item) => item.id !== clientId);
+    }
+    save();
+  },
+
   async updateUser(changes) {
     Object.assign(data().user, changes);
     save();

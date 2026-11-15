@@ -65,6 +65,7 @@ export interface Backend {
   /** A URL the browser can render for this expense's receipt photo. */
   receiptUrl(expense: Expense): Promise<string | null>;
   updateClient(id: string, patch: { name: string; phone: string | null }): Promise<void>;
+  deleteClient(id: string): Promise<void>;
   updateUser(patch: {
     name: string | null;
     businessName: string | null;

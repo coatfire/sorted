@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { normalisePhone } from "@sorted/core";
-import { BackButton, Button, Card, EmptyState, Field, Icon, MoneyText } from "../components";
+import { BackButton, Button, Card, EmptyState, Field, Icon, MoneyText, Sheet } from "../components";
 import { dayMonth, whatsappLink } from "../lib/format";
 import { useAction, useData, useStore } from "../lib/store";
 import { BookingRow } from "./Home";
@@ -12,8 +12,10 @@ export function ClientDetail() {
   const { clients, bookings, payments } = useData();
   const { backend } = useStore();
   const { busy, run } = useAction();
+  const navigate = useNavigate();
   const client = clients.find((item) => item.id === id);
   const [editing, setEditing] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [form, setForm] = useState({ name: client?.name ?? "", phone: client?.phone ?? "" });
   const validation = useValidation({
     phone: () => form.phone.trim() && !normalisePhone(form.phone)
@@ -33,6 +35,8 @@ export function ClientDetail() {
     .filter((booking) => booking.clientId === client.id)
     .sort((a, b) => b.startAt.localeCompare(a.startAt));
   const ids = new Set(theirs.map((booking) => booking.id));
+  const hasPaid = payments.some((payment) => ids.has(payment.bookingId) && payment.status === "paid");
+  const hasOpenBookings = theirs.some((booking) => booking.status === "enquiry" || booking.status === "confirmed");
   const sum = (status: "paid" | "pending") =>
     payments
       .filter((payment) => ids.has(payment.bookingId) && payment.status === status)
@@ -44,6 +48,12 @@ export function ClientDetail() {
     const phone = form.phone.trim() ? normalisePhone(form.phone) : null;
     if (await run(() => backend.updateClient(client!.id, { name: form.name.trim(), phone }), "Client saved")) {
       setEditing(false);
+    }
+  }
+
+  async function remove() {
+    if (await run(() => backend.deleteClient(client!.id), hasPaid ? "Client anonymised" : "Client deleted")) {
+      navigate("/", { replace: true });
     }
   }
 
@@ -123,6 +133,26 @@ export function ClientDetail() {
           )}
         </Card>
       </section>
+      <Button kind="danger" onClick={() => setDeleting(true)}>
+        <Icon name="trash" /> Delete client
+      </Button>
+      {deleting && (
+        <Sheet title="Delete client?" onClose={() => setDeleting(false)}>
+          {hasOpenBookings ? (
+            <p>Cancel or complete their open bookings first.</p>
+          ) : hasPaid ? (
+            <p>This client has paid payments. Their name will become “Deleted client”. Their phone, email and notes, messages, and booking notes and locations will be removed. Bookings and payments will be kept for your tax records. Receipts won’t be changed. This can’t be undone.</p>
+          ) : (
+            <p>This client has no paid payments. The client, all their messages, payments and bookings will be permanently deleted. Receipts won’t be changed. This can’t be undone.</p>
+          )}
+          {!hasOpenBookings && (
+            <Button kind="danger" disabled={busy} onClick={remove}>
+              {busy ? "Removing…" : hasPaid ? "Remove personal data" : "Delete client"}
+            </Button>
+          )}
+          <Button kind="quiet" onClick={() => setDeleting(false)}>Cancel</Button>
+        </Sheet>
+      )}
     </div>
   );
 }
