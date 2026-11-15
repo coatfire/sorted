@@ -29,6 +29,13 @@
       "when": 1794733607242,
       "tag": "0003_lean_thanos",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1794734336279,
+      "tag": "0004_light_talkback",
+      "breakpoints": true
     }
   ]
 }

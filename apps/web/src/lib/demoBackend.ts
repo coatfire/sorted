@@ -104,6 +104,7 @@ function seed(): DemoData {
       phone: "+353871234567", reviewLink: "https://g.page/r/example/review",
       currency: "EUR", createdAt: at(-200, 9),
       emailVerifiedAt: at(-200, 9), address: null, iban: null, bic: null,
+      bookingConfirmationTemplate: null, paymentRequestTemplate: null,
     },
     features: { automation: true, paymentLinks: true },
     clients: [sarah, aoife, emma, ryan, niamh, laura],
@@ -205,7 +206,7 @@ export const demoBackend: Backend = {
     else {
       client = {
         id: id(), name: draft.client!.name, phone: draft.client!.phone ?? null,
-        email: null, notes: null, createdAt: now(),
+        email: draft.client!.email ?? null, notes: null, createdAt: now(),
       };
       d.clients.unshift(client);
     }

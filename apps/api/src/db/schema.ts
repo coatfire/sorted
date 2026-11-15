@@ -69,6 +69,8 @@ export const users = pgTable("users", {
   address: text("address"),
   iban: text("iban"),
   bic: text("bic"),
+  bookingConfirmationTemplate: text("booking_confirmation_template"),
+  paymentRequestTemplate: text("payment_request_template"),
   name: text("name"),
   businessName: text("business_name"),
   phone: text("phone"), // E.164

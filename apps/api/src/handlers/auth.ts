@@ -145,6 +145,8 @@ authRoutes.patch("/me", requireAuth, async (c) => {
   const [user] = await db.update(schema.users).set({
     name: input.name, businessName: input.business_name, phone: input.phone, reviewLink: input.review_link,
     address: input.address, iban: input.iban, bic: input.bic,
+    bookingConfirmationTemplate: input.booking_confirmation_template,
+    paymentRequestTemplate: input.payment_request_template,
   }).where(eq(schema.users.id, c.get("userId"))).returning();
   if (!user) return c.json({ error: "Not found" }, 404);
   return c.json(publicUser(user));

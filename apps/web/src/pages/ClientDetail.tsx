@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { normalisePhone } from "@sorted/core";
+import { normalisePhone, UpdateClientInput } from "@sorted/core";
 import { BackButton, Button, Card, EmptyState, Field, Icon, MoneyText, Sheet } from "../components";
 import { dayMonth, whatsappLink } from "../lib/format";
 import { useAction, useData, useStore } from "../lib/store";
@@ -16,8 +16,10 @@ export function ClientDetail() {
   const client = clients.find((item) => item.id === id);
   const [editing, setEditing] = useState(false);
   const [deleting, setDeleting] = useState(false);
-  const [form, setForm] = useState({ name: client?.name ?? "", phone: client?.phone ?? "" });
+  const [form, setForm] = useState({ name: client?.name ?? "", phone: client?.phone ?? "", email: client?.email ?? "" });
   const validation = useValidation({
+    email: () => form.email.trim() && !UpdateClientInput.shape.email.safeParse(form.email.trim()).success
+      ? "Enter a valid email address." : undefined,
     phone: () => form.phone.trim() && !normalisePhone(form.phone)
       ? "That mobile number doesn’t look right. Try it like 087 123 4567." : undefined,
   });
@@ -46,7 +48,7 @@ export function ClientDetail() {
     event.preventDefault();
     if (!validation.validate(event.currentTarget)) return;
     const phone = form.phone.trim() ? normalisePhone(form.phone) : null;
-    if (await run(() => backend.updateClient(client!.id, { name: form.name.trim(), phone }), "Client saved")) {
+    if (await run(() => backend.updateClient(client!.id, { name: form.name.trim(), phone, email: form.email.trim() || null }), "Client saved")) {
       setEditing(false);
     }
   }
@@ -73,7 +75,7 @@ export function ClientDetail() {
             <Field label="Name" {...validation.field("name")}>
               <input name="name" required value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} />
             </Field>
-            <Field label="Mobile" helper="Sorted sends confirmations and reminders to this number." {...validation.field("phone")}>
+            <Field label="Mobile" helper="For WhatsApp drafts you send yourself." {...validation.field("phone")}>
               <input
                 type="tel"
                 inputMode="tel"
@@ -82,6 +84,9 @@ export function ClientDetail() {
                 onChange={(event) => setForm({ ...form, phone: event.target.value })}
                 placeholder="087 123 4567"
               />
+            </Field>
+            <Field label="Email (optional)" {...validation.field("email")}>
+              <input name="email" type="email" autoComplete="email" value={form.email} onChange={(event) => setForm({ ...form, email: event.target.value })} />
             </Field>
           </Card>
           <div className="action-pair">
@@ -95,7 +100,7 @@ export function ClientDetail() {
             <span className="detail-icon"><Icon name="message" /></span>
             <div>
               <strong>{client.phone ?? "No mobile added"}</strong>
-              <span>{client.phone ? "Mobile" : "Add one so Sorted can message them for you"}</span>
+              <span>{client.phone ? "Mobile" : "Add one to open WhatsApp drafts"}</span>
             </div>
             {client.phone && (
               <a className="chip-link" href={whatsappLink(client.phone, "")} target="_blank" rel="noreferrer">
@@ -104,8 +109,11 @@ export function ClientDetail() {
             )}
           </div>
           <div className="detail-line">
-            <button className="text-link" onClick={() => { validation.clear(); setForm({ name: client.name, phone: client.phone ?? "" }); setEditing(true); }}>
-              <Icon name="edit" size={16} /> Edit name or mobile
+            <div><strong>{client.email ?? "No email added"}</strong><span>Email</span></div>
+          </div>
+          <div className="detail-line">
+            <button className="text-link" onClick={() => { validation.clear(); setForm({ name: client.name, phone: client.phone ?? "", email: client.email ?? "" }); setEditing(true); }}>
+              <Icon name="edit" size={16} /> Edit client details
             </button>
           </div>
         </Card>

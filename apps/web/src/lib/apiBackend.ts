@@ -115,6 +115,8 @@ export const apiBackend: Backend = {
       address: changes.address,
       iban: changes.iban,
       bic: changes.bic,
+      booking_confirmation_template: changes.bookingConfirmationTemplate,
+      payment_request_template: changes.paymentRequestTemplate,
     });
   },
 

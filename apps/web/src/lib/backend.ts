@@ -25,7 +25,7 @@ export interface BookingDraft {
   /** Existing client, or… */
   clientId?: string;
   /** …a new one created inline. */
-  client?: { name: string; phone?: string };
+  client?: { name: string; phone?: string; email?: string };
   service: string;
   startAt: string;
   priceCents: number;
@@ -69,7 +69,7 @@ export interface Backend {
   deleteExpense(id: string): Promise<void>;
   /** A URL the browser can render for this expense's receipt photo. */
   receiptUrl(expense: Expense): Promise<string | null>;
-  updateClient(id: string, patch: { name: string; phone: string | null }): Promise<void>;
+  updateClient(id: string, patch: { name: string; phone: string | null; email: string | null }): Promise<void>;
   deleteClient(id: string): Promise<void>;
   updateUser(patch: {
     name: string | null;
@@ -79,6 +79,8 @@ export interface Backend {
     address: string | null;
     iban: string | null;
     bic: string | null;
+    bookingConfirmationTemplate?: string | null;
+    paymentRequestTemplate?: string | null;
   }): Promise<void>;
   exportCsv(year: number): Promise<Blob>;
 }

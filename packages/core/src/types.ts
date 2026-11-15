@@ -124,6 +124,8 @@ export const UpdateBookingInput = z.object({
 export type UpdateBookingInput = z.infer<typeof UpdateBookingInput>;
 
 export const UpdateUserInput = z.object({
+  booking_confirmation_template: z.string().max(4000).nullable().optional(),
+  payment_request_template: z.string().max(4000).nullable().optional(),
   name: z.string().max(200).nullable().optional(),
   business_name: z.string().max(200).nullable().optional(),
   phone: Phone.nullable().optional(),
@@ -184,6 +186,8 @@ export const ConfirmExpenseInput = z.object(expenseFields);
 // ISO timestamp strings). Request bodies above are snake_case.
 
 export interface User {
+  bookingConfirmationTemplate: string | null;
+  paymentRequestTemplate: string | null;
   id: string;
   email: string;
   emailVerifiedAt: string | null;
