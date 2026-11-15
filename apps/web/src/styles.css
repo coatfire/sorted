@@ -1112,6 +1112,7 @@ a.button { text-decoration: none; }
   text-decoration: none;
 }
 .detail-line > div { flex: 1; }
+.calendar-directions { min-height: 44px; justify-content: center; }
 .chip-link {
   display: inline-flex;
   min-height: 44px;

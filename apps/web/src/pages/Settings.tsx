@@ -10,6 +10,7 @@ import { BackButton, Button, Card, Field, Icon, PageHeader } from "../components
 import { useAction, useData, useSession, useStore } from "../lib/store";
 import { useValidation } from "../lib/useValidation";
 import { prepareInvoiceLogo } from "../lib/image";
+import { CalendarSettings } from "../CalendarSettings";
 
 export function Settings({ welcome = false }: { welcome?: boolean }) {
   const { user, features } = useData();
@@ -217,7 +218,6 @@ export function Settings({ welcome = false }: { welcome?: boolean }) {
             detail="Clients pay online; Sorted marks it paid"
             on={features.paymentLinks}
           />
-          <Connection logo="G" tone="calendar" name="Google Calendar" detail="Bookings appear in your calendar" soon />
         </Card>
         {mode === "api" && !(features.automation && features.paymentLinks) && (
           <p className="settings-footnote left">
@@ -225,6 +225,8 @@ export function Settings({ welcome = false }: { welcome?: boolean }) {
           </p>
         )}
       </section>
+
+      <CalendarSettings />
 
       <section className="settings-section">
         <p className="eyebrow">Account</p>

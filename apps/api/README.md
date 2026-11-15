@@ -42,6 +42,7 @@ Set these server-side variables for each Vercel environment:
 | `DATABASE_URL` | Supabase **transaction pooler** Postgres URL, port **6543**; keep the password secret |
 | `JWT_SECRET` | A securely generated secret of at least 32 characters |
 | `APP_URL` | Public HTTPS address of the Vercel project, no trailing slash |
+| `API_URL` | Optional. Public address of the API if it isn't served from `APP_URL`; used for calendar feed links |
 | `CORS_ORIGIN` | Same public origin as `APP_URL` |
 | `RESEND_API_KEY` | Resend API key for login emails; required for production login |
 | `EMAIL_FROM` | Sender on a verified Resend domain |

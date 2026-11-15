@@ -10,6 +10,7 @@ import type {
   BookingDocument,
   DocumentKind,
   RecordPaymentInput,
+  CalendarLinks,
 } from "@sorted/core";
 
 export type BookingRow = Booking & { client: Client };
@@ -53,6 +54,8 @@ export interface ExpenseDraft {
  * try-before-you-sign-up demo). Pages never know which one they have.
  */
 export interface Backend {
+  calendar(): Promise<CalendarLinks>;
+  resetCalendar(): Promise<CalendarLinks>;
   signup(email: string, password: string): Promise<{ ok: true; dev_link?: string }>;
   login(email: string, password: string): Promise<{ jwt: string; user: User }>;
   verify(token: string): Promise<{ jwt: string; user: User }>;

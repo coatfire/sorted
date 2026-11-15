@@ -155,6 +155,18 @@ Stacked sections:
   kind · chip, and per-pending-row buttons `[Send payment link] [Mark paid]`.
   "Mark paid" opens a sheet: Cash / Bank transfer. Header line: "€120 of
   €350 paid".
+- **Add to calendar:** non-cancelled bookings offer a button opening a Sheet
+  with **iPhone / phone calendar** (share an `.ics` file where supported,
+  otherwise download) and **Google Calendar** (a prefilled event). Explain
+  that this is a one-off copy; automatic updates come from Settings. Works
+  in demo too. Booking location opens Google Maps directions in a new tab.
+- **Calendar subscriptions (Settings):** replace the Google Calendar “soon”
+  connection with **Add bookings to your calendar**. Confirmed and Enquiries
+  each have 44px-minimum **iPhone / Mac** and **Google** links. Explain:
+  “Pick a colour for each calendar in your calendar app. Changes can take a
+  few hours to show in Google.” **Reset links** requires confirmation:
+  “Old links will stop working.” In demo, disable the controls and show
+  “Available when you sign in”; never show fake subscription URLs.
 - **Record payment:** confirmed/completed bookings with money owed offer a
   44px-minimum button opening a Sheet with a euro-prefixed decimal amount
   (defaults to all outstanding), method (Cash / Bank transfer / Revolut), and
@@ -200,8 +212,9 @@ Two stacked zones:
 - **Never auto-confirm OCR** — the confirm tap is what makes it a tax record.
 
 ### 6. Settings — `/settings` (M3/M7/M8)
-Business name · your mobile · Google review link (M7) · connect Google
-Calendar (M4) · currency (locked EUR for now, visible) · logout.
+Business name · your mobile · Google review link (M7) · calendar
+subscriptions (Confirmed / Enquiries) · currency (locked EUR for now,
+visible) · logout.
 First-run onboarding = this same screen presented as 3 quick cards after
 first login, skippable.
 
