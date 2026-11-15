@@ -7,14 +7,28 @@ import type { BookingRow } from "./lib/backend";
 import { centsToInput, parseEuros, longDay, time, whatsappLink } from "./lib/format";
 import { useValidation } from "./lib/useValidation";
 import { useAction, useData, useStore } from "./lib/store";
+import { needsPaymentDetails } from "./lib/setup";
+import { PaymentDetailsPrompt } from "./PaymentDetailsPrompt";
 
-export function BookingMessageSheet({ booking, kind, onClose, initialAmountCents, requestLabel = "Request payment" }: {
+interface MessageSheetProps {
   booking: BookingRow;
   kind: "confirmation" | "payment_request";
   onClose: () => void;
   initialAmountCents?: number;
   requestLabel?: string;
-}) {
+}
+
+export function BookingMessageSheet(props: MessageSheetProps) {
+  const { user, payments } = useData();
+  const [continued, setContinued] = useState(false);
+  const paid = payments.filter(payment => payment.bookingId === props.booking.id && payment.status === "paid").reduce((sum, payment) => sum + payment.amountCents, 0);
+  if (!continued && needsPaymentDetails(user, props.kind, Math.max(0, props.booking.depositCents - paid), Math.max(0, props.booking.priceCents - paid))) {
+    return <Sheet title="How should clients pay you?" onClose={props.onClose}><PaymentDetailsPrompt onContinue={() => setContinued(true)} /></Sheet>;
+  }
+  return <BookingDraftSheet {...props} />;
+}
+
+function BookingDraftSheet({ booking, kind, onClose, initialAmountCents, requestLabel = "Request payment" }: MessageSheetProps) {
   const { user, payments, features } = useData();
   const { backend } = useStore();
   const { run, busy, error, committed } = useAction();

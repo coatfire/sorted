@@ -499,6 +499,31 @@ a.button { text-decoration: none; }
 .tax-estimate-row { display: flex; justify-content: space-between; align-items: baseline; gap: 16px; margin: 12px 0; }
 .tax-estimate-caveat { font-weight: 600; margin-bottom: 20px; }
 .tax-workings summary { min-height: 44px; display: flex; align-items: center; cursor: pointer; }
+.settings-fields { border: 0; padding: 0; margin: 0; min-width: 0; }
+.settings-section h2 { font-size: 1rem; margin-bottom: 10px; }
+.settings-save-state { color: var(--muted); font-size: 0.78rem; margin-top: 8px; min-height: 20px; line-height: 1.5; }
+.settings-save-state[role="alert"] { color: var(--due); }
+.settings-save-state .button { width: auto; min-height: 44px; margin-left: 8px; }
+.welcome-page form { display: flex; flex-direction: column; gap: 20px; }
+.welcome-page h2 small { font-size: 0.76rem; font-weight: 400; color: var(--muted); }
+.welcome-page .settings-section { margin: 0; }
+.accent-swatches { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 10px; }
+.accent-swatch { width: 44px; height: 44px; display: grid; place-items: center; border-radius: 50%; border: 2px solid transparent; background: transparent; cursor: pointer; }
+.accent-swatch span { display: block; width: 32px; height: 32px; border-radius: 50%; }
+.accent-swatch[aria-pressed="true"] { border-color: var(--ink); }
+.custom-colour { display: flex; align-items: center; gap: 8px; min-height: 44px; font-size: 0.8rem; padding: 4px; }
+.custom-colour input { width: 48px; height: 44px; padding: 3px; cursor: pointer; }
+.customise-messages > summary { min-height: 48px; cursor: pointer; font-size: 1rem; font-weight: 700; display: list-item; align-content: center; }
+.message-editor { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.message-editor + .message-editor { border-top: 1px solid var(--line); padding-top: 20px; margin-top: 10px; }
+.message-editor textarea { resize: none; min-height: 100px; overflow-y: hidden; }
+.message-editor > .button { width: auto; align-self: start; }
+.message-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.message-chips .button { width: auto; min-height: 44px; padding: 8px 10px; background: var(--brand-soft); color: var(--brand); font-size: 0.76rem; }
+.message-live-preview { border-radius: 12px; background: #f4f6f2; padding: 14px; }
+.message-live-preview h3 { font-size: 0.83rem; margin-bottom: 6px; }
+.message-live-preview .message-preview { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 0.83rem; line-height: 1.6; margin-top: 10px; }
+.payment-details-prompt { display: flex; flex-direction: column; gap: 14px; }
 .tax-guide > summary { min-height: 44px; cursor: pointer; font-size: 1rem; font-weight: 700; }
 .tax-guide[open] > summary { margin-bottom: 18px; }
 .year-basis { color: var(--muted); font-size: 0.75rem; line-height: 1.5; margin-bottom: 16px; }

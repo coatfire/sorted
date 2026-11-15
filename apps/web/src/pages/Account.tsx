@@ -5,6 +5,7 @@ import { useSession, useStore } from "../lib/store";
 import { useValidation } from "../lib/useValidation";
 import { authError } from "./Login";
 import { GoogleSignIn } from "../GoogleSignIn";
+import { needsWelcome } from "../lib/setup";
 
 function AccountPage({ children }: { children: ReactNode }) {
   return <main className="login-page">
@@ -54,7 +55,7 @@ function PasswordForm({ reset = false }: { reset?: boolean }) {
         if (!token) throw new Error("That reset link is missing. Ask for a new one.");
         const { jwt, user } = await backend.resetPassword(token, password);
         signIn(jwt);
-        navigate(!user.name || !user.businessName ? "/welcome" : "/", { replace: true });
+        navigate(needsWelcome(user) ? "/welcome" : "/", { replace: true });
       } else {
         setSent(await backend.signup(email, password));
       }
@@ -143,7 +144,7 @@ export function Verify() {
     attempted.current = token;
     backend.verify(token).then(({ jwt, user }) => {
       signIn(jwt);
-      navigate(!user.name || !user.businessName ? "/welcome" : "/", { replace: true });
+      navigate(needsWelcome(user) ? "/welcome" : "/", { replace: true });
     }).catch((caught: unknown) => setError(authError(caught)));
   }, [backend, navigate, signIn, token]);
 
@@ -173,7 +174,7 @@ export function GoogleLogin() {
     }
     backend.googleExchange(code.current).then(({ jwt, user }) => {
       signIn(jwt);
-      navigate(!user.name || !user.businessName ? "/welcome" : "/", { replace: true });
+      navigate(needsWelcome(user) ? "/welcome" : "/", { replace: true });
     }).catch(() => navigate("/login?error=google", { replace: true }));
   }, [backend, mode, navigate, signIn]);
   return <AccountPage><h1>Signing you in…</h1></AccountPage>;

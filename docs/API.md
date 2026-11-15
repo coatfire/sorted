@@ -215,6 +215,13 @@ owed amount, never marks both a pending row and a new record paid.
 
 ### Saved services
 
+`PATCH /auth/me` is partial: omitted fields are preserved; supported nullable
+fields can be cleared with null. Settings autosave sends only edited fields,
+serially. Welcome sends `business_name`, optional/null `name`, and `services`;
+only a missing business name requires the welcome step. Payment details can be
+saved later with just `iban`, `bic` and/or `revolut_link`. No new endpoint or
+migration is needed for incremental setup.
+
 `PATCH /auth/me` accepts optional `services: [{ name, price_cents }]`, up to
 30 entries. Names are trimmed, nonempty, at most 200 characters, and unique
 case-insensitively. Prices are nonnegative integer cents, at most 2147483647.

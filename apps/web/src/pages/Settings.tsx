@@ -1,313 +1,126 @@
-import { useState, type FormEvent } from "react";
+import { useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import {
-  normalisePhone, normaliseIban, normaliseBic, validIban, validBic,
-  DEFAULT_BOOKING_CONFIRMATION_TEMPLATE, DEFAULT_PAYMENT_REQUEST_TEMPLATE, MESSAGE_PLACEHOLDERS,
-  DEFAULT_INVOICE_ACCENT, InvoiceAccent, IrishVatNumber,
-  percentToBasisPoints, RevolutLink, Service, Services,
-} from "@sorted/core";
+import { DEFAULT_BOOKING_CONFIRMATION_TEMPLATE, DEFAULT_PAYMENT_REQUEST_TEMPLATE } from "@sorted/core";
 import { BackButton, Button, Card, Field, Icon, PageHeader } from "../components";
-import { useAction, useData, useSession, useStore } from "../lib/store";
-import { useValidation } from "../lib/useValidation";
+import { useData, useSession, useStore } from "../lib/store";
 import { prepareInvoiceLogo } from "../lib/image";
+import { centsToInput } from "../lib/format";
 import { CalendarSettings } from "../CalendarSettings";
 import { DriveSettings } from "../DriveSettings";
-import { vatNumberUpdate } from "../lib/settings";
-import { centsToInput, parseEuros } from "../lib/format";
+import { AccentPicker } from "../AccentPicker";
+import { MessageEditor } from "../MessageEditor";
+import { ServiceEditor } from "../ServiceEditor";
+import { Welcome } from "./Welcome";
+import { completeServiceDrafts, type ServiceDraft } from "../lib/setup";
+import { fieldPatch, settingsForm, type SettingsField, type SettingsForm } from "../lib/settingsFields";
+import { useSettingsAutosave } from "../lib/useSettingsAutosave";
+import type { SaveState } from "../lib/settingsAutosave";
 
 export function Settings({ welcome = false }: { welcome?: boolean }) {
+  return welcome ? <Welcome /> : <BusinessSettings />;
+}
+
+function SaveStatus({ state, retry }: { state?: SaveState; retry: () => void }) {
+  if (!state) return null;
+  return <div className="settings-save-state" role={state.phase === "error" ? "alert" : "status"} aria-live="polite">
+    {state.phase === "saving" ? "Saving…" : state.phase === "saved" ? "Saved" : state.phase === "invalid" ? "Check the details above — not saved yet." : state.message}
+    {state.phase === "error" && !state.committed && <Button kind="quiet" onClick={retry}>Try again</Button>}
+  </div>;
+}
+
+function BusinessSettings() {
   const { user, features } = useData();
   const { backend, resetDemo, toast } = useStore();
   const { mode, signOut } = useSession();
-  const { busy, run, error, committed } = useAction();
   const navigate = useNavigate();
+  const { saver, states, blocked } = useSettingsAutosave();
+  const [form, setForm] = useState(() => settingsForm(user));
+  const [errors, setErrors] = useState<Partial<Record<SettingsField, string>>>({});
+  const [services, setServices] = useState<ServiceDraft[]>(() => (user.services ?? []).map(service => ({ id: crypto.randomUUID(), name: service.name, price: centsToInput(service.priceCents), lastComplete: service })));
+  const [messagesOpen, setMessagesOpen] = useState(false);
+  const registrationPending = useRef(false);
+  const [logo, setLogo] = useState(user.invoiceLogo);
   const [logoBusy, setLogoBusy] = useState(false);
   const [logoError, setLogoError] = useState<string>();
-  const [services, setServices] = useState(() => (user.services ?? []).map(service => ({ id: crypto.randomUUID(), name: service.name, price: centsToInput(service.priceCents) })));
-  const [form, setForm] = useState({
-    businessName: user.businessName ?? "",
-    name: user.name ?? "",
-    phone: user.phone ?? "",
-    reviewLink: user.reviewLink ?? "",
-    address: user.address ?? "",
-    iban: user.iban ?? "",
-    revolutLink: user.revolutLink ?? "",
-    bic: user.bic ?? "",
-    bookingConfirmationTemplate: user.bookingConfirmationTemplate ?? DEFAULT_BOOKING_CONFIRMATION_TEMPLATE,
-    paymentRequestTemplate: user.paymentRequestTemplate ?? DEFAULT_PAYMENT_REQUEST_TEMPLATE,
-    invoiceLogo: user.invoiceLogo ?? null,
-    invoiceAccent: user.invoiceAccent ?? DEFAULT_INVOICE_ACCENT,
-    invoiceFooter: user.invoiceFooter ?? "",
-    vatNumber: user.vatNumber ?? "",
-    vatRegistered: user.vatRegistered ?? false,
-    vatRateChoice: user.vatRateBp == null ? "" : [2300, 1350, 900].includes(user.vatRateBp) ? String(user.vatRateBp) : "custom",
-    vatCustomPercent: user.vatRateBp == null ? "" : String(user.vatRateBp / 100),
-    vatPeriodMonths: String(user.vatPeriodMonths ?? 2),
-    incomeTaxPercent: user.incomeTaxRateBp == null ? "" : String(user.incomeTaxRateBp / 100),
-  });
-  const set = (field: keyof typeof form) => (event: { target: { value: string } }) => {
-    setForm({ ...form, [field]: event.target.value });
-  };
-  const validation = useValidation({
-    ...Object.fromEntries(services.flatMap(service => [
-      [`serviceName-${service.id}`, () => {
-        if (!Service.shape.name.safeParse(service.name).success) return "Enter a service name, up to 200 characters.";
-        if (services.some(other => other.id !== service.id && other.name.trim().toLowerCase() === service.name.trim().toLowerCase())) return "Use a different name for each service.";
-      }],
-      [`servicePrice-${service.id}`, () => !Service.shape.priceCents.safeParse(parseEuros(service.price)).success ? "Enter a valid price, like 35 or 35.50." : undefined],
-    ])),
-    revolutLink: () => form.revolutLink.trim() && !RevolutLink.safeParse(form.revolutLink).success ? "Enter a Revolut username or revolut.me link." : undefined,
-    vatRateChoice: () => form.vatRegistered && !form.vatRateChoice ? "Enter your VAT rate." : undefined,
-    vatCustomPercent: () => form.vatRegistered && form.vatRateChoice === "custom" && percentToBasisPoints(form.vatCustomPercent, 3000) === null ? "Enter a rate from 0 to 30%, with up to two decimal places." : undefined,
-    incomeTaxPercent: () => form.incomeTaxPercent.trim() && percentToBasisPoints(form.incomeTaxPercent) === null ? "Enter a rate from 0 to 100%, with up to two decimal places." : undefined,
-    invoiceAccent: () => !InvoiceAccent.safeParse(form.invoiceAccent).success ? "Enter a hex colour, like #14532D." : undefined,
-    vatNumber: () => form.vatRegistered && form.vatNumber.trim() && !IrishVatNumber.safeParse(form.vatNumber).success ? "Enter a valid Irish VAT number." : undefined,
-    phone: () => form.phone.trim() && !normalisePhone(form.phone)
-      ? "That mobile number doesn’t look right. Try it like 087 123 4567." : undefined,
-    name: () => welcome && !form.name.trim() ? "Enter your name." : undefined,
-    businessName: () => welcome && !form.businessName.trim() ? "Enter your business name." : undefined,
-    iban: () => form.iban.trim() && !validIban(form.iban) ? "Enter a valid IBAN." : undefined,
-    bic: () => form.bic.trim() && !validBic(form.bic) ? "Enter a valid BIC." : undefined,
-  });
-
-  async function submit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (busy || committed || logoBusy || logoError) return;
-    if (!validation.validate(event.currentTarget)) return;
-    const phone = form.phone.trim() ? normalisePhone(form.phone) : null;
-    let reviewLink: string | null = form.reviewLink.trim() || null;
-    if (reviewLink && !/^https?:\/\//i.test(reviewLink)) reviewLink = `https://${reviewLink}`;
-    const saved = await run(
-      () =>
-        backend.updateUser({
-          businessName: form.businessName.trim() || null,
-          name: form.name.trim() || null,
-          phone,
-          reviewLink,
-          address: form.address.trim() || null,
-          iban: form.iban.trim() ? normaliseIban(form.iban) : null,
-          revolutLink: form.revolutLink.trim() ? RevolutLink.parse(form.revolutLink) : null,
-          bic: form.bic.trim() ? normaliseBic(form.bic) : null,
-          ...(!welcome ? {
-            services: Services.parse(services.map(service => ({ name: service.name, priceCents: parseEuros(service.price) }))),
-            bookingConfirmationTemplate: form.bookingConfirmationTemplate === DEFAULT_BOOKING_CONFIRMATION_TEMPLATE ? null : form.bookingConfirmationTemplate,
-            paymentRequestTemplate: form.paymentRequestTemplate === DEFAULT_PAYMENT_REQUEST_TEMPLATE ? null : form.paymentRequestTemplate,
-            invoiceLogo: form.invoiceLogo,
-            invoiceAccent: InvoiceAccent.parse(form.invoiceAccent) === DEFAULT_INVOICE_ACCENT ? null : InvoiceAccent.parse(form.invoiceAccent),
-            invoiceFooter: form.invoiceFooter.trim() || null,
-            ...vatNumberUpdate(form.vatRegistered, form.vatNumber),
-            vatRegistered: form.vatRegistered,
-            vatRateBp: form.vatRateChoice === "custom" ? percentToBasisPoints(form.vatCustomPercent, 3000) : form.vatRateChoice ? Number(form.vatRateChoice) : null,
-            vatPeriodMonths: Number(form.vatPeriodMonths),
-            incomeTaxRateBp: form.incomeTaxPercent.trim() ? percentToBasisPoints(form.incomeTaxPercent) : null,
-          } : {}),
-        }),
-      "Settings saved",
-    );
-    if (saved && welcome) navigate("/", { replace: true });
+  function change(field: SettingsField, value: SettingsForm[SettingsField], section: string, immediate = false) {
+    const next = { ...form, [field]: value };
+    setForm(next);
+    const result = fieldPatch(field, next);
+    if (field === "vatRegistered") registrationPending.current = value === true && !result.patch;
+    const rateField = field === "vatRateChoice" || field === "vatCustomPercent";
+    if (rateField && result.patch && registrationPending.current) {
+      saver.change(section, "vatRegistered", { vatRegistered: next.vatRegistered });
+      registrationPending.current = false;
+    }
+    setErrors(current => ({ ...current, ...(rateField && result.patch ? { vatRegistered: undefined, vatRateChoice: undefined, vatCustomPercent: undefined } : {}), [field]: result.error }));
+    saver.change(section, field === "vatCustomPercent" ? "vatRateChoice" : field, result.patch, immediate);
   }
-
-  return (
-    <div className="page">
-      {!welcome && <BackButton to="/" />}
-      <PageHeader eyebrow={welcome ? "Welcome to Sorted" : "Settings"} title="Your business" />
-      <p className="page-intro">The details clients see in messages from you.</p>
-      {error && <p className="sheet-copy" role="alert">{error}</p>}
-      {committed && error && <Button kind="soft" onClick={() => window.location.reload()}>Reload</Button>}
-      <form onSubmit={submit} noValidate>
-        <Card className="form-card settings-card">
-          <Field label="Business name" {...validation.field("businessName")}>
-            <input name="businessName" required value={form.businessName} onChange={set("businessName")} placeholder="e.g. Studio by Shane" />
-          </Field>
-          <Field label="Your name" {...validation.field("name")}>
-            <input name="name" required={welcome} value={form.name} onChange={set("name")} autoComplete="name" />
-          </Field>
-          <Field label="Your mobile" {...validation.field("phone")}>
-            <input
-                type="tel" inputMode="tel" value={form.phone}
-                name="phone"
-                onChange={set("phone")} placeholder="087 123 4567"
-            />
-          </Field>
-          <Field label="Business address">
-            <textarea name="address" maxLength={500} value={form.address} onChange={set("address")} autoComplete="street-address" />
-          </Field>
-          <Field label="IBAN" helper="Shown on your invoices and payment messages." {...validation.field("iban")}>
-            <input name="iban" value={form.iban} onChange={set("iban")} autoCapitalize="characters" spellCheck={false} />
-          </Field>
-          <Field label="BIC" helper="Shown on your invoices and payment messages." {...validation.field("bic")}>
-            <input name="bic" value={form.bic} onChange={set("bic")} autoCapitalize="characters" spellCheck={false} />
-          </Field>
-          <Field label="Revolut.me link" helper="Your username or revolut.me link. Leave blank to turn it off." {...validation.field("revolutLink")}>
-            <input name="revolutLink" value={form.revolutLink} onChange={set("revolutLink")} placeholder="revolut.me/yourname" autoCapitalize="none" autoCorrect="off" spellCheck={false} />
-          </Field>
-          {!welcome && <Field label="Google review link" helper="Sent to clients two days after a completed job.">
-            <input inputMode="url" value={form.reviewLink} onChange={set("reviewLink")} placeholder="https://g.page/r/…" />
-          </Field>}
-          {!welcome && <Field label="Currency">
-            <div className="locked-field">EUR · Euro <span>Fixed during beta</span></div>
-          </Field>}
-        </Card>
-        {!welcome && <section className="settings-section" aria-labelledby="your-services">
-          <p className="eyebrow" id="your-services">Your services</p>
-          <p className="sheet-copy">Save up to 30 services and prices for quicker bookings. Changes are saved with Save settings.</p>
-          <Card className="form-card">
-            {services.length === 0 && <p className="sheet-copy">No services added yet. You can still type any service when booking.</p>}
-            {services.map((service, index) => <div className="service-editor-row" role="group" aria-label={`Service ${index + 1}`} key={service.id}>
-              <Field label="Service name" {...validation.field(`serviceName-${service.id}`)}>
-                <input name={`serviceName-${service.id}`} required maxLength={200} value={service.name} placeholder="e.g. Gel nails" onChange={event => setServices(current => current.map(row => row.id === service.id ? { ...row, name: event.target.value } : row))} />
-              </Field>
-              <Field label="Price" {...validation.field(`servicePrice-${service.id}`)}>
-                <div className="money-input"><span>€</span><input name={`servicePrice-${service.id}`} required inputMode="decimal" value={service.price} placeholder="0.00" onChange={event => setServices(current => current.map(row => row.id === service.id ? { ...row, price: event.target.value } : row))} /></div>
-              </Field>
-              <Button type="button" kind="quiet" aria-label={`Remove ${service.name.trim() || `service ${index + 1}`}`} onClick={() => { setServices(current => current.filter(row => row.id !== service.id)); validation.clear(); }}><Icon name="trash" size={18} /></Button>
-            </div>)}
-            <Button type="button" kind="soft" disabled={services.length >= 30} onClick={() => setServices(current => [...current, { id: crypto.randomUUID(), name: "", price: "" }])}>
-              <Icon name="plus" /> Add service
-            </Button>
-          </Card>
-        </section>}
-        {!welcome && <section className="settings-section">
-          <p className="eyebrow">VAT &amp; tax</p>
-          <Card className="form-card">
-            <Field label="VAT registered" helper="Your prices are treated as including VAT.">
-              <select name="vatRegistered" value={form.vatRegistered ? "yes" : "no"} onChange={(event) => setForm({ ...form, vatRegistered: event.target.value === "yes" })}>
-                <option value="no">Not VAT registered</option><option value="yes">VAT registered</option>
-              </select>
-            </Field>
-            {form.vatRegistered && <>
-              <Field label="VAT rate" {...validation.field("vatRateChoice")}>
-                <select name="vatRateChoice" value={form.vatRateChoice} onChange={set("vatRateChoice")}>
-                  <option value="">Choose a rate</option><option value="2300">23%</option><option value="1350">13.5%</option><option value="900">9%</option><option value="custom">Custom rate</option>
-                </select>
-              </Field>
-              {form.vatRateChoice === "custom" && <Field label="Custom VAT rate (%)" {...validation.field("vatCustomPercent")}>
-                <input name="vatCustomPercent" inputMode="decimal" value={form.vatCustomPercent} onChange={set("vatCustomPercent")} placeholder="e.g. 23" />
-              </Field>}
-              <Field label="VAT period">
-                <select name="vatPeriodMonths" value={form.vatPeriodMonths} onChange={set("vatPeriodMonths")}>
-                  <option value="2">Every 2 months (Jan–Feb, Mar–Apr…)</option><option value="4">Every 4 months (Jan–Apr, May–Aug…)</option><option value="6">Every 6 months (Jan–Jun, Jul–Dec)</option><option value="12">Yearly (Jan–Dec)</option>
-                </select>
-              </Field>
-            </>}
-            {form.vatRegistered && <Field label="VAT number (optional)" {...validation.field("vatNumber")}>
-              <input name="vatNumber" value={form.vatNumber} onChange={set("vatNumber")} placeholder="IE1234567AB" autoCapitalize="characters" />
-            </Field>}
-            <Field label="Income tax rate (%)" helper="e.g. 20% or 40% — the rate you expect on your profit." {...validation.field("incomeTaxPercent")}>
-              <input name="incomeTaxPercent" inputMode="decimal" value={form.incomeTaxPercent} onChange={set("incomeTaxPercent")} placeholder="e.g. 20" />
-            </Field>
-          </Card>
-        </section>}
-        {!welcome && <section className="settings-section">
-          <p className="eyebrow">Invoices &amp; receipts</p>
-          <Card className="form-card">
-            <Field label="Logo" helper="PNG or JPEG. Resized to 400px; under 300KB after compression." error={logoError}>
-              <input name="invoiceLogo" type="file" accept="image/png,image/jpeg" disabled={logoBusy} onChange={async (event) => {
-                const input = event.currentTarget;
-                const file = input.files?.[0];
-                if (!file) return;
-                setLogoBusy(true);
-                setLogoError(undefined);
-                try { const logo = await prepareInvoiceLogo(file); setForm((current) => ({ ...current, invoiceLogo: logo })); }
-                catch (error) { setLogoError(error instanceof Error ? error.message : "Couldn't read that logo."); }
-                finally { setLogoBusy(false); input.value = ""; }
-              }} />
-            </Field>
-            {form.invoiceLogo && <img className="invoice-logo-preview" src={form.invoiceLogo} alt="Your invoice logo" />}
-            {(form.invoiceLogo || logoError) && <Button type="button" kind="quiet" disabled={logoBusy} onClick={() => {
-              setForm({ ...form, invoiceLogo: null }); setLogoError(undefined);
-            }}>Remove logo</Button>}
-            <Field label="Accent colour" {...validation.field("invoiceAccent")}>
-              <input name="invoiceAccent" value={form.invoiceAccent} onChange={set("invoiceAccent")} placeholder={DEFAULT_INVOICE_ACCENT} spellCheck={false} />
-            </Field>
-            <Field label="Footer text">
-              <textarea name="invoiceFooter" rows={3} maxLength={1000} value={form.invoiceFooter} onChange={set("invoiceFooter")} />
-            </Field>
-          </Card>
-        </section>}
-        {!welcome && <section className="settings-section">
-          <p className="eyebrow">Message templates</p>
-          <p className="sheet-copy">For drafts you send yourself by WhatsApp or email.</p>
-          <Card className="form-card">
-            <Field label="Booking confirmation" helper={MESSAGE_PLACEHOLDERS.map((key) => `{${key}}`).join(" ")}>
-              <textarea name="bookingConfirmationTemplate" rows={7} maxLength={4000} value={form.bookingConfirmationTemplate} onChange={set("bookingConfirmationTemplate")} />
-            </Field>
-            <Button type="button" kind="quiet" aria-label="Reset booking confirmation to default" onClick={() => setForm({ ...form, bookingConfirmationTemplate: DEFAULT_BOOKING_CONFIRMATION_TEMPLATE })}>Reset to default</Button>
-            <Field label="Payment request" helper={MESSAGE_PLACEHOLDERS.map((key) => `{${key}}`).join(" ")}>
-              <textarea name="paymentRequestTemplate" rows={7} maxLength={4000} value={form.paymentRequestTemplate} onChange={set("paymentRequestTemplate")} />
-            </Field>
-            <Button type="button" kind="quiet" aria-label="Reset payment request to default" onClick={() => setForm({ ...form, paymentRequestTemplate: DEFAULT_PAYMENT_REQUEST_TEMPLATE })}>Reset to default</Button>
-          </Card>
-        </section>}
-        <Button type="submit" disabled={busy || committed || logoBusy}>
-          <Icon name="check" /> {busy ? "Saving…" : welcome ? "Save and get started" : "Save settings"}
-        </Button>
-      </form>
-
-      {!welcome && <><section className="settings-section">
-        <p className="eyebrow">Connections</p>
-        <Card className="connection-card">
-          <Connection
-            logo="W" tone="whatsapp" name="WhatsApp messages"
-            detail="Confirmations, reminders, payment requests"
-            on={features.automation}
-          />
-          <Connection
-            logo="€" tone="stripe" name="Card payment links"
-            detail="Clients pay online; Sorted marks it paid"
-            on={features.paymentLinks}
-          />
-        </Card>
-        {mode === "api" && !(features.automation && features.paymentLinks) && (
-          <p className="settings-footnote left">
-            Connections are switched on for your account by Sorted during the beta.
-          </p>
-        )}
-      </section>
-
-      <CalendarSettings />
-      <DriveSettings />
-
-      <section className="settings-section">
-        <p className="eyebrow">Account</p>
-        {mode === "demo" ? (
-          <>
-            <Button kind="quiet" onClick={async () => { await resetDemo(); toast("Demo data reset"); }}>
-              Reset demo data
-            </Button>
-            <Button kind="soft" onClick={() => { signOut(); navigate("/login"); }}>
-              Leave the demo and sign up
-            </Button>
-          </>
-        ) : (
-          <>
-            <Card className="connection-card">
-              <div className="connection-row">
-                <span className="connection-logo account-logo"><Icon name="user" size={18} /></span>
-                <div><strong>{user.email}</strong><span>Logged in</span></div>
-              </div>
-            </Card>
-            <Button kind="quiet" onClick={() => { signOut(); navigate("/login"); }}>
-              <Icon name="logout" size={18} /> Log out
-            </Button>
-          </>
-        )}
-      </section>
-      <p className="settings-footnote">Sorted beta · Made for Irish sole traders</p></>}
-    </div>
-  );
-}
-
-function Connection({
-  logo, tone, name, detail, on, soon,
-}: {
-  logo: string; tone: string; name: string; detail: string; on?: boolean; soon?: boolean;
-}) {
-  return (
-    <div className="connection-row">
-      <span className={`connection-logo ${tone}-logo`}>{logo}</span>
-      <div><strong>{name}</strong><span>{detail}</span></div>
-      <span className={`coming-pill ${on ? "on" : ""}`}>{soon ? "Coming soon" : on ? "Connected" : "Not connected"}</span>
-    </div>
-  );
+  const input = (field: SettingsField, section: string, immediate = false) => ({
+    name: field, value: String(form[field]), onChange: (event: { target: { value: string } }) => change(field, event.target.value, section, immediate),
+    onBlur: () => { void saver.flush(section); },
+  });
+  const status = (section: string) => <SaveStatus state={states[section]} retry={() => { void saver.flush(section); }} />;
+  return <div className="page">
+    <BackButton to="/" />
+    <PageHeader eyebrow="Settings" title="Your business" />
+    <p className="page-intro">Make it yours. Changes save as you go.</p>
+    {blocked && <Button kind="soft" onClick={() => window.location.reload()}>Reload</Button>}
+    <fieldset className="settings-fields" disabled={blocked}>
+      <section className="settings-section"><h2>Your details</h2><Card className="form-card">
+        <Field label="Business name" error={errors.businessName}><input {...input("businessName", "profile")} required maxLength={200} placeholder="e.g. Studio by Shane" /></Field>
+        <Field label="Your name (optional)" error={errors.name}><input {...input("name", "profile")} maxLength={200} autoComplete="name" /></Field>
+        <Field label="Your mobile (optional)" error={errors.phone}><input {...input("phone", "profile")} type="tel" inputMode="tel" placeholder="087 123 4567" /></Field>
+        <Field label="Business address (optional)" error={errors.address}><textarea {...input("address", "profile")} maxLength={500} autoComplete="street-address" /></Field>
+        <Field label="Google review link (optional)" error={errors.reviewLink}><input {...input("reviewLink", "profile")} type="url" inputMode="url" placeholder="https://g.page/r/…" /></Field>
+        <p className="field-helper">Currency: EUR · Euro</p>
+      </Card>{status("profile")}</section>
+      <section className="settings-section"><h2>Getting paid</h2><p className="sheet-copy">These details appear in your payment drafts and on invoices.</p><Card className="form-card">
+        <Field label="Revolut.me link (optional)" error={errors.revolutLink}><input {...input("revolutLink", "payment")} autoCapitalize="none" spellCheck={false} placeholder="revolut.me/yourname" /></Field>
+        <Field label="IBAN (optional)" error={errors.iban}><input {...input("iban", "payment")} autoCapitalize="characters" spellCheck={false} /></Field>
+        <Field label="BIC (optional)" error={errors.bic}><input {...input("bic", "payment")} autoCapitalize="characters" spellCheck={false} /></Field>
+      </Card>{status("payment")}</section>
+      <section className="settings-section"><h2>Your services</h2><p className="sheet-copy">Save up to 30 services and prices for quicker bookings.</p><Card>
+        <ServiceEditor rows={services} onChange={rows => {
+          const next = completeServiceDrafts(rows);
+          setServices(next.drafts);
+          if (JSON.stringify(next.values) !== JSON.stringify(completeServiceDrafts(services).values)) saver.change("services", "services", { services: next.values });
+        }} />
+      </Card>{status("services")}</section>
+      <section className="settings-section"><h2>VAT &amp; tax</h2><Card className="form-card">
+        <Field label="VAT registered" helper="Your prices are treated as including VAT." error={errors.vatRegistered}><select name="vatRegistered" value={form.vatRegistered ? "yes" : "no"} onChange={event => change("vatRegistered", event.target.value === "yes", "tax", true)}><option value="no">Not VAT registered</option><option value="yes">VAT registered</option></select></Field>
+        {form.vatRegistered && <>
+          <Field label="VAT rate" error={errors.vatRateChoice}><select {...input("vatRateChoice", "tax", true)}><option value="2300">23%</option><option value="1350">13.5%</option><option value="900">9%</option><option value="custom">Custom rate</option></select></Field>
+          {form.vatRateChoice === "custom" && <Field label="Custom VAT rate (%)" error={errors.vatCustomPercent}><input {...input("vatCustomPercent", "tax")} inputMode="decimal" placeholder="e.g. 23" /></Field>}
+          <Field label="VAT period"><select {...input("vatPeriodMonths", "tax", true)}><option value="2">Every 2 months</option><option value="4">Every 4 months</option><option value="6">Every 6 months</option><option value="12">Yearly</option></select></Field>
+          <Field label="VAT number (optional)" error={errors.vatNumber}><input {...input("vatNumber", "tax")} autoCapitalize="characters" placeholder="IE1234567AB" /></Field>
+        </>}
+        <Field label="Income tax rate (%)" error={errors.incomeTaxPercent} helper="The rate you expect on your profit, for example 20 or 40."><input {...input("incomeTaxPercent", "tax")} inputMode="decimal" /></Field>
+      </Card>{status("tax")}</section>
+      <section className="settings-section"><h2>Invoices &amp; receipts</h2><Card className="form-card">
+        <Field label="Logo (optional)" helper="PNG or JPEG. Resized to 400px; under 300KB after compression." error={logoError}><input name="invoiceLogo" type="file" accept="image/png,image/jpeg" disabled={logoBusy} onChange={async event => {
+          const file = event.target.files?.[0]; event.target.value = ""; if (!file) return;
+          setLogoBusy(true); setLogoError(undefined);
+          try { const value = await prepareInvoiceLogo(file); setLogo(value); saver.change("branding", "invoiceLogo", { invoiceLogo: value }, true); }
+          catch (error) { setLogoError(error instanceof Error ? error.message : "Couldn't read that logo."); }
+          finally { setLogoBusy(false); }
+        }} /></Field>
+        {logo && <img className="invoice-logo-preview" src={logo} alt="Your invoice logo" />}
+        {(logo || logoError) && <Button kind="quiet" disabled={logoBusy} onClick={() => { setLogo(null); setLogoError(undefined); saver.change("branding", "invoiceLogo", { invoiceLogo: null }, true); }}>Remove logo</Button>}
+        <AccentPicker value={form.invoiceAccent} onChange={value => change("invoiceAccent", value, "branding", true)} />
+        <Field label="Footer text (optional)" error={errors.invoiceFooter}><textarea {...input("invoiceFooter", "branding")} maxLength={1000} rows={3} /></Field>
+      </Card>{status("branding")}</section>
+      <details className="settings-section customise-messages" onToggle={event => setMessagesOpen(event.currentTarget.open)}><summary>Customise messages</summary>{messagesOpen && <><p className="sheet-copy">For drafts you send yourself by WhatsApp or email.</p><Card className="form-card">
+        <MessageEditor label="Booking confirmation" name="bookingConfirmationTemplate" value={form.bookingConfirmationTemplate} onChange={value => change("bookingConfirmationTemplate", value, "messages")} onBlur={() => { void saver.flush("messages"); }} onReset={() => change("bookingConfirmationTemplate", DEFAULT_BOOKING_CONFIRMATION_TEMPLATE, "messages", true)} user={user} kind="confirmation" />
+        <MessageEditor label="Payment request" name="paymentRequestTemplate" value={form.paymentRequestTemplate} onChange={value => change("paymentRequestTemplate", value, "messages")} onBlur={() => { void saver.flush("messages"); }} onReset={() => change("paymentRequestTemplate", DEFAULT_PAYMENT_REQUEST_TEMPLATE, "messages", true)} user={user} kind="payment_request" />
+      </Card>{status("messages")}</>}</details>
+    </fieldset>
+    <section className="settings-section"><h2>Messages &amp; payments</h2><Card className="connection-card">
+      <div className="connection-row"><span className="connection-logo whatsapp-logo">W</span><div><strong>WhatsApp messages</strong><span>Opens a draft in your WhatsApp — you press send</span></div></div>
+      <div className="connection-row"><span className="connection-logo stripe-logo">€</span><div><strong>Card payment links</strong><span>{features.paymentLinks ? "Clients pay online; Sorted marks it paid" : "Coming later"}</span></div></div>
+    </Card></section>
+    <CalendarSettings /><DriveSettings />
+    <section className="settings-section"><h2>Account</h2>
+      {mode === "demo" ? <><Button kind="quiet" onClick={async () => { if (await saver.flushAll()) { await resetDemo(); toast("Demo data reset"); } }}>Reset demo data</Button><Button kind="soft" onClick={async () => { if (await saver.flushAll()) { signOut(); navigate("/login"); } }}>Leave the demo and sign up</Button></> : <><Card className="connection-card"><div className="connection-row"><span className="connection-logo account-logo"><Icon name="user" size={18} /></span><div><strong>{user.email}</strong><span>Logged in</span></div></div></Card><Button kind="quiet" onClick={async () => { if (await saver.flushAll()) { signOut(); navigate("/login"); } }}><Icon name="logout" size={18} />Log out</Button></>}
+    </section><p className="settings-footnote">Sorted beta · Made for Irish sole traders</p>
+  </div>;
 }
