@@ -11,7 +11,7 @@ export default defineConfig({
       workbox: {
         // The app shell works offline; API calls must always hit the network.
         navigateFallbackDenylist: [/^\/api\//],
-        globPatterns: ["**/*.{js,css,html,svg,png,woff2}"],
+        globPatterns: ["**/*.{js,css,html,svg,png,woff2,ttf}"],
       },
       manifest: {
         name: "Sorted",
