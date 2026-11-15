@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import Stripe from "stripe";
 import { db, schema } from "../db";
 import { emitBookingEvent } from "../lib/events";
@@ -45,25 +45,36 @@ webhookRoutes.post("/stripe", async (c) => {
     return c.json({ received: true });
   }
   const session = event.data.object;
-  let paymentId = session.metadata?.payment_id;
-  if (!paymentId && typeof session.payment_intent === "string") {
-    const intent = await stripe.paymentIntents.retrieve(session.payment_intent);
-    paymentId = intent.metadata.payment_id;
+  const paymentId = session.metadata?.payment_id;
+  const userId = session.metadata?.user_id;
+  if (!paymentId || !userId) {
+    console.error(paymentId ?? "missing", session.id);
+    return c.json({ received: true });
   }
-  if (!paymentId) return c.json({ received: true });
 
   const [current] = await db
     .select()
     .from(schema.payments)
-    .where(eq(schema.payments.id, paymentId));
-  if (!current || current.status === "paid") {
+    .where(and(eq(schema.payments.id, paymentId), eq(schema.payments.userId, userId)));
+  if (current?.status === "cancelled") {
+    console.error(current.id, session.id);
+  }
+  if (!current || current.status !== "pending") {
     return c.json({ received: true });
   }
   const [payment] = await db
     .update(schema.payments)
     .set({ status: "paid", method: "stripe", paidAt: new Date() })
-    .where(eq(schema.payments.id, paymentId))
+    .where(and(
+      eq(schema.payments.id, paymentId),
+      eq(schema.payments.userId, userId),
+      eq(schema.payments.status, "pending"),
+    ))
     .returning();
+  if (!payment) {
+    console.error(paymentId, session.id);
+    return c.json({ received: true });
+  }
   await emitBookingEvent(
     payment.userId,
     payment.bookingId,

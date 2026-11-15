@@ -18,6 +18,7 @@ import {
 } from "@sorted/core";
 import { db, schema } from "../db";
 import { emitBookingEvent, emitEvent } from "../lib/events";
+import { deactivatePaymentLink } from "../lib/stripe";
 import type { AppEnv } from "../app";
 
 export const bookingRoutes = new Hono<AppEnv>();
@@ -307,7 +308,7 @@ bookingRoutes.post("/:id/complete", async (c) => {
       );
     const paidCents = Number(expected?.amount ?? 0);
     const remainder = Math.max(booking.priceCents - paidCents, 0);
-    await tx
+    const voided = await tx
       .update(schema.payments)
       .set({ status: "cancelled" })
       .where(
@@ -316,7 +317,8 @@ bookingRoutes.post("/:id/complete", async (c) => {
           eq(schema.payments.userId, userId),
           eq(schema.payments.status, "pending"),
         ),
-      );
+      )
+      .returning({ linkId: schema.payments.stripePaymentLinkId });
     let payment: typeof schema.payments.$inferSelect | undefined;
     if (remainder > 0) {
       [payment] = await tx
@@ -334,10 +336,13 @@ bookingRoutes.post("/:id/complete", async (c) => {
       .set({ status: "completed", completedAt: new Date() })
       .where(and(eq(schema.bookings.id, id), eq(schema.bookings.userId, userId)))
       .returning();
-    return { completed, payment };
+    return { completed, payment, voided };
   });
   if (result instanceof Response) return result;
-  const { completed, payment } = result;
+  const { completed, payment, voided } = result;
+  for (const { linkId } of voided) {
+    if (linkId) await deactivatePaymentLink(linkId);
+  }
   await emitBookingEvent(
     userId,
     id,
@@ -373,7 +378,7 @@ bookingRoutes.post("/:id/cancel", async (c) => {
         409,
       );
     }
-    await tx
+    const voided = await tx
       .update(schema.payments)
       .set({ status: "cancelled" })
       .where(
@@ -382,16 +387,20 @@ bookingRoutes.post("/:id/cancel", async (c) => {
           eq(schema.payments.userId, userId),
           eq(schema.payments.status, "pending"),
         ),
-      );
+      )
+      .returning({ linkId: schema.payments.stripePaymentLinkId });
     const [cancelled] = await tx
       .update(schema.bookings)
       .set({ status: "cancelled" })
       .where(and(eq(schema.bookings.id, id), eq(schema.bookings.userId, userId)))
       .returning();
-    return { cancelled };
+    return { cancelled, voided };
   });
   if (result instanceof Response) return result;
-  const { cancelled } = result;
+  const { cancelled, voided } = result;
+  for (const { linkId } of voided) {
+    if (linkId) await deactivatePaymentLink(linkId);
+  }
   await emitBookingEvent(userId, id, "booking.cancelled");
   return c.json(cancelled);
 });
