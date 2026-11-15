@@ -12,6 +12,7 @@ import { useValidation } from "../lib/useValidation";
 import { prepareInvoiceLogo } from "../lib/image";
 import { CalendarSettings } from "../CalendarSettings";
 import { DriveSettings } from "../DriveSettings";
+import { vatNumberUpdate } from "../lib/settings";
 
 export function Settings({ welcome = false }: { welcome?: boolean }) {
   const { user, features } = useData();
@@ -81,7 +82,7 @@ export function Settings({ welcome = false }: { welcome?: boolean }) {
             invoiceLogo: form.invoiceLogo,
             invoiceAccent: InvoiceAccent.parse(form.invoiceAccent) === DEFAULT_INVOICE_ACCENT ? null : InvoiceAccent.parse(form.invoiceAccent),
             invoiceFooter: form.invoiceFooter.trim() || null,
-            vatNumber: form.vatRegistered && form.vatNumber.trim() ? IrishVatNumber.parse(form.vatNumber) : null,
+            ...vatNumberUpdate(form.vatRegistered, form.vatNumber),
             vatRegistered: form.vatRegistered,
             vatRateBp: form.vatRateChoice === "custom" ? percentToBasisPoints(form.vatCustomPercent, 3000) : form.vatRateChoice ? Number(form.vatRateChoice) : null,
             vatPeriodMonths: Number(form.vatPeriodMonths),

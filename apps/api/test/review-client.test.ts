@@ -1,6 +1,26 @@
 import { describe, expect, it, vi } from "vitest";
 import { completeAction, createActionGuard } from "../../web/src/lib/action";
 import { jobDateLabel } from "../../web/src/lib/format";
+import { vatNumberUpdate } from "../../web/src/lib/settings";
+
+describe("VAT number settings", () => {
+  it("preserves the stored number when registration is turned off and the input is hidden", () => {
+    const stored = { vatNumber: "IE1234567AB" };
+    expect(vatNumberUpdate(false, "")).toEqual({});
+    expect({ ...stored, ...vatNumberUpdate(false, "") }).toEqual(stored);
+    expect({ ...stored, ...vatNumberUpdate(false, "invalid hidden value") }).toEqual(stored);
+  });
+  it("keeps an empty unregistered account empty", () => {
+    expect({ vatNumber: null, ...vatNumberUpdate(false, "") }).toEqual({ vatNumber: null });
+  });
+  it("saves a registered trader's number and allows explicitly clearing it", () => {
+    expect(vatNumberUpdate(true, "IE1234567AB")).toEqual({ vatNumber: "IE1234567AB" });
+    expect(vatNumberUpdate(true, " ")).toEqual({ vatNumber: null });
+  });
+  it("rejects an invalid visible number", () => {
+    expect(() => vatNumberUpdate(true, "invalid")).toThrow();
+  });
+});
 
 describe("mutation completion", () => {
   it.each(["expense", "booking"])("blocks a second %s create after saving succeeds but reloading fails", async () => {
