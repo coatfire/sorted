@@ -30,12 +30,12 @@ function links(origin: string, token: string): CalendarLinks {
 
 calendarRoutes.get("/", requireAuth, async (c) => {
   c.header("Cache-Control", "no-store");
-  return c.json(links(env.appUrl(), await tokenFor(c.get("userId"))));
+  return c.json(links(env.apiUrl(), await tokenFor(c.get("userId"))));
 });
 
 calendarRoutes.post("/reset", requireAuth, async (c) => {
   c.header("Cache-Control", "no-store");
-  return c.json(links(env.appUrl(), await tokenFor(c.get("userId"), true)));
+  return c.json(links(env.apiUrl(), await tokenFor(c.get("userId"), true)));
 });
 
 calendarRoutes.get("/:token/:feed", async (c) => {
