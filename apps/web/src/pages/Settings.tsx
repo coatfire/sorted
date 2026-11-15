@@ -123,11 +123,11 @@ export function Settings({ welcome = false }: { welcome?: boolean }) {
           <Field label="IBAN" helper="Shown on your invoices and payment messages." {...validation.field("iban")}>
             <input name="iban" value={form.iban} onChange={set("iban")} autoCapitalize="characters" spellCheck={false} />
           </Field>
-          <Field label="Revolut.me link" helper="Your username or revolut.me link. Leave blank to turn it off." {...validation.field("revolutLink")}>
-            <input name="revolutLink" value={form.revolutLink} onChange={set("revolutLink")} placeholder="revolut.me/yourname" autoCapitalize="none" autoCorrect="off" spellCheck={false} />
-          </Field>
           <Field label="BIC" helper="Shown on your invoices and payment messages." {...validation.field("bic")}>
             <input name="bic" value={form.bic} onChange={set("bic")} autoCapitalize="characters" spellCheck={false} />
+          </Field>
+          <Field label="Revolut.me link" helper="Your username or revolut.me link. Leave blank to turn it off." {...validation.field("revolutLink")}>
+            <input name="revolutLink" value={form.revolutLink} onChange={set("revolutLink")} placeholder="revolut.me/yourname" autoCapitalize="none" autoCorrect="off" spellCheck={false} />
           </Field>
           {!welcome && <Field label="Google review link" helper="Sent to clients two days after a completed job.">
             <input inputMode="url" value={form.reviewLink} onChange={set("reviewLink")} placeholder="https://g.page/r/…" />
