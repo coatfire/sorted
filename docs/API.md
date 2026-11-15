@@ -15,19 +15,33 @@ which integrations are configured, so the UI only offers what works.
 ## Auth
 | Method | Path                | Notes |
 |--------|---------------------|-------|
-| POST   | /auth/magic-link    | body `{email}` → emails a 15-min login link (logged if no email provider; returned as `dev_link` in local dev) |
-| POST   | /auth/verify        | body `{token}` → `{jwt, user}`; consumes the link exactly once |
+| POST   | /auth/signup        | body `{email,password}` → `{ok:true}`; emails a 15-min verification link, or an account reminder with `/forgot` for existing verified accounts |
+| POST   | /auth/verify        | body `{token}` → `{jwt,user}`; consumes a verification token and applies its pending password exactly once |
+| POST   | /auth/login         | body `{email,password}` → `{jwt,user}`; verified accounts with a password only |
+| POST   | /auth/forgot        | body `{email}` → `{ok:true}`; emails a 15-min reset link if the account exists |
+| POST   | /auth/reset         | body `{token,password}` → `{jwt,user}`; consumes a reset token exactly once and verifies the email if needed |
 | GET    | /auth/me            | current user |
-| PATCH  | /auth/me            | business settings: `name`, `business_name`, `phone`, `review_link` |
+| PATCH  | /auth/me            | business settings: `name`, `business_name`, `phone`, `review_link`, `address`, `iban`, `bic` |
 
-Login links expire after 15 minutes and are single-use, including simultaneous
+Verification and reset links expire after 15 minutes and are single-use, including simultaneous
 verification attempts. Expired, already-used, or invalid links return
 `401 { "error": "Invalid or expired login link" }`.
 
-`POST /auth/magic-link` allows three requests per email address (case-insensitive)
+Signup and forgot share a limit of three requests per email address (case-insensitive)
 within the last 15 minutes. The fourth returns
 `429 { "error": "Too many login links requested. Check your email, or try again in 15 minutes." }`.
 Used links still count toward this limit.
+
+Passwords use salted scrypt and must be at least 8 characters. Ten failed logins
+within 15 minutes block further checks with 429; invalid credentials always return
+`401 { "error": "Email or password is incorrect." }`. User responses omit password hashes.
+IBANs are uppercased, stripped of spaces and checked with mod-97; BICs are uppercased
+and must contain 8 or 11 alphanumeric characters. Null clears either optional field.
+
+Local email failures log and return `dev_link`. Production failures delete the
+new token and return `502 { "error": "We couldn't send your login email. Try again in a minute." }`,
+without logging the link. Signup/forgot otherwise return the same success response
+regardless of account existence; development links are never returned in production.
 
 ## Clients
 | Method | Path          | Notes |

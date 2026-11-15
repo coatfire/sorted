@@ -63,6 +63,11 @@ export const messageStatus = pgEnum("message_status", [
 export const users = pgTable("users", {
   id: uuid("id").primaryKey().defaultRandom(),
   email: text("email").notNull().unique(),
+  passwordHash: text("password_hash"),
+  emailVerifiedAt: timestamp("email_verified_at", { withTimezone: true }),
+  address: text("address"),
+  iban: text("iban"),
+  bic: text("bic"),
   name: text("name"),
   businessName: text("business_name"),
   phone: text("phone"), // E.164
@@ -80,9 +85,17 @@ export const loginTokens = pgTable(
     email: text("email").notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     usedAt: timestamp("used_at", { withTimezone: true }),
+    purpose: text("purpose").$type<"verify" | "reset">().notNull().default("verify"),
+    pendingPasswordHash: text("pending_password_hash"),
   },
   (t) => [index("login_tokens_email_idx").on(t.email)],
 );
+
+export const loginAttempts = pgTable("login_attempts", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  email: text("email").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [index("login_attempts_email_idx").on(t.email)]);
 
 export const clients = pgTable(
   "clients",

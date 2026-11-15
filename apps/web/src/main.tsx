@@ -12,6 +12,7 @@ import { BookingDetail } from "./pages/BookingDetail";
 import { ClientDetail } from "./pages/ClientDetail";
 import { Settings } from "./pages/Settings";
 import { Login } from "./pages/Login";
+import { Signup, Verify, Forgot, Reset } from "./pages/Account";
 import { StoreProvider } from "./lib/store";
 import "./styles.css";
 
@@ -21,6 +22,10 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
       <StoreProvider>
         <Routes>
           <Route path="/login" element={<Login />} />
+          <Route path="/signup" element={<Signup />} />
+          <Route path="/verify" element={<Verify />} />
+          <Route path="/forgot" element={<Forgot />} />
+          <Route path="/reset" element={<Reset />} />
           <Route element={<AppShell />}>
             <Route path="/" element={<Home />} />
             <Route path="/bookings/new" element={<BookingForm />} />
@@ -30,6 +35,7 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
             <Route path="/money" element={<Money />} />
             <Route path="/expenses" element={<Expenses />} />
             <Route path="/settings" element={<Settings />} />
+            <Route path="/welcome" element={<Settings welcome />} />
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

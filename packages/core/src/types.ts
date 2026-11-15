@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { normaliseIban, normaliseBic, validIban, validBic } from "./bank";
 
 // ─── Enums ────────────────────────────────────────────────────────────────
 
@@ -127,6 +128,9 @@ export const UpdateUserInput = z.object({
   business_name: z.string().max(200).nullable().optional(),
   phone: Phone.nullable().optional(),
   review_link: z.string().url().max(500).nullable().optional(),
+  address: z.string().max(500).nullable().optional(),
+  iban: z.string().transform(normaliseIban).refine(validIban, "Enter a valid IBAN.").nullable().optional(),
+  bic: z.string().transform(normaliseBic).refine(validBic, "Enter a valid BIC.").nullable().optional(),
 });
 export type UpdateUserInput = z.infer<typeof UpdateUserInput>;
 
@@ -182,6 +186,10 @@ export const ConfirmExpenseInput = z.object(expenseFields);
 export interface User {
   id: string;
   email: string;
+  emailVerifiedAt: string | null;
+  address: string | null;
+  iban: string | null;
+  bic: string | null;
   name: string | null;
   businessName: string | null;
   phone: string | null;

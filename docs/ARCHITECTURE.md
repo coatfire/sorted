@@ -70,10 +70,12 @@ Stripe Payment Links are a one-call API (`paymentLinks.create`) with reliable
 webhooks. Revolut's merchant API is worth adding once the flow is validated,
 because Irish clients often prefer it — but it's an M-later, not an M1.
 
-### Auth: magic link, single-tenant-per-user
-Sole traders. No teams, no roles. Email magic link → JWT in an httpOnly-ish
-storage (PWA: localStorage is acceptable at MVP, revisit). One `users` row owns
-everything via `user_id` FK. Keep it embarrassingly simple.
+### Auth: passwords, single-tenant-per-user
+Sole traders. No teams, no roles. Email verification applies a pending scrypt
+password hash; password login issues a JWT stored in localStorage (revisit for
+production hardening). Verification and reset links are single-use and expire
+after 15 minutes. Signup/forgot requests and failed logins are rate-limited.
+One `users` row owns everything via `user_id` FK.
 
 ### Expense OCR
 Receipt photo → storage (Postgres today — see DATA_MODEL `receipts`; S3

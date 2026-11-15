@@ -103,6 +103,7 @@ function seed(): DemoData {
       id: "demo", email: "demo@sorted.app", name: "Shane", businessName: "Studio by Shane",
       phone: "+353871234567", reviewLink: "https://g.page/r/example/review",
       currency: "EUR", createdAt: at(-200, 9),
+      emailVerifiedAt: at(-200, 9), address: null, iban: null, bic: null,
     },
     features: { automation: true, paymentLinks: true },
     clients: [sarah, aoife, emma, ryan, niamh, laura],
@@ -187,6 +188,11 @@ const voidPending = (bookingId: string) => {
 const csvCell = (value: unknown) => `"${String(value ?? "").replaceAll('"', '""')}"`;
 
 export const demoBackend: Backend = {
+  signup: async () => ({ ok: true, dev_link: "/verify?token=demo" }),
+  login: async () => ({ jwt: "demo", user: data().user }),
+  verify: async () => ({ jwt: "demo", user: data().user }),
+  forgot: async () => ({ ok: true, dev_link: "/reset?token=demo" }),
+  resetPassword: async () => ({ jwt: "demo", user: data().user }),
   async load() {
     const { messages: _m, receipts: _r, ...snapshot } = data();
     return structuredClone(snapshot);

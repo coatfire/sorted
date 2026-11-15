@@ -12,8 +12,8 @@ export async function issueJwt(userId: string): Promise<string> {
     .sign(secret());
 }
 
-export async function issueMagicLinkToken(userId: string, tokenId: string): Promise<string> {
-  return new SignJWT({ sub: userId, purpose: "magic-link" })
+export async function issueEmailToken(userId: string, tokenId: string): Promise<string> {
+  return new SignJWT({ sub: userId, purpose: "email-link" })
     .setProtectedHeader({ alg: "HS256" })
     .setJti(tokenId)
     .setIssuedAt()
@@ -21,10 +21,10 @@ export async function issueMagicLinkToken(userId: string, tokenId: string): Prom
     .sign(secret());
 }
 
-export async function verifyMagicLinkToken(token: string): Promise<{ userId: string; tokenId: string }> {
+export async function verifyEmailToken(token: string): Promise<{ userId: string; tokenId: string }> {
   const { payload } = await jwtVerify(token, secret());
-  if (payload.purpose !== "magic-link" || !payload.sub || !payload.jti) {
-    throw new Error("Invalid magic link");
+  if (payload.purpose !== "email-link" || !payload.sub || !payload.jti) {
+    throw new Error("Invalid email link");
   }
   return { userId: payload.sub, tokenId: payload.jti };
 }
