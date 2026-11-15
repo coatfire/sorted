@@ -84,8 +84,14 @@ bookingRoutes.post("/:id/documents", async (c) => {
   for (let attempt = 0; ; attempt++) {
     try {
       return await db.transaction(async (tx) => {
+        const [owner] = await tx.select({ client: schema.clients }).from(schema.clients)
+          .innerJoin(schema.bookings, eq(schema.bookings.clientId, schema.clients.id))
+          .where(and(eq(schema.bookings.id, bookingId), eq(schema.bookings.userId, userId), eq(schema.clients.userId, userId)))
+          .for("share", { of: schema.clients });
+        if (!owner) return c.json({ error: "Booking not found" }, 404);
+        const { client } = owner;
         const [booking] = await tx.select().from(schema.bookings)
-          .where(and(eq(schema.bookings.id, bookingId), eq(schema.bookings.userId, userId))).for("update");
+          .where(and(eq(schema.bookings.id, bookingId), eq(schema.bookings.userId, userId), eq(schema.bookings.clientId, client.id))).for("update");
         if (!booking) return c.json({ error: "Booking not found" }, 404);
         if (kind === "quote" && booking.status !== "enquiry") return c.json({ error: "Quotes are only available for enquiries." }, 409);
         const paidPayments = await tx.select().from(schema.payments).where(and(
@@ -105,8 +111,6 @@ bookingRoutes.post("/:id/documents", async (c) => {
           .from(schema.invoices).where(and(eq(schema.invoices.userId, userId), eq(schema.invoices.kind, kind)));
         const issuedAt = new Date();
         const [taxSettings] = await tx.select().from(schema.users).where(eq(schema.users.id, userId)).for("share");
-        const [client] = await tx.select().from(schema.clients).where(and(eq(schema.clients.id, booking.clientId), eq(schema.clients.userId, userId))).for("share");
-        if (!client) return c.json({ error: "Client not found" }, 404);
         const receiptSnapshot = kind === "receipt" ? snapshotReceipt(
           { ...booking, startAt: booking.startAt.toISOString() },
           paidPayments.map((payment) => ({ ...payment, paidAt: payment.paidAt?.toISOString() ?? null, createdAt: payment.createdAt.toISOString() })),

@@ -21,6 +21,25 @@ async function fixture() {
 }
 
 describe("booking document numbering", () => {
+  it.each(["invoice", "receipt", "quote"] as const)("locks only the client before the booking when issuing or reopening a %s", async kind => {
+    const f = await fixture();
+    const booking = await f.booking();
+    const [payment] = await db.insert(schema.payments).values({ userId: f.user.id, bookingId: booking.id, kind: "deposit", status: "paid", amountCents: 2000 }).returning();
+    const query = db.select().from(schema.clients);
+    const locks = vi.spyOn(Object.getPrototypeOf(query) as typeof query, "for");
+    for (let issue = 0; issue < 2; issue++) {
+      locks.mockClear();
+      expect((await f.request(booking.id, { kind, payment_id: payment.id })).status).toBe(200);
+      const queries = locks.mock.contexts.map(query => (query as { toSQL(): { sql: string; params: unknown[] } }).toSQL());
+      expect(queries[0].sql).toMatch(/from "clients" inner join "bookings"/);
+      expect(queries[0].sql).toMatch(/for share of "clients"$/);
+      expect(queries[0].params).toEqual([booking.id, f.user.id, f.user.id]);
+      expect(queries[1].sql).toMatch(/from "bookings"/);
+      expect(queries[1].sql).toMatch(/for update$/);
+      expect(queries[1].params).toEqual([booking.id, f.user.id, f.client.id]);
+    }
+  });
+
   it("persists, validates and clears user-scoped invoice settings", async () => {
     const first = await fixture();
     const second = await fixture();
