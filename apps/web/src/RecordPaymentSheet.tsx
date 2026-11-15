@@ -2,14 +2,15 @@ import { useState } from "react";
 import { irelandToday, RecordPaymentInput, type PaymentMethod } from "@sorted/core";
 import { Button, Field, Sheet } from "./components";
 import { centsToInput, methodLabel, parseEuros } from "./lib/format";
-import { useAction, useStore } from "./lib/store";
+import { useAction, useData, useStore } from "./lib/store";
 import { useValidation } from "./lib/useValidation";
 
 export function RecordPaymentSheet({ bookingId, outstanding, onClose }: { bookingId: string; outstanding: number; onClose: () => void }) {
   const { backend } = useStore();
+  const { user } = useData();
   const { busy, run, error, committed } = useAction();
   const [amount, setAmount] = useState(centsToInput(outstanding));
-  const [method, setMethod] = useState<Exclude<PaymentMethod, "stripe">>("cash");
+  const [method, setMethod] = useState<Exclude<PaymentMethod, "stripe">>(user.revolutLink ? "revolut" : "cash");
   const [date, setDate] = useState(irelandToday());
   const validation = useValidation({
     amount: () => {

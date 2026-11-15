@@ -1,4 +1,4 @@
-import { PDFDocument, rgb } from "pdf-lib";
+import { PDFDocument, PDFString, rgb } from "pdf-lib";
 import fontkit from "@pdf-lib/fontkit";
 import type { BookingDocumentData } from "@sorted/core";
 import fontUrl from "../assets/DejaVuSans.ttf?url";
@@ -114,6 +114,19 @@ export async function createBookingPdf(data: BookingDocumentData): Promise<Blob>
     text("Paid — thank you", 14, accent);
     row("Booking total", data.bookingTotal, 10);
     row("Balance remaining", data.balanceDue, 10);
+  }
+  if (data.kind !== "receipt" && data.revolutLink) {
+    const label = `Pay by Revolut: ${data.revolutLink}`;
+    for (const line of wrap(label, 10)) {
+      room(15);
+      page.drawText(line, { x: margin, y, font, size: 10, color: accent });
+      const annotation = pdf.context.obj({
+        Type: "Annot", Subtype: "Link", Rect: [margin, y - 2, margin + font.widthOfTextAtSize(line, 10), y + 11],
+        Border: [0, 0, 0], A: { S: "URI", URI: PDFString.of(data.revolutLink) },
+      });
+      page.node.addAnnot(pdf.context.register(annotation));
+      y -= 15;
+    }
   }
   if (data.footer) {
     const lines = wrap(data.footer, 9);

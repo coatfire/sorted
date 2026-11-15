@@ -20,7 +20,8 @@ Authenticated, tenant-scoped and disabled (404) without `GOOGLE_CLIENT_ID`:
 
 - `GET /drive/files` returns `{ userId, logo, documents, photos, years }`.
   Documents are **already issued** invoices, receipts and quotes, assembled with
-  the shared document renderer data (logo returned once separately). It never
+  the shared document renderer data, including each document's frozen logo
+  (the top-level logo remains as a fallback for older clients). It never
   allocates numbers; previously issued quotes remain included after confirmation.
   Photos identify the user's expenses and receipt MIME types; photo bytes still
   use authenticated `GET /expenses/:id/receipt`. Years are all UTC years with paid
@@ -97,7 +98,7 @@ the Google subject. New users complete the existing profile onboarding.
 | POST   | /auth/forgot        | body `{email}` → `{ok:true}`; emails a 15-min reset link if the account exists |
 | POST   | /auth/reset         | body `{token,password}` → `{jwt,user}`; consumes a reset token exactly once and verifies the email if needed |
 | GET    | /auth/me            | current user |
-| PATCH  | /auth/me            | business settings: `name`, `business_name`, `phone`, `review_link`, `address`, `iban`, `bic` |
+| PATCH  | /auth/me            | business settings: `name`, `business_name`, `phone`, `review_link`, `address`, `iban`, `bic`, `revolut_link` |
 
 Verification and reset links expire after 15 minutes and are single-use, including simultaneous
 verification attempts. Expired, already-used, or invalid links return
@@ -137,9 +138,32 @@ and receipt. A quote is an enquiry's PDF, not a separate entity. The booking
 must belong to the user (404 otherwise) and still be an enquiry (409 otherwise,
 including re-downloads). One number and issue time are allocated per booking;
 the per-user quote sequence is independent of invoices/receipts and displayed
-as QTE-0001. The quote always uses the booking's current price. Like invoices,
+as QTE-0001. A new quote captures the booking's price at issue time. Like invoices,
 its VAT rate is captured when first numbered. Validity is the Ireland-local
 issue date plus 30 calendar days.
+
+New invoices, receipts and quotes store a versioned `documentSnapshot` in the
+same transaction as number allocation. It contains `vatRegistered` and all PDF
+renderer data: business/client details, VAT number and breakdown (including a
+registered 0% rate), line items, totals, payment history, bank/Revolut details,
+logo, accent and footer. Reissues and Drive backups render this snapshot, not
+current settings, booking prices or client details. Legacy rows with no snapshot
+retain their existing live-render behaviour; no backfill is performed.
+
+### Revolut payment details
+
+`PATCH /auth/me` accepts optional `revolut_link`: a username, `@username`,
+`revolut.me/username`, or `https://revolut.me/username`. Usernames contain only
+letters, digits, `.`, `_` and `-`. Stored values and camelCase `revolutLink`
+responses use `https://revolut.me/username`. Empty/whitespace or null disables
+the link; omission preserves it. Invalid input returns 400. Updates require
+authentication and affect only the signed-in account.
+
+Manual payment-request defaults support `{revolut_link}`. Custom payment
+requests without it get `Pay by Revolut: <link>` appended unless that URL is
+already present (with or without `https://`). Deposit confirmations with bank
+details also include the link when money is due. No amount is embedded in the
+URL. Opening drafts still records nothing; sent confirmation remains explicit.
 
 `POST /bookings` optionally accepts `repeat: { every_weeks: 1 | 2 | 4,
 count: 2..12 }`. Count is the total, including the first booking. All enquiries

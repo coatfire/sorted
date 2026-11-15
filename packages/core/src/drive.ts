@@ -3,7 +3,7 @@ import type { BookingDocumentData } from "./documents";
 export interface DriveBackup {
   userId: string;
   logo: string | null;
-  documents: Omit<BookingDocumentData, "logo">[];
+  documents: (Omit<BookingDocumentData, "logo"> & { logo?: string | null })[];
   photos: { id: string; receiptKey: string | null; date: string; merchant: string | null; contentType: string }[];
   years: number[];
 }

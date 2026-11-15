@@ -17,6 +17,7 @@ import {
   UpdateBookingInput,
   CreateDocumentInput,
   snapshotReceipt,
+  snapshotDocument,
   RecordPaymentInput,
   paymentPaidAt,
   irelandToday,
@@ -87,9 +88,9 @@ bookingRoutes.post("/:id/documents", async (c) => {
           .where(and(eq(schema.bookings.id, bookingId), eq(schema.bookings.userId, userId))).for("update");
         if (!booking) return c.json({ error: "Booking not found" }, 404);
         if (kind === "quote" && booking.status !== "enquiry") return c.json({ error: "Quotes are only available for enquiries." }, 409);
-        const paidPayments = kind === "receipt" ? await tx.select().from(schema.payments).where(and(
+        const paidPayments = await tx.select().from(schema.payments).where(and(
           eq(schema.payments.bookingId, bookingId), eq(schema.payments.userId, userId),
-        )) : [];
+        ));
         if (kind === "receipt") {
           const payment = paidPayments.find((payment) => payment.id === paymentId);
           if (!payment) return c.json({ error: "Payment not found" }, 404);
@@ -103,7 +104,9 @@ bookingRoutes.post("/:id/documents", async (c) => {
         const [sequence] = await tx.select({ next: sql<number>`coalesce(max(${schema.invoices.number}), 0) + 1` })
           .from(schema.invoices).where(and(eq(schema.invoices.userId, userId), eq(schema.invoices.kind, kind)));
         const issuedAt = new Date();
-        const [taxSettings] = await tx.select({ vatRegistered: schema.users.vatRegistered, vatRateBp: schema.users.vatRateBp }).from(schema.users).where(eq(schema.users.id, userId));
+        const [taxSettings] = await tx.select().from(schema.users).where(eq(schema.users.id, userId)).for("share");
+        const [client] = await tx.select().from(schema.clients).where(and(eq(schema.clients.id, booking.clientId), eq(schema.clients.userId, userId))).for("share");
+        if (!client) return c.json({ error: "Client not found" }, 404);
         const receiptSnapshot = kind === "receipt" ? snapshotReceipt(
           { ...booking, startAt: booking.startAt.toISOString() },
           paidPayments.map((payment) => ({ ...payment, paidAt: payment.paidAt?.toISOString() ?? null, createdAt: payment.createdAt.toISOString() })),
@@ -114,7 +117,15 @@ bookingRoutes.post("/:id/documents", async (c) => {
           vatRateBp: kind !== "receipt" ? taxSettings.vatRegistered ? taxSettings.vatRateBp : 0 : null,
           paymentId: kind === "receipt" ? paymentId : null, receiptSnapshot,
         }).returning();
-        return c.json(document);
+        const documentSnapshot = snapshotDocument(
+          { ...taxSettings, createdAt: taxSettings.createdAt.toISOString(), emailVerifiedAt: taxSettings.emailVerifiedAt?.toISOString() ?? null, driveBackedUpAt: taxSettings.driveBackedUpAt?.toISOString() ?? null },
+          { ...booking, startAt: booking.startAt.toISOString(), endAt: booking.endAt?.toISOString() ?? null, completedAt: booking.completedAt?.toISOString() ?? null, paymentRequestedAt: booking.paymentRequestedAt?.toISOString() ?? null, createdAt: booking.createdAt.toISOString() },
+          { ...client, createdAt: client.createdAt.toISOString() },
+          paidPayments.map((payment) => ({ ...payment, paidAt: payment.paidAt?.toISOString() ?? null, createdAt: payment.createdAt.toISOString() })),
+          { ...document, issuedAt: document.issuedAt.toISOString() },
+        );
+        const [frozen] = await tx.update(schema.invoices).set({ documentSnapshot }).where(and(eq(schema.invoices.id, document.id), eq(schema.invoices.userId, userId))).returning();
+        return c.json(frozen);
       });
     } catch (error) {
       const code = error && typeof error === "object"

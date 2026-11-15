@@ -91,7 +91,8 @@ export async function backUpToDrive(tokenResponse: Promise<string>, backend: Bac
         let blob: Blob;
         if (file.kind === "document") {
           const { createBookingPdf } = await import("./bookingPdf");
-          blob = await createBookingPdf({ ...backup.documents[file.index], logo: backup.logo });
+          const document = backup.documents[file.index];
+          blob = await createBookingPdf({ ...document, logo: document.logo === undefined ? backup.logo : document.logo });
         } else if (file.kind === "csv") blob = await backend.exportCsv(file.index);
         else {
           const photo = backup.photos[file.index];

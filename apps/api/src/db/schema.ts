@@ -12,7 +12,7 @@ import {
   date,
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
-import type { ReceiptSnapshot } from "@sorted/core";
+import type { ReceiptSnapshot, DocumentSnapshot } from "@sorted/core";
 
 // Enums mirror packages/core/src/types.ts — keep in sync.
 export const bookingStatus = pgEnum("booking_status", [
@@ -87,6 +87,7 @@ export const users = pgTable("users", {
   invoiceAccent: text("invoice_accent"),
   invoiceFooter: text("invoice_footer"),
   vatNumber: text("vat_number"),
+  revolutLink: text("revolut_link"),
   name: text("name"),
   businessName: text("business_name"),
   phone: text("phone"), // E.164
@@ -267,6 +268,7 @@ export const invoices = pgTable("invoices", {
   bookingId: uuid("booking_id").notNull(),
   paymentId: uuid("payment_id"),
   receiptSnapshot: jsonb("receipt_snapshot").$type<ReceiptSnapshot>(),
+  documentSnapshot: jsonb("document_snapshot").$type<DocumentSnapshot>(),
   kind: text("kind").$type<"invoice" | "receipt" | "quote">().notNull(),
   number: integer("number").notNull(),
   issuedAt: timestamp("issued_at", { withTimezone: true }).notNull().defaultNow(),

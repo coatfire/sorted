@@ -4,7 +4,7 @@ import {
   normalisePhone, normaliseIban, normaliseBic, validIban, validBic,
   DEFAULT_BOOKING_CONFIRMATION_TEMPLATE, DEFAULT_PAYMENT_REQUEST_TEMPLATE, MESSAGE_PLACEHOLDERS,
   DEFAULT_INVOICE_ACCENT, InvoiceAccent, IrishVatNumber,
-  percentToBasisPoints,
+  percentToBasisPoints, RevolutLink,
 } from "@sorted/core";
 import { BackButton, Button, Card, Field, Icon, PageHeader } from "../components";
 import { useAction, useData, useSession, useStore } from "../lib/store";
@@ -29,6 +29,7 @@ export function Settings({ welcome = false }: { welcome?: boolean }) {
     reviewLink: user.reviewLink ?? "",
     address: user.address ?? "",
     iban: user.iban ?? "",
+    revolutLink: user.revolutLink ?? "",
     bic: user.bic ?? "",
     bookingConfirmationTemplate: user.bookingConfirmationTemplate ?? DEFAULT_BOOKING_CONFIRMATION_TEMPLATE,
     paymentRequestTemplate: user.paymentRequestTemplate ?? DEFAULT_PAYMENT_REQUEST_TEMPLATE,
@@ -46,6 +47,7 @@ export function Settings({ welcome = false }: { welcome?: boolean }) {
     setForm({ ...form, [field]: event.target.value });
   };
   const validation = useValidation({
+    revolutLink: () => form.revolutLink.trim() && !RevolutLink.safeParse(form.revolutLink).success ? "Enter a Revolut username or revolut.me link." : undefined,
     vatRateChoice: () => form.vatRegistered && !form.vatRateChoice ? "Enter your VAT rate." : undefined,
     vatCustomPercent: () => form.vatRegistered && form.vatRateChoice === "custom" && percentToBasisPoints(form.vatCustomPercent, 3000) === null ? "Enter a rate from 0 to 30%, with up to two decimal places." : undefined,
     incomeTaxPercent: () => form.incomeTaxPercent.trim() && percentToBasisPoints(form.incomeTaxPercent) === null ? "Enter a rate from 0 to 100%, with up to two decimal places." : undefined,
@@ -75,6 +77,7 @@ export function Settings({ welcome = false }: { welcome?: boolean }) {
           reviewLink,
           address: form.address.trim() || null,
           iban: form.iban.trim() ? normaliseIban(form.iban) : null,
+          revolutLink: form.revolutLink.trim() ? RevolutLink.parse(form.revolutLink) : null,
           bic: form.bic.trim() ? normaliseBic(form.bic) : null,
           ...(!welcome ? {
             bookingConfirmationTemplate: form.bookingConfirmationTemplate === DEFAULT_BOOKING_CONFIRMATION_TEMPLATE ? null : form.bookingConfirmationTemplate,
@@ -119,6 +122,9 @@ export function Settings({ welcome = false }: { welcome?: boolean }) {
           </Field>
           <Field label="IBAN" helper="Shown on your invoices and payment messages." {...validation.field("iban")}>
             <input name="iban" value={form.iban} onChange={set("iban")} autoCapitalize="characters" spellCheck={false} />
+          </Field>
+          <Field label="Revolut.me link" helper="Your username or revolut.me link. Leave blank to turn it off." {...validation.field("revolutLink")}>
+            <input name="revolutLink" value={form.revolutLink} onChange={set("revolutLink")} placeholder="revolut.me/yourname" autoCapitalize="none" autoCorrect="off" spellCheck={false} />
           </Field>
           <Field label="BIC" helper="Shown on your invoices and payment messages." {...validation.field("bic")}>
             <input name="bic" value={form.bic} onChange={set("bic")} autoCapitalize="characters" spellCheck={false} />
