@@ -8,7 +8,7 @@ import { driveErrorMessage } from "../../web/src/lib/driveErrors";
 
 afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); });
 
-function fixture({ failUpload = false, closePopup = false, empty = false } = {}) {
+function fixture({ failUpload = false, closePopup = false, empty = false, existingRoot = !empty }: { failUpload?: boolean; closePopup?: boolean; empty?: boolean; existingRoot?: boolean } = {}) {
   const scope = "https://www.googleapis.com/auth/drive.file";
   const tokenClient = vi.fn((options: { scope: string; include_granted_scopes: boolean; callback: (value: { access_token: string; scope: string }) => void; error_callback: () => void }) => {
     expect(options.scope).toBe(scope);
@@ -29,12 +29,12 @@ function fixture({ failUpload = false, closePopup = false, empty = false } = {})
     const query = new URL(url).searchParams.get("q")!;
     if (query.includes("appProperties")) {
       expect(query).toContain("user-1");
-      return Response.json({ files: [{ id: "root", name: "Sorted", mimeType: "application/vnd.google-apps.folder" }] });
+      return Response.json({ files: existingRoot ? [{ id: "root", name: "Sorted", mimeType: "application/vnd.google-apps.folder" }] : [] });
     }
     return Response.json({ files: [{ id: "csv-2024", name: "sorted-2024.csv", mimeType: "text/csv" }] });
   });
   vi.stubGlobal("fetch", fetchMock);
-  const backedUp = vi.fn(async () => { expect(uploads).toHaveLength(2); return { driveBackedUpAt: "2026-07-01T12:00:00Z" }; });
+  const backedUp = vi.fn(async () => { expect(uploads).toHaveLength(empty ? 1 : 2); return { driveBackedUpAt: "2026-07-01T12:00:00Z" }; });
   const backend = {
     driveFiles: vi.fn(async () => ({ userId: "user-1", logo: null, documents: [], photos: [], years: empty ? [] : [2024, 2026] })),
     exportCsv: vi.fn(async () => new Blob(["INCOME"], { type: "text/csv" })),
@@ -105,6 +105,19 @@ describe("browser-driven Drive backup", () => {
     expect(f.uploads).toHaveLength(2);
     expect(f.backedUp).not.toHaveBeenCalled();
   });
+  it.each([false, true])("rewrites a previously backed-up year after its final entry moves away, with no current files: %s", async empty => {
+    const f = fixture({ empty, existingRoot: true });
+    vi.mocked(f.backend.driveFiles).mockResolvedValue({ userId: "user-1", logo: null, documents: [], photos: [], years: empty ? [] : [2026] });
+    vi.mocked(f.backend.exportCsv).mockImplementation(async year => new Blob([year === 2024 ? "HEADER\n" : "HEADER\ncorrected-payment\n"], { type: "text/csv" }));
+    await backUpToDrive(Promise.resolve("test-drive-token"), f.backend, vi.fn());
+    expect(f.backend.exportCsv).toHaveBeenCalledWith(2024);
+    const old = f.uploads.find(upload => upload.url.includes("/files/csv-2024?"))!;
+    expect(old.init.method).toBe("PATCH");
+    expect(await (old.init.body as Blob).text()).toContain("HEADER\n");
+    expect(await (old.init.body as Blob).text()).not.toContain("corrected-payment");
+    if (!empty) expect(f.backend.exportCsv).toHaveBeenCalledWith(2026);
+    expect(f.backedUp).toHaveBeenCalledOnce();
+  });
   it("does not upload or mark completion after popup dismissal", async () => {
     const f = fixture({ closePopup: true });
     const requestToken = await prepareDriveBackup("test-client");
@@ -116,7 +129,7 @@ describe("browser-driven Drive backup", () => {
     const f = fixture({ empty: true });
     const requestToken = await prepareDriveBackup("test-client");
     expect(await backUpToDrive(requestToken(), f.backend, vi.fn())).toEqual({ driveBackedUpAt: null });
-    expect(f.fetchMock).not.toHaveBeenCalled();
+    expect(f.fetchMock).toHaveBeenCalledOnce();
     expect(f.backedUp).not.toHaveBeenCalled();
   });
 });

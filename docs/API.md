@@ -296,6 +296,9 @@ Client deletion keeps their audit rows through the existing anonymisation path,
 even when every previously paid row has since been undone.
 Drive refreshes CSVs even for a year whose last paid row was undone, and
 replaces previously backed-up receipt PDFs with their void-marked versions.
+The backup plan also refreshes every yearly CSV already present in this user's
+Sorted Drive folder, even when date corrections or deletions leave that year
+empty. Empty years overwrite the old CSV with a header-only export.
 `GET /payments` includes `receiptVoidedAt` beside each payment for the UI.
 
 | Method | Path                     | Notes |
