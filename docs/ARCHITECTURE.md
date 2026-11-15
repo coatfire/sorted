@@ -62,7 +62,7 @@ preset discovers the default export in `apps/api/src/app.ts`; the root
 `vercel.json` serves `/api/*` from the API service and everything else from
 the Vite web service, including an SPA fallback. Leave `VITE_API_URL` unset
 for same-origin requests. `pnpm dev` still runs plain Node + Vite, and
-`lambda.ts` still builds to `dist/index.mjs` for optional Lambda hosting.
+`lambda.ts` still builds to `dist/lambda/index.mjs` for optional Lambda hosting.
 See `apps/api/README.md` for the required Vercel environment variables.
 
 ### Stripe first, Revolut second

@@ -1,4 +1,4 @@
-/** AWS Lambda entrypoint. Build with `pnpm build`, deploy dist/index.mjs. */
+/** AWS Lambda entrypoint. Build with `pnpm build`, deploy dist/lambda/index.mjs. */
 import { handle } from "hono/aws-lambda";
 import { app } from "./app";
 
