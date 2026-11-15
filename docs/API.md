@@ -54,6 +54,30 @@ regardless of account existence; development links are never returned in product
 
 ## Bookings
 
+### Quotes and repeat enquiries
+
+`POST /bookings/:id/documents` accepts `{ kind: "quote" }` alongside invoice
+and receipt. A quote is an enquiry's PDF, not a separate entity. The booking
+must belong to the user (404 otherwise) and still be an enquiry (409 otherwise,
+including re-downloads). One number and issue time are allocated per booking;
+the per-user quote sequence is independent of invoices/receipts and displayed
+as QTE-0001. The quote always uses the booking's current price. Like invoices,
+its VAT rate is captured when first numbered. Validity is the Ireland-local
+issue date plus 30 calendar days.
+
+`POST /bookings` optionally accepts `repeat: { every_weeks: 1 | 2 | 4,
+count: 2..12 }`. Count is the total, including the first booking. All enquiries
+and an optional inline client are created in one transaction. Dates and optional
+end times shift by calendar weeks in Europe/Dublin, not fixed UTC durations.
+Only the first gets `follow_up_on` (including the normal two-day default);
+later bookings get null. The response is the first booking with `seriesCount`
+(1 without repeat). No confirmations, payments or messages are created.
+Invalid intervals/counts return 400 without creating anything.
+
+During a skipped spring-clock hour, the time moves forward by the clock gap;
+ambiguous autumn times preserve the original offset when possible.
+
+
 Bookings include `followUpOn` (nullable YYYY-MM-DD) and `paymentRequestedAt`
 (nullable UTC timestamp). Create/PATCH accept `follow_up_on`: a valid calendar
 date, or null to remove the follow-up. Omitted on creation defaults to two days

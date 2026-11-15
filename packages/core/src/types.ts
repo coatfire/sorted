@@ -92,6 +92,9 @@ export const UpdateClientInput = z.object({
   notes: z.string().max(2000).nullable().optional(),
 });
 
+export const RepeatInput = z.object({ every_weeks: z.union([z.literal(1), z.literal(2), z.literal(4)]), count: z.number().int().min(2).max(12) });
+export type RepeatInput = z.infer<typeof RepeatInput>;
+
 export const CreateBookingInput = z
   .object({
     // Either an existing client…
@@ -101,6 +104,7 @@ export const CreateBookingInput = z
     service: z.string().min(1).max(200),
     start_at: z.coerce.date(),
     follow_up_on: CalendarDate.nullable().optional(),
+    repeat: RepeatInput.optional(),
     end_at: z.coerce.date().optional(),
     price_cents: z.number().int().nonnegative(),
     deposit_cents: z.number().int().nonnegative().default(0),

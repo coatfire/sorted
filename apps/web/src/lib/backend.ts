@@ -33,6 +33,7 @@ export interface BookingDraft {
   service: string;
   startAt: string;
   followUpOn?: string | null;
+  repeat?: { everyWeeks: 1 | 2 | 4; count: number };
   priceCents: number;
   depositCents: number;
   location: string | null;
@@ -63,7 +64,7 @@ export interface Backend {
   forgot(email: string): Promise<{ ok: true; dev_link?: string }>;
   resetPassword(token: string, password: string): Promise<{ jwt: string; user: User }>;
   load(): Promise<Snapshot>;
-  createBooking(draft: BookingDraft): Promise<{ id: string }>;
+  createBooking(draft: BookingDraft): Promise<{ id: string; seriesCount: number }>;
   updateBooking(id: string, draft: Omit<BookingDraft, "clientId" | "client">): Promise<void>;
   confirmBooking(id: string): Promise<void>;
   completeBooking(id: string): Promise<void>;
