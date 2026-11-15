@@ -54,7 +54,7 @@ function BusinessSettings() {
       registrationPending.current = false;
     }
     setErrors(current => ({ ...current, ...(rateField && result.patch ? { vatRegistered: undefined, vatRateChoice: undefined, vatCustomPercent: undefined } : {}), [field]: result.error }));
-    saver.change(section, field === "vatCustomPercent" ? "vatRateChoice" : field, result.patch, immediate);
+    saver.change(section, rateField ? "vatRateBp" : field === "incomeTaxPercent" ? "incomeTaxRateBp" : field, result.patch, immediate);
   }
   const input = (field: SettingsField, section: string, immediate = false) => ({
     name: field, value: String(form[field]), onChange: (event: { target: { value: string } }) => change(field, event.target.value, section, immediate),

@@ -53,6 +53,38 @@ describe("growing setup", () => {
 });
 
 describe("Settings partial autosave", () => {
+  it("drops a failed value on a newer invalid edit while retaining other failed fields", async () => {
+    const save = vi.fn().mockRejectedValueOnce(new TypeError("offline")).mockResolvedValue(undefined);
+    const saver = createSettingsAutosave(save, async () => {}, vi.fn());
+    saver.change("profile", "phone", { phone: "+353871234567" });
+    saver.change("profile", "name", { name: "Aoife" });
+    await saver.flush("profile");
+    saver.change("profile", "phone", null);
+    expect(saver.getChanges()).toEqual({ name: "Aoife" });
+    await saver.flushAll();
+    expect(save.mock.calls).toEqual([[{ phone: "+353871234567", name: "Aoife" }], [{ name: "Aoife" }]]);
+    saver.change("profile", "phone", { phone: "+353879876543" }, true);
+    await saver.flushAll(); expect(save).toHaveBeenLastCalledWith({ phone: "+353879876543" });
+  });
+  it("does not resurrect a request that fails after a newer invalid edit", async () => {
+    let reject!: (error: Error) => void;
+    const save = vi.fn().mockImplementationOnce(() => new Promise<void>((_, fail) => { reject = fail; }));
+    const saver = createSettingsAutosave(save, async () => {}, vi.fn());
+    saver.change("profile", "phone", { phone: "+353871234567" }, true);
+    await Promise.resolve(); saver.change("profile", "phone", null);
+    reject(new TypeError("offline")); await saver.flushAll(); await saver.flushAll();
+    expect(save).toHaveBeenCalledTimes(1); expect(saver.getChanges()).toEqual({});
+  });
+  it("drops obsolete queued and coupled pending keys before retrying", async () => {
+    const save = vi.fn().mockRejectedValueOnce(new TypeError("offline")).mockResolvedValue(undefined);
+    const saver = createSettingsAutosave(save, async () => {}, vi.fn());
+    saver.change("tax", "vatRegistered", { vatRegistered: true, vatRateBp: 2300 });
+    saver.change("tax", "vatRateBp", null);
+    await saver.flushAll(); expect(save).toHaveBeenCalledWith({ vatRegistered: true });
+    saver.change("tax", "vatRegistered", { vatRegistered: false }, true);
+    saver.change("tax", "vatRegistered", null);
+    await saver.flushAll(); expect(save).toHaveBeenCalledTimes(1); expect(saver.getChanges()).toEqual({});
+  });
   it("debounces text and sends just the latest changed field", async () => {
     vi.useFakeTimers();
     const save = vi.fn().mockResolvedValue(undefined), refresh = vi.fn().mockResolvedValue(undefined), report = vi.fn();
