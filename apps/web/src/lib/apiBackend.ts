@@ -97,6 +97,10 @@ export const apiBackend: Backend = {
     await patch(`/clients/${id}`, changes);
   },
 
+  deleteClient: (id) => api(`/clients/${id}`, {
+    method: "DELETE", body: JSON.stringify({ confirm: true }),
+  }),
+
   async updateUser(changes) {
     await patch("/auth/me", {
       name: changes.name,

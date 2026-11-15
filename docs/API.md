@@ -36,7 +36,7 @@ Used links still count toward this limit.
 | POST   | /clients      | create (name required, rest optional — 10-second rule) |
 | GET    | /clients/:id  | includes booking history + lifetime value |
 | PATCH  | /clients/:id  | |
-| DELETE | /clients/:id  | M8: GDPR cascade |
+| DELETE | /clients/:id  | requires `{ "confirm": true }` (otherwise 400); 409 for enquiry/confirmed bookings. Deletes clients without paid payments; otherwise anonymises personal data and retains bookings/payments for tax records. Returns `{ "outcome": "deleted" }` or `{ "outcome": "anonymised" }`. Receipts are unchanged. |
 
 ## Bookings
 | Method | Path                    | Notes |
