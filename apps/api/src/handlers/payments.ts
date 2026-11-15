@@ -92,8 +92,16 @@ paymentRoutes.post("/:id/link", async (c) => {
       stripePaymentLinkId: link.id,
       linkUrl: link.url,
     })
-    .where(and(eq(schema.payments.id, row.payment.id), eq(schema.payments.userId, userId)))
+    .where(and(
+      eq(schema.payments.id, row.payment.id),
+      eq(schema.payments.userId, userId),
+      eq(schema.payments.status, "pending"),
+    ))
     .returning();
+  if (!payment) {
+    await deactivatePaymentLink(link.id);
+    return c.json({ error: "Only pending payments can have a link" }, 409);
+  }
   await emitBookingEvent(userId, payment.bookingId, "payment.link_created", {
     id: payment.id,
     kind: payment.kind,
