@@ -56,7 +56,12 @@ export function Settings() {
             <input value={form.name} onChange={set("name")} autoComplete="given-name" />
           </Field>
           <Field label="Your mobile">
-            <input type="tel" inputMode="tel" value={form.phone} onChange={set("phone")} placeholder="087 123 4567" />
+            <input
+                type="tel" inputMode="tel" value={form.phone}
+                aria-invalid={error ? true : undefined}
+                aria-describedby={error ? "settings-error" : undefined}
+                onChange={set("phone")} placeholder="087 123 4567"
+            />
           </Field>
           <Field label="Google review link" helper="Sent to clients two days after a completed job.">
             <input inputMode="url" value={form.reviewLink} onChange={set("reviewLink")} placeholder="https://g.page/r/…" />
@@ -64,7 +69,7 @@ export function Settings() {
           <Field label="Currency">
             <div className="locked-field">EUR · Euro <span>Fixed during beta</span></div>
           </Field>
-          {error && <p className="form-error" role="alert">{error}</p>}
+          {error && <p id="settings-error" className="form-error" role="alert">{error}</p>}
         </Card>
         <Button type="submit" disabled={busy}>
           <Icon name="check" /> {busy ? "Saving…" : "Save settings"}

@@ -2,6 +2,7 @@ import { useEffect, useRef, type ButtonHTMLAttributes, type ReactNode } from "re
 import { useNavigate } from "react-router-dom";
 import type { BookingStatus, PaymentStatus } from "@sorted/core";
 import { euros } from "./lib/format";
+import { manageDialogFocus } from "./lib/dialogFocus";
 
 export function Icon({
   name,
@@ -274,18 +275,11 @@ export function Sheet({
   children: ReactNode;
 }) {
   const panel = useRef<HTMLDivElement>(null);
+  const close = useRef(onClose);
+  close.current = onClose;
   useEffect(() => {
-    const previous = document.activeElement as HTMLElement | null;
-    panel.current?.focus();
-    const onKey = (event: KeyboardEvent) => event.key === "Escape" && onClose();
-    document.addEventListener("keydown", onKey);
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.removeEventListener("keydown", onKey);
-      document.body.style.overflow = "";
-      previous?.focus();
-    };
-  }, [onClose]);
+    if (panel.current) return manageDialogFocus(panel.current, () => close.current());
+  }, []);
   return (
     <div className="sheet-backdrop" onClick={onClose}>
       <div

@@ -3,6 +3,7 @@ import type { Expense, ExpenseCategory } from "@sorted/core";
 import { Button, Card, EmptyState, Field, Icon, MoneyText, PageHeader, Sheet } from "../components";
 import { CATEGORIES, categoryLabel, centsToInput, dayMonth, monthYear, parseEuros, toDateInput } from "../lib/format";
 import { downscaleImage } from "../lib/image";
+import { manageDialogFocus } from "../lib/dialogFocus";
 import { useAction, useData, useStore } from "../lib/store";
 
 const blank = () => ({
@@ -26,6 +27,13 @@ export function Expenses() {
   const [filter, setFilter] = useState<ExpenseCategory | "all">("all");
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [zoom, setZoom] = useState(false);
+  const lightbox = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (zoom && lightbox.current) {
+      return manageDialogFocus(lightbox.current, () => setZoom(false));
+    }
+  }, [zoom]);
 
   const year = new Date().getFullYear();
   const dated = expenses
@@ -160,6 +168,8 @@ export function Expenses() {
                     required
                     inputMode="decimal"
                     value={form.amount}
+                    aria-invalid={error ? true : undefined}
+                    aria-describedby={error ? "expense-error" : undefined}
                     onChange={(event) => { setError(""); setForm({ ...form, amount: event.target.value }); }}
                     placeholder="0.00"
                   />
@@ -190,7 +200,7 @@ export function Expenses() {
                 </button>
               ))}
             </div>
-            {error && <p className="form-error" role="alert">{error}</p>}
+            {error && <p id="expense-error" className="form-error" role="alert">{error}</p>}
             <Button type="submit" disabled={busy}>
               <Icon name="check" /> {busy ? "Saving…" : editing ? "Save changes" : "Confirm expense"}
             </Button>
@@ -293,7 +303,7 @@ export function Expenses() {
         </Sheet>
       )}
       {zoom && photo && (
-        <div className="lightbox" onClick={() => setZoom(false)} role="dialog" aria-label="Receipt photo">
+        <div ref={lightbox} tabIndex={-1} className="lightbox" onClick={() => setZoom(false)} role="dialog" aria-modal="true" aria-label="Receipt photo">
           <img src={photo.url} alt="Receipt, full size" />
         </div>
       )}
