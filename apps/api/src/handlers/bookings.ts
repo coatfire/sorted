@@ -30,8 +30,31 @@ import { deactivatePaymentLink } from "../lib/stripe";
 import { effectivePaymentVatRate } from "../lib/tax";
 import { lockBookingWithClient, userTransaction } from "../lib/transaction";
 import type { AppEnv } from "../app";
+import { env } from "../lib/env";
+import { createPaymentLink } from "./payments";
 
 export const bookingRoutes = new Hono<AppEnv>();
+
+bookingRoutes.post("/:id/payment-link", async (c) => {
+  const userId = c.get("userId"), bookingId = c.req.param("id");
+  if (!env.stripeKey()) return c.json({ error: "Stripe is not configured" }, 503);
+  const result = await userTransaction(userId, async tx => {
+    const [booking] = await tx.select().from(schema.bookings).where(and(eq(schema.bookings.id, bookingId), eq(schema.bookings.userId, userId))).for("update");
+    if (!booking) return c.json({ error: "Booking not found" }, 404);
+    if (booking.status !== "confirmed" && booking.status !== "completed") return c.json({ error: "This booking cannot take payments." }, 409);
+    const payments = await tx.select().from(schema.payments).where(and(eq(schema.payments.bookingId, bookingId), eq(schema.payments.userId, userId))).orderBy(schema.payments.id).for("update");
+    const owedCents = Math.max(0, booking.priceCents - payments.filter(payment => payment.status === "paid").reduce((sum, payment) => sum + payment.amountCents, 0));
+    if (!owedCents) return c.json({ error: "This booking is already paid in full." }, 409);
+    const pending = payments.filter(payment => payment.status === "pending");
+    if (pending.length === 1 && pending[0].amountCents === owedCents) return { payment: pending[0], voided: [] };
+    const voided = await tx.update(schema.payments).set({ status: "cancelled" }).where(and(eq(schema.payments.bookingId, bookingId), eq(schema.payments.userId, userId), eq(schema.payments.status, "pending"))).returning({ linkId: schema.payments.stripePaymentLinkId });
+    const [payment] = await tx.insert(schema.payments).values({ userId, bookingId, kind: "custom", amountCents: owedCents }).returning();
+    return { payment, voided };
+  });
+  if (result instanceof Response) return result;
+  for (const payment of result.voided) if (payment.linkId) await deactivatePaymentLink(payment.linkId);
+  return createPaymentLink(userId, result.payment.id);
+});
 
 bookingRoutes.post("/:id/payments", async (c) => {
   const parsed = RecordPaymentInput.safeParse(await c.req.json());
@@ -307,7 +330,7 @@ bookingRoutes.patch("/:id", async (c) => {
   if (!parsed.success) return c.json({ error: parsed.error.flatten() }, 400);
   const input = parsed.data;
   const userId = c.get("userId");
-  return userTransaction(userId, async (tx) => {
+  const result = await userTransaction(userId, async (tx) => {
     const [current] = await tx
       .select()
       .from(schema.bookings)
@@ -341,9 +364,20 @@ bookingRoutes.patch("/:id", async (c) => {
     }
     const priceCents = input.price_cents ?? current.priceCents;
     const depositCents = input.deposit_cents ?? current.depositCents;
+    const payments = priceCents !== current.priceCents
+      ? await tx.select().from(schema.payments).where(and(eq(schema.payments.bookingId, current.id), eq(schema.payments.userId, userId))).orderBy(schema.payments.id).for("update")
+      : null;
+    const paidCents = payments?.filter(payment => payment.status === "paid").reduce((sum, payment) => sum + payment.amountCents, 0) ?? 0;
+    if (payments && priceCents < paidCents) {
+      return c.json({ error: "The price can't be less than the amount already paid." }, 409);
+    }
     if (depositCents > priceCents) {
       return c.json({ error: "Deposit cannot exceed price" }, 400);
     }
+    const pending = payments?.filter(payment => payment.status === "pending");
+    const voided = pending && !(pending.length === 1 && pending[0].amountCents === priceCents - paidCents)
+      ? await tx.update(schema.payments).set({ status: "cancelled" }).where(and(eq(schema.payments.bookingId, current.id), eq(schema.payments.userId, userId), eq(schema.payments.status, "pending"))).returning({ linkId: schema.payments.stripePaymentLinkId })
+      : [];
     const [booking] = await tx
       .update(schema.bookings)
       .set({
@@ -358,8 +392,11 @@ bookingRoutes.patch("/:id", async (c) => {
       })
       .where(and(eq(schema.bookings.id, current.id), eq(schema.bookings.userId, c.get("userId"))))
       .returning();
-    return c.json(booking);
+    return { booking, voided };
   });
+  if (result instanceof Response) return result;
+  for (const payment of result.voided) if (payment.linkId) await deactivatePaymentLink(payment.linkId);
+  return c.json(result.booking);
 });
 
 /** POST /api/bookings/:id/complete — confirmed → completed */

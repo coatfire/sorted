@@ -201,6 +201,18 @@ date, or null to remove the follow-up. Omitted on enquiry creation defaults to t
 after today in Europe/Dublin; omitted on PATCH preserves it. Only enquiries
 may be assigned a follow-up date. Confirming or cancelling clears it.
 
+`POST /bookings/:id/payment-link` creates/reuses a Stripe link for the booking's
+full current price-minus-paid balance. Authenticated, tenant-scoped, confirmed/
+completed bookings only. Returns the pending payment row (including `linkUrl`).
+Under the global transaction lock order, reuse a sole pending row with the exact
+balance; otherwise void pending rows and insert one pending custom payment for
+the balance. Deactivate voided links after commit. Missing/foreign bookings
+return 404; cancelled/enquiry/settled bookings return 409; unconfigured Stripe
+returns 503 without creating rows. Stripe failures return 502; retries reuse the
+pending row. The existing per-payment link endpoint remains available.
+Money's booking-level Mark paid uses `POST /bookings/:id/payments` with the full
+owed amount, never marks both a pending row and a new record paid.
+
 ### Saved services
 
 `PATCH /auth/me` accepts optional `services: [{ name, price_cents }]`, up to

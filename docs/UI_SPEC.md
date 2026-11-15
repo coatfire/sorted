@@ -109,41 +109,43 @@ Route map:
 ## Screens
 
 ### 1. Today — `/` (M1)
-The morning-coffee screen.
+The morning-coffee screen: where do I need to be next, then what needs attention.
+No weekly totals, charts or snapshot card.
 
-- **Follow up** is the first section after the header, above the snapshot.
-  Show enquiries due today or earlier, oldest follow-up first; hide the section
-  when empty. Each card links to the booking and shows client, service and
-  **Due today** / **X days overdue**. Separate 44px-minimum **Message** and
-  **Later** buttons must not be nested inside the booking link.
-- Message opens an editable draft: “Hi {first name}, just following up on your
-  enquiry about {service} on {date}. Would you like me to book you in?” followed
-  by the business name. WhatsApp and Email open the trader's app; missing contact
-  details disable that action with a reason. Nothing is labelled or logged “Sent”.
-- Later opens a Sheet with **Tomorrow**, **In 3 days**, **Next week**, a date
-  picker with **Save date**, and **Remove follow-up**. Dates use Europe/Dublin.
-  A quick choice saves immediately and closes the Sheet.
-
-```
-Sorted                                (gear)
-┌────────────────────────────────────────┐
-│ TODAY · Tue 14 Jul                     │
-│ 10:00  Sarah K · Bridal trial   €80  ● │   ← chip = status
-│ 14:30  O'Brien wedding · Hair  €350  ● │
-├────────────────────────────────────────┤
-│ UPCOMING                               │
-│ Thu 16  Emma L · Makeup        €120  ● │
-│ Sat 18  Ryan/Walsh wedding     €400  ● │
-└────────────────────────────────────────┘
-```
-
-- Grouped by day, 14-day window, then "Later" collapsed.
-- Row = time · client · service · price · status chip. Whole row taps to
-  detail. No swipe actions in MVP (discoverability is poor; buttons live on
-  detail).
-- Pull-to-refresh.
-- **Empty state:** friendly, directive: "No bookings yet. Tap ＋ to log your
-  first — it takes 30 seconds." Empty states are onboarding; write them all.
+- **Header:** Sorted, an Ireland-local time-of-day greeting and Settings gear.
+- **Next appointment:** the earliest confirmed booking that has not ended.
+  Use `endAt`, or one hour after start when absent; include appointments already
+  in progress and label them **Now**. Otherwise show **In 2 hours**,
+  **Tomorrow, 10:00**, or **Wed 18 Nov, 14:00**, using Ireland-local dates/times.
+  Show client, service, remaining deposit/payment phrase derived from
+  `bookingStage`, and location with Google Maps directions when present.
+  The main hero links to booking detail; directions are a separate 44px target,
+  never a nested link. Empty: **No appointments ahead** with a + booking hint.
+- **Needs attention:** one compact card of small rows, hidden entirely when empty:
+  - Follow up: enquiries due today or earlier, oldest follow-up first, with client,
+    service and **Due today / X days overdue**. Separate **Message** and
+    **Remind me later** actions, each at least 44px, outside the booking link.
+  - To wrap up: past-date open bookings. Confirmed jobs offer **Mark complete**;
+    enquiries offer **Review enquiry** rather than being silently confirmed.
+    Save errors stay visible; a committed refresh error offers Reload.
+  - **€X owed by N clients** links to Money; count distinct clients, not payments.
+    Up to three compact booking rows link to detail, oldest job first.
+    Both pages use core `moneyOwed`: only due/owing bookings, price minus paid;
+    future jobs, enquiries and cancelled bookings never inflate owed-now totals.
+- Follow-up Message is an editable draft with WhatsApp/Email, retaining missing
+  contact reasons. Nothing is labelled or logged Sent. **Remind me later** opens
+  Tomorrow / In 3 days / Next week / a date picker / Remove follow-up; a quick
+  choice saves immediately. Follow-up calendar dates use Europe/Dublin.
+- Retain the optional business-name Settings nudge, below the hero/attention.
+- **Today:** all non-cancelled bookings on today's Ireland date, including completed.
+  Row = Ireland time, client, service, full price, work-status chip; tap for detail.
+  Empty: **Your day is clear**, or **No bookings yet**, with a + hint.
+- **Upcoming:** enquiry/confirmed bookings 1–14 Ireland-local days ahead, grouped by
+  Ireland date. Empty: **Nothing in the next two weeks**. **Later** (>14 days)
+  and the latest 20 completed/cancelled **Past bookings** are collapsed when present.
+  Past open jobs stay in To wrap up. No swipe actions.
+- Relative times/grouping refresh each minute and when returning to the tab.
+  All targets are at least 44px and respect reduced-motion preferences.
 
 ### 2. Add Booking — `/bookings/new` (M1) — THE screen
 One scrollable form. No steps, no wizard. Field order matches how a vendor
@@ -300,27 +302,49 @@ Money → Client messages. Lead with at most one primary page action.
   your calendar. Pending payment links will be cancelled."
 
 ### 4. Money — `/money` (M2, M6)
-Two stacked zones:
+Order: heading → Owed hero → Due now → Coming up → This year → collapsed Tax estimate.
 
-Outstanding cards have a primary **Send reminder** button opening the existing
-payment-request Sheet with that payment's amount, still editable up to the
-unpaid balance. Show **Not asked yet**, **Asked today**, or **Asked n days ago**
-using Ireland-local days and the booking's most recent user-confirmed request timestamp.
-WhatsApp/Email taps record nothing. After opening a draft, ask **Did you send
-it?** with **Yes, I sent it** (records the time) and **Not yet** (records nothing).
-Keep the explanation that the user reviews and sends in their own app; never
-show “Sent” for a manual draft. Keep existing payment-recording actions.
-
-- **Owed to you** (M2): hero number = total outstanding (amber), then rows:
-  client · service · amount · job date (e.g. **Deposit · job on Wed 18 Nov**
-  or **Balance · job was 2 days ago**, using Ireland-local days), each with
-  `[Send link] [Mark paid]`. Sorted oldest first — that's the chase order.
-  Empty state: "Nobody owes you anything. Lovely." (green tick).
-- **This year** (M6): income / expenses / **profit** as three figures,
-  a simple 12-bar month strip (CSS bars are fine — no chart library), and a
-  full-width **Export for accountant** button → downloads the CSV. This
-  button is the retention feature; give it visual weight year-round, not
-  just in January.
+- Shared core `moneyOwed(bookings, payments, now)` uses `bookingStage` and returns
+  one item per booking, never per pending row. Owed cents = max(0, price minus
+  paid payments); cancelled/pending payment rows do not count as paid.
+  Due now = confirmed today/past or completed owing. Coming up = confirmed after
+  today in Ireland. Enquiries, cancelled and fully-paid jobs are excluded.
+  Missing or duplicate pending rows do not alter these totals.
+- **Owed to you:** hero = due-now cents and booking count. **Due now** cards are
+  oldest job first. Empty: **Nobody owes you anything. Lovely.**
+- **Coming up:** hidden when empty; lighter cards and **€X expected** subtotal
+  for future jobs' full remaining amounts. Neither Today nor the Owed hero
+  includes these amounts.
+- Cards show client, service, amount, kind and Ireland-local job wording:
+  **Deposit · job on Wed 18 Nov**, **Balance · job was 2 days ago**, or
+  **Full payment · job today**. Kind is Deposit only for future jobs where the
+  remaining amount equals the unpaid deposit (payments cover the deposit first);
+  otherwise Full payment if nothing received, else Balance.
+- Keep **Not asked yet / Asked today / Asked n days ago**, using the booking's
+  most recent user-confirmed request timestamp and Ireland-local days.
+  **Send reminder** opens the existing editable draft with the booking's owed
+  amount, not a pending row's amount. Opening WhatsApp/Email records nothing.
+  Retain **Did you send it? / Yes, I sent it / Not yet** and draft-only wording.
+- **Mark paid** offers Cash / Bank transfer / Revolut and records the full owed
+  amount via the booking record-payment handler. Existing pending deposits/
+  balances are voided, not additionally marked paid. It works without pending
+  rows. Preserve inline errors and the committed-save Reload guard.
+- **Payment link**, when enabled, is for the same full amount. A tenant-scoped
+  booking endpoint reuses a matching pending row or replaces mismatched rows
+  with a single pending full-balance row, deactivating voided links after commit.
+  Never invent a payment id in the browser; demo follows the same rules.
+- **This year:** one card, Ireland-local year/month boundaries, year-to-date only.
+  Paid income after recorded VAT, confirmed expenses after reclaimable VAT, and
+  profit before income tax use the tax estimate's exact YTD basis.
+  Monthly paid-income bars use the same net basis and exclude future receipts.
+  Keep **Export for accountant**, downloading the year's cash-basis CSV; no
+  changes to the underlying export's financial records.
+- **Tax estimate (rough guide):** secondary native disclosure below This year,
+  collapsed by default. Expanded: caveat, VAT-period sales/reclaimable VAT and
+  estimated VAT due/refund when registered, and income-tax estimate or Settings
+  rate prompt. Only nested **How it's worked out** repeats income/expenses/profit,
+  explicitly labelling gross amounts, VAT deductions and net YTD workings.
+- All actions/disclosures retain 44px targets and reduced-motion support.
 
 ### 5. Expenses — `/expenses` (M5)
 - Top: full-width **📷 Snap receipt** button (opens

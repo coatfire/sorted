@@ -281,6 +281,12 @@ export const demoBackend: Backend = {
     const booking = mustFind(data().bookings, bookingId, "Booking");
     if (booking.status === "completed" || booking.status === "cancelled") throw new Error(`A ${booking.status} booking can't be edited`);
     if (draft.followUpOn != null && booking.status !== "enquiry") throw new Error("Only enquiries can have a follow-up date");
+    if (draft.priceCents !== undefined && draft.priceCents !== booking.priceCents) {
+      const owedCents = draft.priceCents - paidFor(bookingId);
+      if (owedCents < 0) throw new Error("The price can't be less than the amount already paid.");
+      const pending = data().payments.filter(payment => payment.bookingId === bookingId && payment.status === "pending");
+      if (!(pending.length === 1 && pending[0].amountCents === owedCents)) voidPending(bookingId);
+    }
     Object.assign(booking, draft);
     save();
   },
@@ -352,6 +358,22 @@ export const demoBackend: Backend = {
       save();
     }
     return payment.linkUrl;
+  },
+
+  async bookingPaymentLink(bookingId) {
+    const d = data(), booking = mustFind(d.bookings, bookingId, "Booking");
+    if (booking.status !== "confirmed" && booking.status !== "completed") throw new Error("This booking cannot take payments.");
+    const { owedCents } = bookingStage(booking, d.payments);
+    if (!owedCents) throw new Error("This booking is already paid in full.");
+    const pending = d.payments.filter(payment => payment.bookingId === bookingId && payment.status === "pending");
+    let payment = pending.length === 1 && pending[0].amountCents === owedCents ? pending[0] : undefined;
+    if (!payment) {
+      voidPending(bookingId);
+      payment = { id: id(), bookingId, kind: "custom", amountCents: owedCents, status: "pending", method: null, linkUrl: null, paidAt: null, createdAt: now(), vatRateBp: null };
+      d.payments.push(payment);
+      save();
+    }
+    return this.paymentLink(payment.id);
   },
 
   async markPaid(paymentId, method) {

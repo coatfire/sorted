@@ -499,6 +499,32 @@ a.button { text-decoration: none; }
 .tax-estimate-row { display: flex; justify-content: space-between; align-items: baseline; gap: 16px; margin: 12px 0; }
 .tax-estimate-caveat { font-weight: 600; margin-bottom: 20px; }
 .tax-workings summary { min-height: 44px; display: flex; align-items: center; cursor: pointer; }
+.tax-guide > summary { min-height: 44px; cursor: pointer; font-size: 1rem; font-weight: 700; }
+.tax-guide[open] > summary { margin-bottom: 18px; }
+.year-basis { color: var(--muted); font-size: 0.75rem; line-height: 1.5; margin-bottom: 16px; }
+.next-appointment { padding: 18px; background: var(--brand-soft); }
+.next-appointment-main { display: flex; flex-direction: column; gap: 8px; color: inherit; text-decoration: none; min-height: 44px; }
+.next-appointment h1 { font-size: 2rem; line-height: 1.1; margin: 4px 0 8px; }
+.next-appointment-main > strong { font-size: 1.1rem; }
+.next-appointment-main > span:not(.appointment-detail) { color: var(--muted); font-size: 0.88rem; }
+.appointment-payment { font-size: 0.84rem; font-weight: 600; }
+.appointment-detail { display: flex; gap: 8px; align-items: center; min-height: 44px; color: var(--brand); font-size: 0.82rem; font-weight: 700; }
+.appointment-location { display: flex; align-items: center; gap: 10px; min-height: 44px; border-top: 1px solid var(--line); padding-top: 10px; color: var(--brand); font-size: 0.84rem; text-decoration: none; }
+.appointment-location small { display: block; margin-top: 4px; font-size: 0.73rem; }
+.attention-card { padding: 0 14px; }
+.attention-group { padding: 10px 0; }
+.attention-group + .attention-group { border-top: 1px solid var(--line); }
+.attention-group h3 { font-size: 0.78rem; color: var(--muted); margin: 4px 0; }
+.attention-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 44px; padding: 6px 0; }
+.attention-row a, .attention-followup-main { display: flex; flex-direction: column; justify-content: center; min-height: 44px; text-decoration: none; color: inherit; }
+.attention-row strong, .attention-followup-main strong { font-size: 0.83rem; }
+.attention-row span:not(.money), .attention-followup-main span { display: block; color: var(--muted); font-size: 0.73rem; line-height: 1.4; }
+.attention-row .button, .attention-followup-actions .button { width: auto; min-height: 44px; padding: 6px; border: 0; background: transparent; font-size: 0.76rem; flex-shrink: 0; }
+.attention-row .attention-action { color: var(--brand); font-size: 0.76rem; flex-shrink: 0; }
+.attention-money { display: flex; justify-content: space-between; align-items: center; min-height: 44px; color: var(--brand); text-decoration: none; font-size: 0.88rem; font-weight: 700; }
+.attention-owed { text-decoration: none; color: inherit; }
+.attention-owed .money { color: var(--due); font-size: 0.86rem; font-weight: 700; }
+.attention-followup-actions { display: flex; gap: 14px; }
 .button-primary {
   background: var(--brand);
   color: #fff;
@@ -711,6 +737,13 @@ a.button { text-decoration: none; }
   font-weight: 700;
 }
 .owed-main > .money { color: var(--due); font-weight: 700; }
+.expected-total { color: var(--muted); font-size: 0.8rem; text-align: right; }
+.expected-card { background: #f5f8f5; }
+.expected-card .owed-main > .money { color: var(--muted); }
+.owed-card-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; padding-bottom: 2px; }
+.owed-card-actions > .field-helper { flex-basis: 100%; margin-bottom: 4px; }
+.owed-card-actions > .button, .owed-card-actions .button { width: auto; min-height: 44px; padding: 8px; font-size: 0.76rem; }
+.owed-card-actions .inline-actions { display: flex; flex-wrap: wrap; gap: 6px; }
 
 .year-card { padding: 18px; }
 .year-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }

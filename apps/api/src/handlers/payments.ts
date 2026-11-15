@@ -44,8 +44,10 @@ paymentRoutes.get("/", async (c) => {
  * lets the webhook resolve the corresponding payment.
  */
 paymentRoutes.post("/:id/link", async (c) => {
-  const userId = c.get("userId");
-  const id = c.req.param("id");
+  return createPaymentLink(c.get("userId"), c.req.param("id"));
+});
+
+export async function createPaymentLink(userId: string, id: string) {
   const [row] = await db
     .select({
       payment: schema.payments,
@@ -56,14 +58,14 @@ paymentRoutes.post("/:id/link", async (c) => {
     .where(
       and(eq(schema.payments.id, id), eq(schema.payments.userId, userId)),
     );
-  if (!row) return c.json({ error: "Payment not found" }, 404);
+  if (!row) return Response.json({ error: "Payment not found" }, { status: 404 });
   if (row.payment.status !== "pending") {
-    return c.json({ error: "Only pending payments can have a link" }, 409);
+    return Response.json({ error: "Only pending payments can have a link" }, { status: 409 });
   }
-  if (row.payment.linkUrl) return c.json(row.payment);
+  if (row.payment.linkUrl) return Response.json(row.payment);
 
   const key = env.stripeKey();
-  if (!key) return c.json({ error: "Stripe is not configured" }, 503);
+  if (!key) return Response.json({ error: "Stripe is not configured" }, { status: 503 });
   const stripe = new Stripe(key);
   let link: Stripe.PaymentLink;
   try {
@@ -73,7 +75,7 @@ paymentRoutes.post("/:id/link", async (c) => {
       product_data: {
         name: `${row.booking.service} — ${row.payment.kind}`,
       },
-    });
+    }, { idempotencyKey: `payment-price-${row.payment.id}` });
     link = await stripe.paymentLinks.create({
       line_items: [{ price: price.id, quantity: 1 }],
       restrictions: { completed_sessions: { limit: 1 } },
@@ -81,10 +83,10 @@ paymentRoutes.post("/:id/link", async (c) => {
       payment_intent_data: {
         metadata: { payment_id: row.payment.id, user_id: userId },
       },
-    });
+    }, { idempotencyKey: `payment-link-${row.payment.id}` });
   } catch {
     console.error("[payments] Stripe link creation failed");
-    return c.json({ error: "Stripe couldn't create the payment link" }, 502);
+    return Response.json({ error: "Stripe couldn't create the payment link" }, { status: 502 });
   }
   const [payment] = await db
     .update(schema.payments)
@@ -101,7 +103,7 @@ paymentRoutes.post("/:id/link", async (c) => {
     .returning();
   if (!payment) {
     await deactivatePaymentLink(link.id);
-    return c.json({ error: "Only pending payments can have a link" }, 409);
+    return Response.json({ error: "Only pending payments can have a link" }, { status: 409 });
   }
   await emitBookingEvent(userId, payment.bookingId, "payment.link_created", {
     id: payment.id,
@@ -109,8 +111,8 @@ paymentRoutes.post("/:id/link", async (c) => {
     amountCents: payment.amountCents,
     linkUrl: payment.linkUrl,
   });
-  return c.json(payment);
-});
+  return Response.json(payment);
+}
 
 /** POST /api/payments/:id/mark-paid — cash / bank transfer */
 paymentRoutes.post("/:id/mark-paid", async (c) => {

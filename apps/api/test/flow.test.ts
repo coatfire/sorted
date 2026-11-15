@@ -653,6 +653,156 @@ describe("payment link safety", () => {
     stripe.updateLink.mockResolvedValue({});
   }
 
+  it("voids an outdated full-balance link in the price transaction and deactivates only after commit", async () => {
+    const { call, booking } = await pendingDeposit();
+    configureStripe();
+    const old = await json<{ id: string }>(await call(`/bookings/${booking.id}/payment-link`, "POST"));
+    const other = await pendingDeposit();
+    expect((await other.call(`/bookings/${booking.id}`, "PATCH", { price_cents: 8000 })).status).toBe(404);
+    let committed = false;
+    const transaction: typeof db.transaction = db.transaction.bind(db);
+    vi.spyOn(db, "transaction").mockImplementationOnce(async (callback, config) => {
+      const result = await transaction(callback, config);
+      committed = true;
+      return result;
+    });
+    stripe.updateLink.mockImplementation(async () => {
+      expect(committed).toBe(true);
+      const [saved] = await db.select().from(schema.bookings).where(eq(schema.bookings.id, booking.id));
+      const [payment] = await db.select().from(schema.payments).where(eq(schema.payments.id, old.id));
+      expect(saved.priceCents).toBe(8000);
+      expect(payment.status).toBe("cancelled");
+      return {};
+    });
+    expect((await call(`/bookings/${booking.id}`, "PATCH", { price_cents: 8000 })).status).toBe(200);
+    expect(stripe.updateLink).toHaveBeenCalledWith("plink_test", { active: false });
+    expect((await call(`/payments/${old.id}/mark-paid`, "POST", { method: "cash" })).status).toBe(409);
+    const [unrelated] = await db.select().from(schema.payments).where(eq(schema.payments.id, other.paymentId));
+    expect(unrelated.status).toBe("pending");
+    const replacement = await json<{ amountCents: number }>(await call(`/bookings/${booking.id}/payment-link`, "POST"));
+    expect(replacement.amountCents).toBe(8000);
+  });
+
+  it("keeps a sole pending row equal to the new price-minus-paid balance", async () => {
+    const { call, booking, paymentId } = await pendingDeposit();
+    configureStripe();
+    await call(`/payments/${paymentId}/link`, "POST");
+    await db.insert(schema.payments).values({ userId: booking.userId, bookingId: booking.id, kind: "custom", status: "paid", amountCents: 6000, method: "cash", paidAt: new Date() });
+    expect((await call(`/bookings/${booking.id}`, "PATCH", { price_cents: 8000 })).status).toBe(200);
+    const [payment] = await db.select().from(schema.payments).where(eq(schema.payments.id, paymentId));
+    expect(payment).toMatchObject({ status: "pending", amountCents: 2000, stripePaymentLinkId: "plink_test" });
+    expect(stripe.updateLink).not.toHaveBeenCalled();
+  });
+
+  it("cancels every pending row when several exist, even if one matches the new balance", async () => {
+    const { call, booking, paymentId } = await pendingDeposit();
+    configureStripe();
+    await call(`/payments/${paymentId}/link`, "POST");
+    await db.insert(schema.payments).values({ userId: booking.userId, bookingId: booking.id, kind: "balance", amountCents: 8000, stripePaymentLinkId: "plink_balance", linkUrl: "https://example.com/balance" });
+    expect((await call(`/bookings/${booking.id}`, "PATCH", { price_cents: 8000 })).status).toBe(200);
+    const rows = await db.select().from(schema.payments).where(eq(schema.payments.bookingId, booking.id));
+    expect(rows.every(row => row.status === "cancelled")).toBe(true);
+    expect(stripe.updateLink).toHaveBeenCalledTimes(2);
+    expect(stripe.updateLink).toHaveBeenCalledWith("plink_balance", { active: false });
+  });
+
+  it("cancels pending requests when the reduced price is already fully paid", async () => {
+    const { call, booking, paymentId } = await pendingDeposit();
+    configureStripe();
+    await call(`/payments/${paymentId}/link`, "POST");
+    await db.insert(schema.payments).values({ userId: booking.userId, bookingId: booking.id, kind: "custom", status: "paid", amountCents: 6000, method: "cash", paidAt: new Date() });
+    expect((await call(`/bookings/${booking.id}`, "PATCH", { price_cents: 6000 })).status).toBe(200);
+    const rows = await db.select().from(schema.payments).where(eq(schema.payments.bookingId, booking.id));
+    expect(rows.filter(row => row.status === "pending")).toHaveLength(0);
+    expect(rows.filter(row => row.status === "paid")).toMatchObject([{ amountCents: 6000 }]);
+    expect(stripe.updateLink).toHaveBeenCalledWith("plink_test", { active: false });
+  });
+
+  it.each([3999, 1999])("rejects price %s below paid funds without changing booking, payments or links", async price => {
+    const { call, booking, paymentId } = await pendingDeposit();
+    configureStripe();
+    await call(`/payments/${paymentId}/link`, "POST");
+    await db.insert(schema.payments).values({ userId: booking.userId, bookingId: booking.id, kind: "custom", status: "paid", amountCents: 4000, method: "cash", paidAt: new Date() });
+    const before = await json(await call(`/bookings/${booking.id}`));
+    const response = await call(`/bookings/${booking.id}`, "PATCH", { price_cents: price, notes: "must not save" });
+    expect(response.status).toBe(409);
+    expect(await json(response)).toEqual({ error: "The price can't be less than the amount already paid." });
+    expect(await json(await call(`/bookings/${booking.id}`))).toEqual(before);
+    expect(stripe.updateLink).not.toHaveBeenCalled();
+  });
+
+  it("leaves pending requests alone for unrelated or unchanged-price edits, and handles no pending rows", async () => {
+    const { call, booking, paymentId } = await pendingDeposit();
+    configureStripe();
+    await call(`/payments/${paymentId}/link`, "POST");
+    expect((await call(`/bookings/${booking.id}`, "PATCH", { notes: "Studio", price_cents: 10000 })).status).toBe(200);
+    const [payment] = await db.select().from(schema.payments).where(eq(schema.payments.id, paymentId));
+    expect(payment.status).toBe("pending");
+    expect(stripe.updateLink).not.toHaveBeenCalled();
+    await db.delete(schema.payments).where(eq(schema.payments.id, paymentId));
+    expect((await call(`/bookings/${booking.id}`, "PATCH", { price_cents: 8000 })).status).toBe(200);
+    expect(await db.select().from(schema.payments).where(eq(schema.payments.bookingId, booking.id))).toEqual([]);
+  });
+
+  it("rolls back both the price and pending cancellations without deactivating links", async () => {
+    const { call, booking, paymentId } = await pendingDeposit();
+    configureStripe();
+    await call(`/payments/${paymentId}/link`, "POST");
+    const transaction: typeof db.transaction = db.transaction.bind(db);
+    vi.spyOn(db, "transaction").mockImplementationOnce((callback, config) => transaction(async tx => {
+      await callback(tx);
+      throw new Error("forced price rollback");
+    }, config));
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    expect((await call(`/bookings/${booking.id}`, "PATCH", { price_cents: 8000 })).status).toBe(500);
+    const detail = await json<{ booking: { priceCents: number }; payments: { status: string }[] }>(await call(`/bookings/${booking.id}`));
+    expect(detail.booking.priceCents).toBe(10000);
+    expect(detail.payments).toMatchObject([{ status: "pending" }]);
+    expect(stripe.updateLink).not.toHaveBeenCalled();
+  });
+
+  it("continues rejecting completed booking edits without changing pending links", async () => {
+    const { call, booking } = await pendingDeposit();
+    await call(`/bookings/${booking.id}/complete`, "POST");
+    configureStripe();
+    await call(`/bookings/${booking.id}/payment-link`, "POST");
+    const before = await json(await call(`/bookings/${booking.id}`));
+    expect((await call(`/bookings/${booking.id}`, "PATCH", { price_cents: 8000 })).status).toBe(409);
+    expect(await json(await call(`/bookings/${booking.id}`))).toEqual(before);
+    expect(stripe.updateLink).not.toHaveBeenCalled();
+  });
+
+  it.each([true, false])("makes a booking-level full-balance link, pending deposit present: %s", async pending => {
+    const { call, booking, paymentId } = await pendingDeposit();
+    configureStripe();
+    if (!pending) await db.delete(schema.payments).where(eq(schema.payments.id, paymentId));
+    const other = await login(`other-booking-link-${crypto.randomUUID()}@example.com`);
+    expect((await other(`/bookings/${booking.id}/payment-link`, "POST")).status).toBe(404);
+    const response = await call(`/bookings/${booking.id}/payment-link`, "POST");
+    expect(response.status).toBe(200);
+    const payment = await json<{ id: string; amountCents: number; linkUrl: string }>(response);
+    expect(payment.amountCents).toBe(10000);
+    expect(payment.linkUrl).toBe("https://example.com/pay");
+    expect((await call(`/bookings/${booking.id}/payment-link`, "POST")).status).toBe(200);
+    expect(stripe.createLink).toHaveBeenCalledTimes(1);
+    const detail = await json<{ payments: { id: string; status: string; amountCents: number }[] }>(await call(`/bookings/${booking.id}`));
+    expect(detail.payments.filter(row => row.status === "pending")).toEqual([expect.objectContaining({ id: payment.id, amountCents: 10000 })]);
+    if (pending) expect(detail.payments.find(row => row.id === paymentId)?.status).toBe("cancelled");
+    expect((await call(`/bookings/${booking.id}/payments`, "POST", { amount_cents: 10000, method: "cash" })).status).toBe(201);
+    expect((await call(`/bookings/${booking.id}/payment-link`, "POST")).status).toBe(409);
+  });
+
+  it("does not create pending rows when booking links are unavailable or the booking is cancelled", async () => {
+    const { call, booking } = await pendingDeposit();
+    vi.spyOn(env, "stripeKey").mockReturnValue(undefined);
+    expect((await call(`/bookings/${booking.id}/payment-link`, "POST")).status).toBe(503);
+    configureStripe();
+    await call(`/bookings/${booking.id}/cancel`, "POST");
+    expect((await call(`/bookings/${booking.id}/payment-link`, "POST")).status).toBe(409);
+    const detail = await json<{ payments: { status: string }[] }>(await call(`/bookings/${booking.id}`));
+    expect(detail.payments.filter(row => row.status === "pending")).toEqual([]);
+  });
+
   it("creates a single-use scoped link, reuses it, and hides it from another user", async () => {
     const { call, booking, paymentId } = await pendingDeposit();
     configureStripe();
@@ -660,13 +810,13 @@ describe("payment link safety", () => {
     expect((await other(`/payments/${paymentId}/link`, "POST")).status).toBe(404);
     expect((await other(`/payments/${paymentId}/mark-paid`, "POST", { method: "cash" })).status).toBe(404);
     expect((await call(`/payments/${paymentId}/link`, "POST")).status).toBe(200);
-    expect(stripe.createPrice).toHaveBeenCalledWith(expect.objectContaining({ unit_amount: 2000 }));
+    expect(stripe.createPrice).toHaveBeenCalledWith(expect.objectContaining({ unit_amount: 2000 }), { idempotencyKey: `payment-price-${paymentId}` });
     const metadata = { payment_id: paymentId, user_id: booking.userId };
     expect(stripe.createLink).toHaveBeenCalledWith(expect.objectContaining({
       restrictions: { completed_sessions: { limit: 1 } },
       metadata,
       payment_intent_data: { metadata },
-    }));
+    }), { idempotencyKey: `payment-link-${paymentId}` });
     expect((await call(`/payments/${paymentId}/link`, "POST")).status).toBe(200);
     expect(stripe.createLink).toHaveBeenCalledTimes(1);
     const paid = await call(`/payments/${paymentId}/mark-paid`, "POST", { method: "cash" });
