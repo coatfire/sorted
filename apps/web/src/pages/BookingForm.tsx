@@ -367,7 +367,7 @@ function Saved({ booking, count }: { booking: BookingRow; count: number }) {
       </Card>
       {confirmed && <>
         <Button onClick={() => setMessage(true)}><Icon name="message" /> Send confirmation</Button>
-        <p className="button-caption">Opens a draft{count > 1 ? " for the first booking" : ""} for you to review and send. Nothing has been sent.</p>
+        <p className="button-caption">Opens a draft{count > 1 ? " for the first booking" : ""} for you to review and send.</p>
       </>}
       <Button kind="soft" onClick={() => navigate(`/bookings/${booking.id}`, { replace: true })}>Done</Button>
       {message && <BookingMessageSheet booking={booking} kind="confirmation" onClose={() => setMessage(false)} />}

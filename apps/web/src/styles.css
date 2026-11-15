@@ -525,10 +525,11 @@ a.button { text-decoration: none; }
 }
 .service-editor-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 105px;
+  grid-template-columns: minmax(0, 1fr) 88px 44px;
+  align-items: start;
   gap: 10px;
 }
-.service-editor-row > .button { grid-column: 1 / -1; justify-self: end; width: auto; }
+.service-editor-row > .button { width: 44px; min-width: 44px; height: 48px; min-height: 44px; padding: 0; margin-top: 24px; }
 .success-page {
   min-height: 70dvh;
   align-items: center;

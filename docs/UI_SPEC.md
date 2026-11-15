@@ -199,11 +199,13 @@ After save, a short success state replaces the old confirmation decision:
 - Confirmed: **Booked** (or **N bookings added**), booking summary,
   **Send confirmation** and **Done**. Send confirmation opens the existing
   WhatsApp/email draft sheet for the first booking only. Explicitly say it opens
-  a draft for the user to review and send, and that nothing has been sent.
+  a draft for the user to review and send; do not claim nothing has been sent,
+  since configured automation may already have sent a confirmation.
 - Enquiry: **Saved as enquiry**, "We'll remind you on <date>", summary and
   **Done**. For repeats, explain only the first has the reminder.
-- Done opens the first booking's detail. Creation itself sends no messages,
-  even with automation enabled, and never records a deposit as paid.
+- Done opens the first booking's detail. Confirmed creation emits the same
+  post-commit automation event as confirming an enquiry, for every occurrence.
+  Enquiry creation emits none. Creation never records a deposit as paid.
 
 ### 3. Booking detail — `/bookings/:id` (M1–M3)
 Stacked sections:
@@ -301,7 +303,8 @@ show “Sent” for a manual draft. Keep existing payment-recording actions.
 
 ### 6. Settings — `/settings` (M3/M7/M8)
 **Your services** lets traders add, edit or remove up to 30 name/price pairs.
-Show names and euro prices side by side, a Remove action for each, and
+Show names, euro prices and a compact remove icon on one row. Remove icons
+have a minimum 44px tap target and an accessible "Remove <name>" label. Show
 **Add service**. Names must be unique case-insensitively; prices are integer
 cents after parsing. Show inline validation. Empty lists are allowed. Changes
 use **Save settings**, not immediate auto-save; catalogue edits never change

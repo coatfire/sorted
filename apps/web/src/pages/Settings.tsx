@@ -160,7 +160,7 @@ export function Settings({ welcome = false }: { welcome?: boolean }) {
               <Field label="Price" {...validation.field(`servicePrice-${service.id}`)}>
                 <div className="money-input"><span>€</span><input name={`servicePrice-${service.id}`} required inputMode="decimal" value={service.price} placeholder="0.00" onChange={event => setServices(current => current.map(row => row.id === service.id ? { ...row, price: event.target.value } : row))} /></div>
               </Field>
-              <Button type="button" kind="quiet" aria-label={`Remove service ${service.name || index + 1}`} onClick={() => { setServices(current => current.filter(row => row.id !== service.id)); validation.clear(); }}>Remove</Button>
+              <Button type="button" kind="quiet" aria-label={`Remove ${service.name.trim() || `service ${index + 1}`}`} onClick={() => { setServices(current => current.filter(row => row.id !== service.id)); validation.clear(); }}><Icon name="trash" size={18} /></Button>
             </div>)}
             <Button type="button" kind="soft" disabled={services.length >= 30} onClick={() => setServices(current => [...current, { id: crypto.randomUUID(), name: "", price: "" }])}>
               <Icon name="plus" /> Add service

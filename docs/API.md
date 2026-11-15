@@ -135,8 +135,11 @@ regardless of account existence; development links are never returned in product
 Omission defaults to enquiry for older clients. Confirmed creation clears any
 follow-up and creates a pending deposit payment when `deposit_cents > 0`, in
 the same transaction as the client and booking(s). No money is marked paid.
-Creation sends no messages or automation events; the web offers a manual
-confirmation draft after saving. All multi-table mutations keep the documented
+After commit, confirmed creation emits `booking.confirmed` for each occurrence,
+with the same payload as `/confirm`, through the shared booking-event helper.
+Automation runs only when its webhook is configured. Enquiry creation emits
+nothing. The web also offers a manual confirmation draft after saving.
+All multi-table mutations keep the documented
 users → clients → bookings → payments → invoices lock order.
 
 ### Quotes and repeat bookings
@@ -185,7 +188,7 @@ Every occurrence gets the chosen status. For enquiries, only the first gets
 `follow_up_on` (including the normal two-day default); later bookings get null.
 Confirmed repeats all have null follow-up and each gets its own pending deposit
 payment if positive. The response is the first booking with `seriesCount`
-(1 without repeat). No messages are created.
+(1 without repeat). Enquiry creation emits no automation events.
 Invalid intervals/counts return 400 without creating anything.
 
 During a skipped spring-clock hour, the time moves forward by the clock gap;
