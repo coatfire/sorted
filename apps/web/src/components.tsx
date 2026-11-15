@@ -1,4 +1,4 @@
-import { useEffect, useRef, type ButtonHTMLAttributes, type ReactNode } from "react";
+import { useEffect, useId, useRef, type ButtonHTMLAttributes, type LabelHTMLAttributes, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import type { BookingStatus, PaymentStatus } from "@sorted/core";
 import { euros } from "./lib/format";
@@ -215,16 +215,33 @@ export function Button({
 export function Field({
   label,
   helper,
+  error,
   children,
+  ...props
 }: {
   label: string;
   helper?: string;
+  error?: string;
   children: ReactNode;
-}) {
+} & LabelHTMLAttributes<HTMLLabelElement>) {
+  const id = useId();
+  const field = useRef<HTMLLabelElement>(null);
+  useEffect(() => {
+    const control = field.current?.querySelector("input, textarea, select");
+    if (!control) return;
+    if (error) {
+      control.setAttribute("aria-invalid", "true");
+      control.setAttribute("aria-describedby", id);
+    } else {
+      control.removeAttribute("aria-invalid");
+      control.removeAttribute("aria-describedby");
+    }
+  }, [error, id]);
   return (
-    <label className="field">
+    <label ref={field} className="field" {...props}>
       <span className="field-label">{label}</span>
       {children}
+      {error && <span id={id} className="form-error" role="alert">{error}</span>}
       {helper && <span className="field-helper">{helper}</span>}
     </label>
   );

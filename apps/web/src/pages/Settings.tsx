@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { normalisePhone } from "@sorted/core";
 import { BackButton, Button, Card, Field, Icon, PageHeader } from "../components";
 import { useAction, useData, useSession, useStore } from "../lib/store";
+import { useValidation } from "../lib/useValidation";
 
 export function Settings() {
   const { user, features } = useData();
@@ -10,7 +11,6 @@ export function Settings() {
   const { mode, signOut } = useSession();
   const { busy, run } = useAction();
   const navigate = useNavigate();
-  const [error, setError] = useState("");
   const [form, setForm] = useState({
     businessName: user.businessName ?? "",
     name: user.name ?? "",
@@ -18,16 +18,17 @@ export function Settings() {
     reviewLink: user.reviewLink ?? "",
   });
   const set = (field: keyof typeof form) => (event: { target: { value: string } }) => {
-    setError("");
     setForm({ ...form, [field]: event.target.value });
   };
+  const validation = useValidation({
+    phone: () => form.phone.trim() && !normalisePhone(form.phone)
+      ? "That mobile number doesn’t look right. Try it like 087 123 4567." : undefined,
+  });
 
-  async function submit(event: FormEvent) {
+  async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (!validation.validate(event.currentTarget)) return;
     const phone = form.phone.trim() ? normalisePhone(form.phone) : null;
-    if (form.phone.trim() && !phone) {
-      return setError("That mobile number doesn’t look right. Try it like 087 123 4567.");
-    }
     let reviewLink: string | null = form.reviewLink.trim() || null;
     if (reviewLink && !/^https?:\/\//i.test(reviewLink)) reviewLink = `https://${reviewLink}`;
     await run(
@@ -47,19 +48,18 @@ export function Settings() {
       <BackButton to="/" />
       <PageHeader eyebrow="Settings" title="Your business" />
       <p className="page-intro">The details clients see in messages from you.</p>
-      <form onSubmit={submit}>
+      <form onSubmit={submit} noValidate>
         <Card className="form-card settings-card">
-          <Field label="Business name">
-            <input required value={form.businessName} onChange={set("businessName")} placeholder="e.g. Studio by Shane" />
+          <Field label="Business name" {...validation.field("businessName")}>
+            <input name="businessName" required value={form.businessName} onChange={set("businessName")} placeholder="e.g. Studio by Shane" />
           </Field>
           <Field label="Your name">
             <input value={form.name} onChange={set("name")} autoComplete="given-name" />
           </Field>
-          <Field label="Your mobile">
+          <Field label="Your mobile" {...validation.field("phone")}>
             <input
                 type="tel" inputMode="tel" value={form.phone}
-                aria-invalid={error ? true : undefined}
-                aria-describedby={error ? "settings-error" : undefined}
+                name="phone"
                 onChange={set("phone")} placeholder="087 123 4567"
             />
           </Field>
@@ -69,7 +69,6 @@ export function Settings() {
           <Field label="Currency">
             <div className="locked-field">EUR · Euro <span>Fixed during beta</span></div>
           </Field>
-          {error && <p id="settings-error" className="form-error" role="alert">{error}</p>}
         </Card>
         <Button type="submit" disabled={busy}>
           <Icon name="check" /> {busy ? "Saving…" : "Save settings"}

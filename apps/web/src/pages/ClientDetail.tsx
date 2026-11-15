@@ -5,6 +5,7 @@ import { BackButton, Button, Card, EmptyState, Field, Icon, MoneyText } from "..
 import { dayMonth, whatsappLink } from "../lib/format";
 import { useAction, useData, useStore } from "../lib/store";
 import { BookingRow } from "./Home";
+import { useValidation } from "../lib/useValidation";
 
 export function ClientDetail() {
   const { id } = useParams();
@@ -14,7 +15,10 @@ export function ClientDetail() {
   const client = clients.find((item) => item.id === id);
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState({ name: client?.name ?? "", phone: client?.phone ?? "" });
-  const [error, setError] = useState("");
+  const validation = useValidation({
+    phone: () => form.phone.trim() && !normalisePhone(form.phone)
+      ? "That mobile number doesn’t look right. Try it like 087 123 4567." : undefined,
+  });
 
   if (!client) {
     return (
@@ -34,12 +38,10 @@ export function ClientDetail() {
       .filter((payment) => ids.has(payment.bookingId) && payment.status === status)
       .reduce((total, payment) => total + payment.amountCents, 0);
 
-  async function save(event: FormEvent) {
+  async function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (!validation.validate(event.currentTarget)) return;
     const phone = form.phone.trim() ? normalisePhone(form.phone) : null;
-    if (form.phone.trim() && !phone) {
-      return setError("That mobile number doesn’t look right. Try it like 087 123 4567.");
-    }
     if (await run(() => backend.updateClient(client!.id, { name: form.name.trim(), phone }), "Client saved")) {
       setEditing(false);
     }
@@ -56,23 +58,21 @@ export function ClientDetail() {
       </div>
 
       {editing ? (
-        <form onSubmit={save}>
+        <form onSubmit={save} noValidate>
           <Card className="form-card">
-            <Field label="Name">
-              <input required value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} />
+            <Field label="Name" {...validation.field("name")}>
+              <input name="name" required value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} />
             </Field>
-            <Field label="Mobile" helper="Sorted sends confirmations and reminders to this number.">
+            <Field label="Mobile" helper="Sorted sends confirmations and reminders to this number." {...validation.field("phone")}>
               <input
                 type="tel"
                 inputMode="tel"
                 value={form.phone}
-                aria-invalid={error ? true : undefined}
-                aria-describedby={error ? "client-error" : undefined}
-                onChange={(event) => { setError(""); setForm({ ...form, phone: event.target.value }); }}
+                name="phone"
+                onChange={(event) => setForm({ ...form, phone: event.target.value })}
                 placeholder="087 123 4567"
               />
             </Field>
-            {error && <p id="client-error" className="form-error" role="alert">{error}</p>}
           </Card>
           <div className="action-pair">
             <Button type="button" kind="quiet" onClick={() => setEditing(false)}>Cancel</Button>
@@ -94,7 +94,7 @@ export function ClientDetail() {
             )}
           </div>
           <div className="detail-line">
-            <button className="text-link" onClick={() => { setForm({ name: client.name, phone: client.phone ?? "" }); setEditing(true); }}>
+            <button className="text-link" onClick={() => { validation.clear(); setForm({ name: client.name, phone: client.phone ?? "" }); setEditing(true); }}>
               <Icon name="edit" size={16} /> Edit name or mobile
             </button>
           </div>
