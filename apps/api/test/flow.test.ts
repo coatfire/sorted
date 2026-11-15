@@ -591,8 +591,8 @@ describe("transactional writes", () => {
       const completed = await call(`/bookings/${booking.id}/complete`, "POST");
       expect(completed.status).toBe(200);
       expect(await json(completed)).toMatchObject({ payment: null });
-      expect(emit).toHaveBeenCalledTimes(1);
-      expect(emitBooking).toHaveBeenCalledTimes(1);
+      expect(emit).not.toHaveBeenCalled();
+      expect(emitBooking.mock.calls.map(call => call[2])).toEqual(["booking.confirmed", "booking.completed"]);
     } finally {
       spy.mockRestore();
       emit.mockRestore();

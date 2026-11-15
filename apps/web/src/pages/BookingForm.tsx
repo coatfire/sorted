@@ -3,7 +3,9 @@ import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom"
 import { normalisePhone, CreateClientInput, CalendarDate, irelandToday, addCalendarDays, bookAgainStart, bookingAtDublinTime, dublinDateTime, RepeatInput, type Client } from "@sorted/core";
 import { BackButton, Button, Card, EmptyState, Field, Icon, MoneyText, PageHeader } from "../components";
 import type { BookingRow } from "../lib/backend";
-import { centsToInput, confirmCopy, longDay, parseEuros, time } from "../lib/format";
+import { centsToInput, longDay, parseEuros, time } from "../lib/format";
+import { bookingServiceChips, serviceChipPrice } from "../lib/bookingServices";
+import { BookingMessageSheet } from "../BookingMessageSheet";
 import { useAction, useData, useStore } from "../lib/store";
 import { useValidation } from "../lib/useValidation";
 
@@ -14,7 +16,7 @@ function tomorrow() {
 /** Add a booking (/bookings/new) or edit one (/bookings/:id/edit). */
 export function BookingForm() {
   const { id } = useParams();
-  const { bookings, clients, features } = useData();
+  const { bookings, clients, user } = useData();
   const { backend, toast } = useStore();
   const { busy, run, error, committed } = useAction();
   const navigate = useNavigate();
@@ -25,6 +27,8 @@ export function BookingForm() {
   const [weeks, setWeeks] = useState(1);
   const [repeatEvery, setRepeatEvery] = useState("");
   const [repeatCount, setRepeatCount] = useState("2");
+  const [showRepeat, setShowRepeat] = useState(false);
+  const [priceFromChip, setPriceFromChip] = useState(false);
   const [savedCount, setSavedCount] = useState(1);
 
   const [savedId, setSavedId] = useState<string | null>(null);
@@ -42,14 +46,12 @@ export function BookingForm() {
       deposit: initial?.depositCents ? centsToInput(initial.depositCents) : "",
       location: initial?.location ?? "",
       notes: initial?.notes ?? "",
-      followUpOn: editing ? editing.followUpOn ?? "" : addCalendarDays(irelandToday(), 2),
     };
   });
   const [showDeposit, setShowDeposit] = useState(Boolean(initial?.depositCents));
   const [showMore, setShowMore] = useState(Boolean(initial?.location || initial?.notes));
   const validation = useValidation({
     repeatCount: () => repeatEvery && !RepeatInput.safeParse({ every_weeks: Number(repeatEvery), count: Number(repeatCount) }).success ? "Choose 2 to 12 bookings." : undefined,
-    followUpOn: () => form.followUpOn && !CalendarDate.safeParse(form.followUpOn).success ? "Pick a valid date." : undefined,
     clientEmail: () => !client && form.clientEmail.trim() && !CreateClientInput.shape.email.safeParse(form.clientEmail.trim()).success
       ? "Enter a valid email address." : undefined,
     clientPhone: () => form.clientPhone.trim() && !normalisePhone(form.clientPhone)
@@ -72,16 +74,7 @@ export function BookingForm() {
       ? "Pick a date and time." : undefined,
   });
 
-  const services = useMemo(
-    () =>
-      [...new Set(
-        [...bookings]
-          .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
-          .slice(0, 10)
-          .map((booking) => booking.service),
-      )].slice(0, 4),
-    [bookings],
-  );
+  const services = useMemo(() => bookingServiceChips(user.services ?? [], bookings), [user.services, bookings]);
   const matches = useMemo(() => {
     const query = form.clientName.trim().toLowerCase();
     if (!query || client) return [];
@@ -106,6 +99,8 @@ export function BookingForm() {
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (busy || committed) return;
+    const submitter = (event.nativeEvent as SubmitEvent).submitter;
+    const status = submitter instanceof HTMLButtonElement && submitter.value === "enquiry" ? "enquiry" : "confirmed";
     if (!validation.validate(event.currentTarget)) return;
     const priceCents = parseEuros(form.price);
     const depositCents = form.deposit.trim() ? parseEuros(form.deposit) : 0;
@@ -124,7 +119,6 @@ export function BookingForm() {
       depositCents,
       location: form.location.trim() || null,
       notes: form.notes.trim() || null,
-      ...(!editing || editing.status === "enquiry" ? { followUpOn: form.followUpOn || null } : {}),
     };
     if (editing) {
       if (await run(() => backend.updateBooking(editing.id, details))) {
@@ -138,6 +132,7 @@ export function BookingForm() {
     const ok = await run(async () => {
       const created = await backend.createBooking({
         ...details,
+        status,
         ...(repeatEvery ? { repeat: { everyWeeks: RepeatInput.parse({ every_weeks: Number(repeatEvery), count: Number(repeatCount) }).every_weeks, count: Number(repeatCount) } } : {}),
         ...(client ? { clientId: client.id } : { client: { name: form.clientName.trim(), phone, email: form.clientEmail.trim() || undefined } }),
       });
@@ -153,7 +148,7 @@ export function BookingForm() {
   }
 
   const saved = savedId ? bookings.find((booking) => booking.id === savedId) : undefined;
-  if (saved) return <Saved booking={saved} automation={features.automation} count={savedCount} />;
+  if (saved) return <Saved booking={saved} count={savedCount} />;
 
   return (
     <div className="page form-page">
@@ -235,8 +230,13 @@ export function BookingForm() {
           {!editing && services.length > 0 && (
             <div className="suggestion-row">
               {services.map((service) => (
-                <button type="button" key={service} onClick={() => update("service", service)}>
-                  {service}
+                <button type="button" key={service.name.toLowerCase()} onClick={() => {
+                  const next = serviceChipPrice(form.price, priceFromChip, service);
+                  validation.clear();
+                  setForm(current => ({ ...current, service: service.name, price: next.price }));
+                  setPriceFromChip(next.fromChip);
+                }}>
+                  {service.name} · <MoneyText cents={service.priceCents} />
                 </button>
               ))}
             </div>
@@ -256,9 +256,6 @@ export function BookingForm() {
               setForm((current) => ({ ...current, date: next.date, time: next.time }));
             }}>{value} {value === 1 ? "week" : "weeks"}</button>)}
           </div>}
-          {(!editing || editing.status === "enquiry") && <Field label="Follow up on" helper="A reminder on Today. Leave blank for no follow-up." {...validation.field("followUpOn")}>
-            <input name="followUpOn" type="date" value={form.followUpOn} onChange={(event) => update("followUpOn", event.target.value)} />
-          </Field>}
           <Field label="Price" {...validation.field("price")}>
             <div className="money-input">
               <span>€</span>
@@ -266,7 +263,7 @@ export function BookingForm() {
                 required
                 inputMode="decimal"
                 name="price" value={form.price}
-                onChange={(event) => update("price", event.target.value)}
+                onChange={(event) => { update("price", event.target.value); setPriceFromChip(false); }}
                 placeholder="0.00"
               />
             </div>
@@ -321,7 +318,10 @@ export function BookingForm() {
           )}
         </Card>
         {!editing && <Card className="form-card">
-          <Field label="Repeat" helper="Each booking is saved as an enquiry. Times stay the same in Ireland.">
+          {!showRepeat ? <button type="button" className="reveal-button" onClick={() => setShowRepeat(true)}>
+            <Icon name="plus" size={17} /> Repeat this booking
+          </button> : <>
+          <Field label="Repeat" helper="Times stay the same in Ireland. Your save choice applies to every booking.">
             <select name="repeatEvery" value={repeatEvery} onChange={(event) => setRepeatEvery(event.target.value)}>
               <option value="">Doesn’t repeat</option><option value="1">Every week</option><option value="2">Every 2 weeks</option><option value="4">Every 4 weeks</option>
             </select>
@@ -329,28 +329,31 @@ export function BookingForm() {
           {repeatEvery && <Field label="How many times" helper="Total bookings, including the first. Choose 2 to 12." {...validation.field("repeatCount")}>
             <input name="repeatCount" type="number" inputMode="numeric" min="2" max="12" step="1" required value={repeatCount} onChange={(event) => setRepeatCount(event.target.value)} />
           </Field>}
+          </>}
         </Card>}
         <div className={`sticky-action ${validation.hasErrors ? "has-error" : ""}`}>
           <Button type="submit" disabled={busy || committed}>
             {busy ? "Saving…" : editing ? "Save changes" : "Save booking"} <Icon name="arrow" />
           </Button>
+          {!editing && <Button type="submit" name="status" value="enquiry" kind="quiet" disabled={busy || committed}>Save as enquiry</Button>}
         </div>
       </form>
     </div>
   );
 }
 
-/** The automation moment is explicit and consented, every time. */
-function Saved({ booking, automation, count }: { booking: BookingRow; automation: boolean; count: number }) {
-  const { backend } = useStore();
-  const { busy, run } = useAction();
+function Saved({ booking, count }: { booking: BookingRow; count: number }) {
+  const [message, setMessage] = useState(false);
   const navigate = useNavigate();
-  const copy = confirmCopy(booking.client, automation);
+  const confirmed = booking.status === "confirmed";
   return (
     <div className="page success-page">
       <div className="success-mark"><Icon name="check" size={32} /></div>
-      <h1>{count > 1 ? `${count} bookings added.` : "Booking saved."}</h1>
-      {count > 1 && <p className="sheet-copy">All are enquiries. Confirm each one when you’re ready.</p>}
+      <h1>{confirmed ? count > 1 ? `${count} bookings added` : "Booked" : "Saved as enquiry"}</h1>
+      {!confirmed && <p className="sheet-copy">
+        {booking.followUpOn ? `We’ll remind you on ${longDay(`${booking.followUpOn}T12:00:00Z`)}.` : "No follow-up set. You can add one from Today."}
+        {count > 1 && ` ${count} enquiries saved; only the first has a follow-up reminder.`}
+      </p>}
       <p className="success-copy">{booking.client.name} · {booking.service}</p>
       <Card className="saved-summary">
         <div>
@@ -362,18 +365,12 @@ function Saved({ booking, automation, count }: { booking: BookingRow; automation
           <MoneyText cents={booking.priceCents} />
         </div>
       </Card>
-      <Button
-        disabled={busy}
-        onClick={async () => {
-          if (await run(() => backend.confirmBooking(booking.id), "Booking confirmed")) {
-            navigate(`/bookings/${booking.id}`, { replace: true });
-          }
-        }}
-      >
-        <Icon name={copy.caption ? "check" : "message"} /> {copy.label}
-      </Button>
-      {copy.caption && <p className="button-caption">{copy.caption}</p>}
-      <Link className="text-link" to={`/bookings/${booking.id}`} replace>Keep as enquiry</Link>
+      {confirmed && <>
+        <Button onClick={() => setMessage(true)}><Icon name="message" /> Send confirmation</Button>
+        <p className="button-caption">Opens a draft{count > 1 ? " for the first booking" : ""} for you to review and send.</p>
+      </>}
+      <Button kind="soft" onClick={() => navigate(`/bookings/${booking.id}`, { replace: true })}>Done</Button>
+      {message && <BookingMessageSheet booking={booking} kind="confirmation" onClose={() => setMessage(false)} />}
     </div>
   );
 }

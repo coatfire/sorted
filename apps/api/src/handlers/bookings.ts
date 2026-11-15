@@ -25,7 +25,7 @@ import {
   shiftDublinWeeks,
 } from "@sorted/core";
 import { db, schema } from "../db";
-import { emitBookingEvent, emitEvent } from "../lib/events";
+import { emitBookingEvent } from "../lib/events";
 import { deactivatePaymentLink } from "../lib/stripe";
 import { effectivePaymentVatRate } from "../lib/tax";
 import { lockBookingWithClient, userTransaction } from "../lib/transaction";
@@ -165,7 +165,7 @@ bookingRoutes.post("/", async (c) => {
   }
   const input = parsed.data;
 
-  return userTransaction(userId, async (tx) => {
+  const rows = await userTransaction(userId, async (tx) => {
     // Resolve or create the client
     let clientId = input.client_id;
     if (input.client) {
@@ -185,7 +185,7 @@ bookingRoutes.post("/", async (c) => {
             eq(schema.clients.userId, userId),
           ),
         ).for("share");
-      if (!client) return c.json({ error: "Client not found" }, 404);
+      if (!client) return null;
     }
 
     const count = input.repeat?.count ?? 1;
@@ -196,6 +196,7 @@ bookingRoutes.post("/", async (c) => {
         return {
         userId,
         clientId: clientId!,
+        status: input.status,
         service: input.service,
         startAt,
         endAt: input.end_at ? new Date(startAt.getTime() + input.end_at.getTime() - input.start_at.getTime()) : undefined,
@@ -203,13 +204,23 @@ bookingRoutes.post("/", async (c) => {
         depositCents: input.deposit_cents,
         location: input.location,
         notes: input.notes,
-        followUpOn: index === 0 ? input.follow_up_on === undefined ? addCalendarDays(irelandToday(), 2) : input.follow_up_on : null,
+        followUpOn: input.status === "enquiry" && index === 0 ? input.follow_up_on === undefined ? addCalendarDays(irelandToday(), 2) : input.follow_up_on : null,
         };
       }))
       .returning();
 
-    return c.json({ ...rows[0], seriesCount: count }, 201);
+    if (input.status === "confirmed" && input.deposit_cents > 0) {
+      await tx.insert(schema.payments).values(rows.map(booking => ({
+        userId, bookingId: booking.id, kind: "deposit" as const, amountCents: booking.depositCents,
+      })));
+    }
+    return rows;
   });
+  if (!rows) return c.json({ error: "Client not found" }, 404);
+  if (input.status === "confirmed") {
+    await Promise.all(rows.map(booking => emitBookingEvent(userId, booking.id, "booking.confirmed")));
+  }
+  return c.json({ ...rows[0], seriesCount: rows.length }, 201);
 });
 
 /** POST /api/bookings/:id/confirm — enquiry → confirmed, emits automation */
@@ -217,7 +228,7 @@ bookingRoutes.post("/:id/confirm", async (c) => {
   const userId = c.get("userId");
   const id = c.req.param("id");
 
-  const result = await userTransaction(userId, async (tx, user) => {
+  const result = await userTransaction(userId, async (tx) => {
     const row = await lockBookingWithClient(tx, userId, id);
 
     if (!row) return c.json({ error: "Booking not found" }, 404);
@@ -244,34 +255,11 @@ bookingRoutes.post("/:id/confirm", async (c) => {
       });
     }
 
-    return { row, booking, user };
+    return { booking };
   });
   if (result instanceof Response) return result;
-  const { row, booking, user } = result;
-
-  await emitEvent({
-    event: "booking.confirmed",
-    user: {
-      id: user.id,
-      business_name: user.businessName ?? user.name ?? "your vendor",
-      phone: user.phone,
-      review_link: user.reviewLink,
-    },
-    client: {
-      id: row.client.id,
-      name: row.client.name,
-      phone: row.client.phone,
-    },
-    booking: {
-      id: booking.id,
-      service: booking.service,
-      start_at: booking.startAt.toISOString(),
-      price_cents: booking.priceCents,
-      deposit_cents: booking.depositCents,
-      location: booking.location,
-      gcal_event_id: booking.gcalEventId,
-    },
-  });
+  const { booking } = result;
+  await emitBookingEvent(userId, booking.id, "booking.confirmed");
 
   return c.json(booking);
 });

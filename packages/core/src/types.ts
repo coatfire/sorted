@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { RevolutLink } from "./revolut";
+import { ServicesInput, type Service } from "./services";
 import { CalendarDate } from "./dates";
 import { InvoiceLogo, InvoiceAccent, IrishVatNumber } from "./documents";
 import { VatRateBp, IncomeTaxRateBp, VatPeriodMonths } from "./tax";
@@ -103,6 +104,7 @@ export const CreateBookingInput = z
     // …or inline creation (the 10-second flow)
     client: CreateClientInput.optional(),
     service: z.string().min(1).max(200),
+    status: z.enum(["confirmed", "enquiry"]).default("enquiry"),
     start_at: z.coerce.date(),
     follow_up_on: CalendarDate.nullable().optional(),
     repeat: RepeatInput.optional(),
@@ -134,6 +136,7 @@ export const UpdateBookingInput = z.object({
 export type UpdateBookingInput = z.infer<typeof UpdateBookingInput>;
 
 export const UpdateUserInput = z.object({
+  services: ServicesInput.optional(),
   revolut_link: z.union([z.string().trim().length(0).transform(() => null), RevolutLink]).nullable().optional(),
   vat_registered: z.boolean().optional(),
   vat_rate_bp: VatRateBp.nullable().optional(),
@@ -211,6 +214,7 @@ export const ConfirmExpenseInput = z.object(expenseFields).refine(expenseVatWith
 // ISO timestamp strings). Request bodies above are snake_case.
 
 export interface User {
+  services?: Service[];
   revolutLink?: string | null;
   driveBackedUpAt: string | null;
   vatRegistered: boolean;
