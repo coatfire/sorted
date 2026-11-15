@@ -191,18 +191,21 @@ bookingRoutes.post("/", async (c) => {
     const count = input.repeat?.count ?? 1;
     const rows = await tx
       .insert(schema.bookings)
-      .values(Array.from({ length: count }, (_, index) => ({
+      .values(Array.from({ length: count }, (_, index) => {
+        const startAt = shiftDublinWeeks(input.start_at, index * (input.repeat?.every_weeks ?? 1));
+        return {
         userId,
         clientId: clientId!,
         service: input.service,
-        startAt: shiftDublinWeeks(input.start_at, index * (input.repeat?.every_weeks ?? 1)),
-        endAt: input.end_at ? shiftDublinWeeks(input.end_at, index * (input.repeat?.every_weeks ?? 1)) : undefined,
+        startAt,
+        endAt: input.end_at ? new Date(startAt.getTime() + input.end_at.getTime() - input.start_at.getTime()) : undefined,
         priceCents: input.price_cents,
         depositCents: input.deposit_cents,
         location: input.location,
         notes: input.notes,
         followUpOn: index === 0 ? input.follow_up_on === undefined ? addCalendarDays(irelandToday(), 2) : input.follow_up_on : null,
-      })))
+        };
+      }))
       .returning();
 
     return c.json({ ...rows[0], seriesCount: count }, 201);

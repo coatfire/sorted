@@ -68,7 +68,8 @@ issue date plus 30 calendar days.
 `POST /bookings` optionally accepts `repeat: { every_weeks: 1 | 2 | 4,
 count: 2..12 }`. Count is the total, including the first booking. All enquiries
 and an optional inline client are created in one transaction. Dates and optional
-end times shift by calendar weeks in Europe/Dublin, not fixed UTC durations.
+start times shift by calendar weeks in Europe/Dublin, not fixed UTC durations.
+Optional end times preserve the original duration relative to each shifted start.
 Only the first gets `follow_up_on` (including the normal two-day default);
 later bookings get null. The response is the first booking with `seriesCount`
 (1 without repeat). No confirmations, payments or messages are created.

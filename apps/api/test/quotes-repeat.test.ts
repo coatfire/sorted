@@ -77,6 +77,17 @@ describe("quote documents", () => {
 });
 
 describe("repeat enquiries", () => {
+  it("preserves a 01:30–02:00 booking's duration when the spring clock gap moves its repeated start to 02:30", async () => {
+    const f = await fixture();
+    const response = await f.create({ start_at: "2026-03-22T01:30:00Z", end_at: "2026-03-22T02:00:00Z", repeat: { every_weeks: 1, count: 2 } });
+    expect(response.status).toBe(201);
+    const rows = await f.rows();
+    expect(rows.map((row) => row.startAt.toISOString())).toEqual(["2026-03-22T01:30:00.000Z", "2026-03-29T01:30:00.000Z"]);
+    expect(rows.map((row) => row.endAt?.toISOString())).toEqual(["2026-03-22T02:00:00.000Z", "2026-03-29T02:00:00.000Z"]);
+    expect(dublinDateTime(rows[1].startAt).time).toBe("02:30");
+    expect(dublinDateTime(rows[1].endAt!).time).toBe("03:00");
+    expect(rows.every((row) => row.endAt!.getTime() - row.startAt.getTime() === 30 * 60000)).toBe(true);
+  });
   it("creates a series atomically across October DST, shifting end times and following up only on the first", async () => {
     const f = await fixture();
     const response = await f.create({ repeat: { every_weeks: 1, count: 3 } });
