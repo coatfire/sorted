@@ -33,13 +33,14 @@ function BusinessSettings() {
   const { backend, resetDemo, toast } = useStore();
   const { mode, signOut } = useSession();
   const navigate = useNavigate();
-  const { saver, states, blocked } = useSettingsAutosave();
-  const [form, setForm] = useState(() => settingsForm(user));
+  const { saver, states, blocked, restoredChanges } = useSettingsAutosave();
+  const initialUser = { ...user, ...restoredChanges };
+  const [form, setForm] = useState(() => settingsForm(initialUser));
   const [errors, setErrors] = useState<Partial<Record<SettingsField, string>>>({});
-  const [services, setServices] = useState<ServiceDraft[]>(() => (user.services ?? []).map(service => ({ id: crypto.randomUUID(), name: service.name, price: centsToInput(service.priceCents), lastComplete: service })));
+  const [services, setServices] = useState<ServiceDraft[]>(() => (initialUser.services ?? []).map(service => ({ id: crypto.randomUUID(), name: service.name, price: centsToInput(service.priceCents), lastComplete: service })));
   const [messagesOpen, setMessagesOpen] = useState(false);
   const registrationPending = useRef(false);
-  const [logo, setLogo] = useState(user.invoiceLogo);
+  const [logo, setLogo] = useState(initialUser.invoiceLogo);
   const [logoBusy, setLogoBusy] = useState(false);
   const [logoError, setLogoError] = useState<string>();
   function change(field: SettingsField, value: SettingsForm[SettingsField], section: string, immediate = false) {

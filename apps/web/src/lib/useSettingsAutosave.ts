@@ -1,16 +1,20 @@
-import { useEffect, useRef, useState } from "react";
-import { useStore } from "./store";
-import { createSettingsAutosave, type SaveState } from "./settingsAutosave";
+import { useEffect, useState } from "react";
+import { useData, useSession, useStore } from "./store";
+import { session as authSession } from "./api";
+import { createSettingsAutosaveRegistry, watchSettingsAutosave } from "./settingsAutosaveSession";
+
+const registry = createSettingsAutosaveRegistry();
 
 export function useSettingsAutosave() {
-  const { backend, refresh } = useStore();
-  const [states, setStates] = useState<Record<string, SaveState>>({});
-  const live = useRef(true);
-  const store = useRef({ backend, refresh }); store.current = { backend, refresh };
-  const saver = useRef<ReturnType<typeof createSettingsAutosave>>();
-  saver.current ??= createSettingsAutosave(patch => store.current.backend.updateUser(patch), () => store.current.refresh(true), (section, state) => {
-    if (live.current) setStates(current => ({ ...current, [section]: state }));
-  });
-  useEffect(() => { live.current = true; return () => { live.current = false; void saver.current?.flushAll(); }; }, []);
-  return { saver: saver.current, states, blocked: Object.values(states).some(state => state.committed) };
+  const { backend, refresh, toast } = useStore();
+  const { user } = useData();
+  const { mode } = useSession();
+  const token = mode === "api" ? authSession.get() : null;
+  const session = registry.get(backend, user.id, async patch => {
+    if (mode === "api" && authSession.get() !== token) throw new Error("Sign back in before saving Settings.");
+    await backend.updateUser(patch);
+  }, () => refresh(true), message => toast(message, "error"));
+  const [states, setStates] = useState(session.getStates);
+  useEffect(() => watchSettingsAutosave(session, setStates, window, document), [session]);
+  return { saver: session.saver, restoredChanges: session.saver.getChanges(), states, blocked: Object.values(states).some(state => state.committed) };
 }

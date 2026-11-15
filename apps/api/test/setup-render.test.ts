@@ -13,7 +13,7 @@ it("renders a minimal welcome, payment-details gating, named swatches and a frie
         const element=screen==='welcome'?h(Settings,{welcome:true}):screen==='settings'?h(Settings):screen==='home'?h(Home):screen==='swatches'?h(AccentPicker,{value:'#6B315D',onChange:noop}):screen==='editor'?h(MessageEditor,{label:'Payment request',name:'template',value:'Hi {client}, your {service} costs {balance}.',onChange:noop,onBlur:noop,onReset:noop,user:snapshot.user,kind:'payment_request'}):h(BookingMessageSheet,{booking,kind:screen==='deposit'?'confirmation':'payment_request',onClose:noop});
         return renderToStaticMarkup(h(MemoryRouter,null,element)); }`,
     resolveDir: new URL("../../web/src", import.meta.url).pathname, loader: "tsx",
-  }, bundle: true, platform: "node", format: "cjs", jsx: "automatic", write: false, external: ["*.ttf?url"],
+  }, bundle: true, platform: "node", format: "cjs", jsx: "automatic", write: false, external: ["*.ttf?url"], define: { "import.meta.env": "{}" },
     plugins: [{ name: "setup-store", setup(build) {
       build.onResolve({ filter: /lib\/store$|\.\/store$/ }, () => ({ path: "store", namespace: "setup-test" }));
       build.onLoad({ filter: /.*/, namespace: "setup-test" }, () => ({ contents: `export const useData=()=>globalThis.__snapshot;

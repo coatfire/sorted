@@ -9,6 +9,7 @@ export function createSettingsAutosave(save: (patch: UserChanges) => Promise<voi
   const versions = new Map<string, number>();
   const invalid = new Map<string, Set<string>>();
   const failed = new Map<string, UserChanges>();
+  const queued = new Set<UserChanges>();
   let queue = Promise.resolve();
   let blocked = false;
   const reload = "Saved, but the screen couldn't update. Reload before making more changes.";
@@ -19,9 +20,11 @@ export function createSettingsAutosave(save: (patch: UserChanges) => Promise<voi
     const changes = Object.assign({}, ...(fields?.values() ?? [])) as UserChanges;
     pending.delete(section);
     const version = versions.get(section);
+    queued.add(changes);
     queue = queue.then(async () => {
       if (blocked) { report(section, { phase: "error", message: reload, committed: true }); return; }
       const patch = { ...failed.get(section), ...changes };
+      if (!Object.keys(patch).length) return;
       try {
         await save(patch);
       } catch (error) {
@@ -33,7 +36,7 @@ export function createSettingsAutosave(save: (patch: UserChanges) => Promise<voi
       try { await refresh(); }
       catch { blocked = true; report(section, { phase: "error", message: reload, committed: true }); return; }
       if (versions.get(section) === version) report(section, { phase: invalid.get(section)?.size ? "invalid" : "saved" });
-    });
+    }).finally(() => { queued.delete(changes); });
     return queue;
   }
   return {
@@ -52,6 +55,7 @@ export function createSettingsAutosave(save: (patch: UserChanges) => Promise<voi
       else timers.set(section, setTimeout(() => { void flush(section); }, delay));
     },
     flush,
+    getChanges(): UserChanges { return Object.assign({}, ...failed.values(), ...queued, ...[...pending.values()].flatMap(fields => [...fields.values()])); },
     flushAll() { for (const section of new Set([...pending.keys(), ...failed.keys()])) void flush(section); return queue.then(() => !blocked && !failed.size); },
   };
 }
