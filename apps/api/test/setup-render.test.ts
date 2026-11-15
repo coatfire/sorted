@@ -8,9 +8,10 @@ it("renders a minimal welcome, payment-details gating, named swatches and a frie
     contents: `import {createElement as h} from "react"; import {renderToStaticMarkup} from "react-dom/server"; import {MemoryRouter} from "react-router-dom";
       import {Settings} from "./pages/Settings"; import {Home} from "./pages/Home"; import {BookingMessageSheet} from "./BookingMessageSheet";
       import {AccentPicker} from "./AccentPicker"; import {MessageEditor} from "./MessageEditor";
+      import {ServiceEditor} from "./ServiceEditor";
       export function render(screen,snapshot,extra={}) { globalThis.__snapshot=snapshot;const noop=()=>{};
         const booking={id:'booking',clientId:'client',client:{name:'Client',phone:null,email:null},service:'Gel nails',startAt:'2026-11-18T10:00:00Z',priceCents:8000,depositCents:2000,...extra};
-        const element=screen==='welcome'?h(Settings,{welcome:true}):screen==='settings'?h(Settings):screen==='home'?h(Home):screen==='swatches'?h(AccentPicker,{value:'#6B315D',onChange:noop}):screen==='editor'?h(MessageEditor,{label:'Payment request',name:'template',value:'Hi {client}, your {service} costs {balance}.',onChange:noop,onBlur:noop,onReset:noop,user:snapshot.user,kind:'payment_request'}):h(BookingMessageSheet,{booking,kind:screen==='deposit'?'confirmation':'payment_request',onClose:noop});
+        const element=screen==='welcome'?h(Settings,{welcome:true}):screen==='settings'?h(Settings):screen==='home'?h(Home):screen==='swatches'?h(AccentPicker,{value:'#6B315D',onChange:noop}):screen==='services'?h(ServiceEditor,{rows:extra.rows,onChange:noop}):screen==='editor'?h(MessageEditor,{label:'Payment request',name:'template',value:'Hi {client}, your {service} costs {balance}.',onChange:noop,onBlur:noop,onReset:noop,user:snapshot.user,kind:'payment_request'}):h(BookingMessageSheet,{booking,kind:screen==='deposit'?'confirmation':'payment_request',onClose:noop});
         return renderToStaticMarkup(h(MemoryRouter,null,element)); }`,
     resolveDir: new URL("../../web/src", import.meta.url).pathname, loader: "tsx",
   }, bundle: true, platform: "node", format: "cjs", jsx: "automatic", write: false, external: ["*.ttf?url"], define: { "import.meta.env": "{}" },
@@ -21,7 +22,8 @@ it("renders a minimal welcome, payment-details gating, named swatches and a frie
         export const useAction=()=>({busy:false,error:null,committed:false,run:()=>{}});` }));
     } }],
   });
-  const cases = [["welcome", snapshot], ["settings", snapshot], ["home", snapshot], ["payment", snapshot], ["payment", { ...snapshot, user: { ...snapshot.user, iban: "IE29AIBK93115212345678" } }], ["payment", { ...snapshot, user: { ...snapshot.user, revolutLink: "https://revolut.me/aoife" } }], ["deposit", snapshot], ["deposit", snapshot, { depositCents: 0 }], ["swatches", snapshot], ["editor", snapshot]];
+  const cases: [string, object, object?][] = [["welcome", snapshot], ["settings", snapshot], ["home", snapshot], ["payment", snapshot], ["payment", { ...snapshot, user: { ...snapshot.user, iban: "IE29AIBK93115212345678" } }], ["payment", { ...snapshot, user: { ...snapshot.user, revolutLink: "https://revolut.me/aoife" } }], ["deposit", snapshot], ["deposit", snapshot, { depositCents: 0 }], ["swatches", snapshot], ["editor", snapshot]];
+  cases.push(["services", snapshot, { rows: [{ id: "existing", name: "New name", price: "", lastComplete: { name: "Gel nails", priceCents: 3500 } }, { id: "new", name: " GEL NAILS ", price: "45" }] }]);
   const html = await new Promise<string[]>((resolve, reject) => {
     const child = spawn(process.execPath, ["-"], { stdio: ["pipe", "pipe", "pipe"] });
     const output: Buffer[] = [], errors: Buffer[] = [];
@@ -46,4 +48,5 @@ it("renders a minimal welcome, payment-details gating, named swatches and a frie
   expect(swatches).toContain('type="color"'); expect(swatches).not.toContain('type="text"');
   expect(editor).toContain("Client name"); expect(editor).toContain("Bank details"); expect(editor).toContain("Example preview");
   expect(editor.split('class="message-live-preview"')[1]).toContain("Hi Aoife, your Gel nails costs €60.00.");
+  expect(html[10].match(/Use a different name for each service\./g)).toHaveLength(2);
 }, 15000);

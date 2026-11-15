@@ -9,12 +9,19 @@ export const needsPaymentDetails = (user: Pick<User, "iban" | "revolutLink">, ki
 
 export interface ServiceDraft { id: string; name: string; price: string; lastComplete?: { name: string; priceCents: number } }
 export function completeServiceDrafts(rows: ServiceDraft[]) {
+  const duplicateIds = new Set<string>();
   const drafts = rows.map(row => {
     const duplicate = rows.some(other => other.id !== row.id && other.name.trim().toLowerCase() === row.name.trim().toLowerCase());
+    if (duplicate && row.name.trim()) duplicateIds.add(row.id);
     const parsed = Service.safeParse({ name: row.name, priceCents: parseEuros(row.price) });
     return parsed.success && !duplicate ? { ...row, lastComplete: parsed.data } : row;
   });
-  return { drafts, values: drafts.flatMap(row => row.lastComplete ? [row.lastComplete] : []) };
+  for (const row of drafts) {
+    const name = row.lastComplete?.name.trim().toLowerCase();
+    if (name && drafts.some(other => other.id !== row.id && other.lastComplete?.name.trim().toLowerCase() === name)) duplicateIds.add(row.id);
+  }
+  const values = drafts.flatMap(row => row.lastComplete ? [row.lastComplete] : []);
+  return { drafts, values, duplicateIds, valid: Services.safeParse(values).success };
 }
 export function serviceErrors(row: ServiceDraft) {
   return {

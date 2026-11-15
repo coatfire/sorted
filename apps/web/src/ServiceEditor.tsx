@@ -1,15 +1,16 @@
 import { Button, Field, Icon } from "./components";
-import { serviceErrors, type ServiceDraft } from "./lib/setup";
+import { completeServiceDrafts, serviceErrors, type ServiceDraft } from "./lib/setup";
 
 export function ServiceEditor({ rows, onChange, limit = 30, submitted = false }: { rows: ServiceDraft[]; onChange: (rows: ServiceDraft[]) => void; limit?: number; submitted?: boolean }) {
+  const { duplicateIds } = completeServiceDrafts(rows);
   return <div className="form-card">
     {rows.map((row, index) => {
-      const active = submitted || Boolean(row.name || row.price);
+      const active = submitted || Boolean(row.name || row.price) || duplicateIds.has(row.id);
       const errors = serviceErrors(row);
-      const duplicate = rows.some(other => other.id !== row.id && other.name.trim().toLowerCase() === row.name.trim().toLowerCase());
+      const duplicate = duplicateIds.has(row.id);
       const update = (field: "name" | "price", value: string) => onChange(rows.map(item => item.id === row.id ? { ...item, [field]: value } : item));
       return <div className="service-editor-row" role="group" aria-label={`Service ${index + 1}`} key={row.id}>
-        <Field label="Service name" error={active ? errors.name || (duplicate ? "Use a different name for each service." : undefined) : undefined}>
+        <Field label="Service name" error={active ? duplicate ? "Use a different name for each service." : errors.name : undefined}>
           <input name={`serviceName-${row.id}`} maxLength={200} value={row.name} placeholder="e.g. Gel nails" onChange={event => update("name", event.target.value)} />
         </Field>
         <Field label="Price" error={active ? errors.price : undefined}>

@@ -84,7 +84,9 @@ function BusinessSettings() {
         <ServiceEditor rows={services} onChange={rows => {
           const next = completeServiceDrafts(rows);
           setServices(next.drafts);
-          if (JSON.stringify(next.values) !== JSON.stringify(completeServiceDrafts(services).values)) saver.change("services", "services", { services: next.values });
+          const previous = completeServiceDrafts(services);
+          if (!next.valid) saver.change("services", "services", null);
+          else if (!previous.valid || JSON.stringify(next.values) !== JSON.stringify(previous.values)) saver.change("services", "services", { services: next.values });
         }} />
       </Card>{status("services")}</section>
       <section className="settings-section"><h2>VAT &amp; tax</h2><Card className="form-card">

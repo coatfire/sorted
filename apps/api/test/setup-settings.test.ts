@@ -50,6 +50,20 @@ describe("growing setup", () => {
     expect(next.values).toEqual([{ name: "Gel nails", priceCents: 3500 }, { name: "Lashes", priceCents: 4500 }]);
     expect(completeServiceDrafts(next.drafts.filter(row => row.id !== "existing")).values).toEqual([{ name: "Lashes", priceCents: 4500 }]);
   });
+  it("rejects duplicates against names retained from incomplete rows and recovers after correction", async () => {
+    const rows = [{ id: "existing", name: "New name", price: "", lastComplete: { name: "Gel nails", priceCents: 3500 } }, { id: "new", name: "  GEL NAILS ", price: "45" }];
+    const next = completeServiceDrafts(rows);
+    expect(next.valid).toBe(false);
+    expect([...next.duplicateIds]).toEqual(["existing", "new"]);
+    const save = vi.fn().mockResolvedValue(undefined), saver = createSettingsAutosave(save, async () => {}, vi.fn());
+    saver.change("services", "services", next.valid ? { services: next.values } : null);
+    await saver.flushAll();
+    expect(save).not.toHaveBeenCalled();
+    const corrected = completeServiceDrafts(next.drafts.map(row => row.id === "new" ? { ...row, name: "Lashes" } : row));
+    expect(corrected.valid).toBe(true); expect(corrected.duplicateIds.size).toBe(0);
+    expect(corrected.values).toEqual([{ name: "Gel nails", priceCents: 3500 }, { name: "Lashes", priceCents: 4500 }]);
+    expect(completeServiceDrafts(next.drafts.filter(row => row.id !== "new")).valid).toBe(true);
+  });
 });
 
 describe("Settings partial autosave", () => {
