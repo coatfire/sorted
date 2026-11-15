@@ -11,6 +11,11 @@ const expenseBody = (draft: ExpenseDraft) => ({
 });
 
 export const apiBackend: Backend = {
+  signup: (email, password) => post("/auth/signup", { email, password }),
+  login: (email, password) => post("/auth/login", { email, password }),
+  verify: (token) => post("/auth/verify", { token }),
+  forgot: (email) => post("/auth/forgot", { email }),
+  resetPassword: (token, password) => post("/auth/reset", { token, password }),
   async load() {
     const [user, health, clients, bookings, payments, expenses] = await Promise.all([
       api<User>("/auth/me"),
@@ -107,6 +112,9 @@ export const apiBackend: Backend = {
       business_name: changes.businessName,
       phone: changes.phone,
       review_link: changes.reviewLink,
+      address: changes.address,
+      iban: changes.iban,
+      bic: changes.bic,
     });
   },
 

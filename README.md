@@ -33,8 +33,8 @@ pnpm dev        # API on :3001, web app on :5173
 That's all — no accounts, no `.env`. Open http://localhost:5173 and either:
 
 - **Explore the demo** — a seeded sample business that lives in your browser, or
-- **Log in with any email** — locally the login link is shown on screen
-  instead of emailed, and data is stored in an embedded Postgres under
+- **Create an account with an email and password** — locally the verification link
+  is shown on screen instead of emailed, and data is stored in an embedded Postgres under
   `apps/api/.data/`.
 
 ```bash

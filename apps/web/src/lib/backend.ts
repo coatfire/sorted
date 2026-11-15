@@ -49,6 +49,11 @@ export interface ExpenseDraft {
  * try-before-you-sign-up demo). Pages never know which one they have.
  */
 export interface Backend {
+  signup(email: string, password: string): Promise<{ ok: true; dev_link?: string }>;
+  login(email: string, password: string): Promise<{ jwt: string; user: User }>;
+  verify(token: string): Promise<{ jwt: string; user: User }>;
+  forgot(email: string): Promise<{ ok: true; dev_link?: string }>;
+  resetPassword(token: string, password: string): Promise<{ jwt: string; user: User }>;
   load(): Promise<Snapshot>;
   createBooking(draft: BookingDraft): Promise<{ id: string }>;
   updateBooking(id: string, draft: Omit<BookingDraft, "clientId" | "client">): Promise<void>;
@@ -71,6 +76,9 @@ export interface Backend {
     businessName: string | null;
     phone: string | null;
     reviewLink: string | null;
+    address: string | null;
+    iban: string | null;
+    bic: string | null;
   }): Promise<void>;
   exportCsv(year: number): Promise<Blob>;
 }

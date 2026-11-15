@@ -72,8 +72,10 @@ Apply new migrations before deployments that need them. Do not run the
 initial migration against an existing, unmanaged schema without deciding
 how to baseline it first.
 
-Verify `/api/health` on the deployed origin, then request a login email and
-follow it back to `/login`. Production must never show an **Open login link**
+Verify `/api/health` on the deployed origin, then sign up with an email and
+password and follow the verification email to `/verify` and `/welcome`.
+Existing passwordless users can set their password through `/forgot`.
+Production must never show an **Open link**
 button or log a login token. If email delivery fails, the API deletes the
 undelivered token and returns 502; the login page shows the failure instead
 of claiming an email was sent. Only local mode logs/returns a development link.

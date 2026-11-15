@@ -6,7 +6,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { and, eq } from "drizzle-orm";
 import { app } from "../src/app";
-import { issueMagicLinkToken } from "../src/lib/auth";
+import { issueEmailToken } from "../src/lib/auth";
 import { db, schema } from "../src/db";
 import * as events from "../src/lib/events";
 import { env } from "../src/lib/env";
@@ -35,16 +35,21 @@ afterEach(() => {
 });
 
 async function login(email: string) {
-  const sent = await app.request("/api/auth/magic-link", {
+  const sent = await app.request("/api/auth/signup", {
     method: "POST",
-    body: JSON.stringify({ email }),
+    body: JSON.stringify({ email, password: "test-password" }),
   });
   const { dev_link } = (await sent.json()) as { dev_link: string };
   const token = new URL(dev_link).searchParams.get("token");
-  const res = await app.request("/api/auth/verify", {
+  const verified = await app.request("/api/auth/verify", {
     method: "POST",
     body: JSON.stringify({ token }),
   });
+  expect(verified.status).toBe(200);
+  const res = await app.request("/api/auth/login", {
+    method: "POST", body: JSON.stringify({ email, password: "test-password" }),
+  });
+  expect(res.status).toBe(200);
   const { jwt } = (await res.json()) as { jwt: string };
   return (path: string, method = "GET", body?: unknown) =>
     app.request(`/api${path}`, {
@@ -58,8 +63,8 @@ const json = async <T = any>(res: Response) => (await res.json()) as T;
 
 describe("auth", () => {
   async function requestLink(email: string) {
-    return app.request("/api/auth/magic-link", {
-      method: "POST", body: JSON.stringify({ email }),
+    return app.request("/api/auth/signup", {
+      method: "POST", body: JSON.stringify({ email, password: "test-password" }),
     });
   }
 
@@ -197,13 +202,13 @@ describe("auth", () => {
     expect((await verify("not-a-token")).status).toBe(401);
     expect((await requestLink("not-an-email")).status).toBe(400);
     const [user] = await db.insert(schema.users).values({ email: "invalid-token@example.com" }).returning();
-    const unrecorded = await issueMagicLinkToken(user.id, crypto.randomUUID());
+    const unrecorded = await issueEmailToken(user.id, crypto.randomUUID());
     expect((await verify(unrecorded)).status).toBe(401);
-    const missingId = await issueMagicLinkToken(user.id, "");
+    const missingId = await issueEmailToken(user.id, "");
     expect((await verify(missingId)).status).toBe(401);
     const email = "different-owner@example.com";
     const [record] = await db.insert(schema.loginTokens).values({ email }).returning();
-    const mismatch = await issueMagicLinkToken(user.id, record.id);
+    const mismatch = await issueEmailToken(user.id, record.id);
     expect((await verify(mismatch)).status).toBe(401);
     const [unchanged] = await db.select().from(schema.loginTokens).where(and(
       eq(schema.loginTokens.id, record.id), eq(schema.loginTokens.email, email),
@@ -215,13 +220,13 @@ describe("auth", () => {
     expect((await app.request("/api/bookings")).status).toBe(401);
   });
 
-  it("does not accept a magic-link token as a session", async () => {
+  it("does not accept an email token as a session", async () => {
     const [user] = await db
       .insert(schema.users)
       .values({ email: "token@example.com" })
       .returning();
     const [loginToken] = await db.insert(schema.loginTokens).values({ email: user.email }).returning();
-    const token = await issueMagicLinkToken(user.id, loginToken.id);
+    const token = await issueEmailToken(user.id, loginToken.id);
     const res = await app.request("/api/bookings", {
       headers: { Authorization: `Bearer ${token}` },
     });
@@ -811,7 +816,7 @@ describe("isolation and bad input", () => {
     const call = await login("junk@example.com");
     expect((await call("/bookings/not-a-uuid")).status).toBe(404);
     expect((await call("/bookings?from=yesterday-ish")).status).toBe(400);
-    const res = await app.request("/api/auth/magic-link", { method: "POST", body: "{nope" });
+    const res = await app.request("/api/auth/signup", { method: "POST", body: "{nope" });
     expect(res.status).toBe(400);
     expect(
       (await call("/bookings", "POST", {

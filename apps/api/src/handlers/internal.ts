@@ -3,6 +3,7 @@ import { and, eq, gt, isNull, lte } from "drizzle-orm";
 import { MessageTemplate } from "@sorted/core";
 import { z } from "zod";
 import { db, schema } from "../db";
+import { publicUser } from "../lib/user";
 
 /**
  * Routes n8n calls back into. All guarded by X-Internal-Secret (see app.ts).
@@ -79,7 +80,7 @@ internalRoutes.get("/reminders", async (c) => {
         isNull(schema.bookings.reminderSentAt),
       ),
     );
-  return c.json(rows);
+  return c.json(rows.map((row) => ({ ...row, user: publicUser(row.user) })));
 });
 
 /** PATCH /api/internal/bookings/:id — n8n writes back state */
@@ -134,6 +135,7 @@ internalRoutes.get("/reviews", async (c) => {
       ),
     );
   return c.json(
-    rows.filter((row) => Boolean(row.user.reviewLink && row.client.phone)),
+    rows.filter((row) => Boolean(row.user.reviewLink && row.client.phone))
+      .map((row) => ({ ...row, user: publicUser(row.user) })),
   );
 });

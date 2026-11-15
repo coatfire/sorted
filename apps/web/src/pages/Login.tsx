@@ -1,124 +1,65 @@
-import { useEffect, useRef, useState, type FormEvent } from "react";
-import { Navigate, useNavigate, useSearchParams } from "react-router-dom";
-import { Button, Icon } from "../components";
-import { ApiError, isNetworkError, post } from "../lib/api";
-import { useSession } from "../lib/store";
+import { useState, type FormEvent } from "react";
+import { Link, Navigate, useNavigate } from "react-router-dom";
+import { Button, Field, Icon } from "../components";
+import { ApiError, isNetworkError } from "../lib/api";
+import { useSession, useStore } from "../lib/store";
+import { useValidation } from "../lib/useValidation";
+
+export function authError(error: unknown) {
+  return error instanceof ApiError ? error.message : isNetworkError(error)
+    ? "Sorted couldn't reach its server. Check your connection and try again."
+    : error instanceof Error ? error.message : "Something went wrong. Try again.";
+}
 
 export function Login() {
   const { mode, signIn, startDemo } = useSession();
+  const { authBackend: backend } = useStore();
   const [email, setEmail] = useState("");
-  const [sent, setSent] = useState<{ devLink?: string } | null>(null);
+  const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const [searchParams] = useSearchParams();
+  const validation = useValidation({});
   const navigate = useNavigate();
-  const token = searchParams.get("token");
-  const verified = useRef(false);
 
-  useEffect(() => {
-    if (!token || verified.current) return;
-    verified.current = true;
-    setLoading(true);
-    post<{ jwt: string }>("/auth/verify", { token })
-      .then(({ jwt }) => {
-        signIn(jwt);
-        navigate("/", { replace: true });
-      })
-      .catch((caught: Error) => {
-        setError(
-          isNetworkError(caught)
-            ? "Sorted couldn't reach its server. Check your connection and tap the link again."
-            : "That login link has expired or was already used. Enter your email for a fresh one.",
-        );
-        setLoading(false);
-        navigate("/login", { replace: true });
-      });
-  }, [navigate, signIn, token]);
+  if (mode === "api") return <Navigate to="/" replace />;
 
-  if (mode && !token) return <Navigate to="/" replace />;
-
-  async function submit(event: FormEvent) {
+  async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (!validation.validate(event.currentTarget)) return;
     setLoading(true);
     setError("");
     try {
-      const res = await post<{ ok: true; dev_link?: string }>("/auth/magic-link", { email });
-      setSent({ devLink: res.dev_link });
+      const { jwt, user } = await backend.login(email, password);
+      signIn(jwt);
+      navigate(!user.name || !user.businessName ? "/welcome" : "/", { replace: true });
     } catch (caught) {
-      setError(
-        caught instanceof ApiError
-          ? caught.message
-          : isNetworkError(caught)
-            ? "Sorted couldn't reach its server. Check your connection and try again."
-            : caught instanceof Error
-              ? caught.message
-              : "Couldn't send the login link.",
-      );
+      setError(authError(caught));
     } finally {
       setLoading(false);
     }
-  }
-
-  function demo() {
-    startDemo();
-    navigate("/");
-  }
-
-  if (token && loading) {
-    return (
-      <main className="login-page">
-        <div className="login-mark">S</div>
-        <h1>Logging you in…</h1>
-      </main>
-    );
   }
 
   return (
     <main className="login-page">
       <div className="login-mark">S</div>
       <p className="brand-wordmark">Sorted<span>.</span></p>
-      {!sent ? (
-        <>
-          <h1>Admin, without the accounting.</h1>
-          <p>You do the work. We’ll track the money.</p>
-          <form onSubmit={submit}>
-            <label className="field">
-              <span className="field-label">Email address</span>
-              <input
-                required
-                type="email"
-                aria-invalid={error ? true : undefined}
-                aria-describedby={error ? "login-error" : undefined}
-                value={email}
-                onChange={(event) => setEmail(event.target.value)}
-                placeholder="you@business.ie"
-                autoComplete="email"
-              />
-            </label>
-            {error && <p id="login-error" className="form-error" role="alert">{error}</p>}
-            <Button type="submit" disabled={loading}>
-              {loading ? "Sending…" : "Send me a login link"} <Icon name="arrow" />
-            </Button>
-          </form>
-          <small>No password. We email you a link.</small>
-          <button className="demo-link" onClick={demo}>Explore the demo instead</button>
-        </>
-      ) : (
-        <div className="login-sent">
-          <span className="success-mark"><Icon name="message" size={28} /></span>
-          <h1>Check your email</h1>
-          <p>
-            We sent a login link to <strong>{email}</strong>. It works for 15 minutes.
-          </p>
-          {sent.devLink && (
-            <div className="dev-note">
-              <p>Local development: no email is sent.</p>
-              <a className="button button-primary" href={sent.devLink}>Open login link</a>
-            </div>
-          )}
-          <Button onClick={() => setSent(null)} kind="quiet">Use a different email</Button>
-        </div>
-      )}
+      <h1>Admin, without the accounting.</h1>
+      <p>You do the work. We’ll track the money.</p>
+      <form onSubmit={submit} noValidate>
+        <Field label="Email address" {...validation.field("email")}>
+          <input name="email" required type="email" value={email} onChange={(event) => setEmail(event.target.value)}
+            placeholder="you@business.ie" autoComplete="email" />
+        </Field>
+        <Field label="Password" {...validation.field("password")}>
+          <input name="password" required type="password" value={password} onChange={(event) => setPassword(event.target.value)}
+            autoComplete="current-password" aria-describedby={error ? "login-error" : undefined} aria-invalid={error ? true : undefined} />
+        </Field>
+        {error && <p id="login-error" className="form-error" role="alert">{error}</p>}
+        <Button type="submit" disabled={loading}>{loading ? "Logging in…" : "Log in"} <Icon name="arrow" /></Button>
+      </form>
+      <Link className="demo-link" to="/signup">Create account</Link>
+      <Link className="demo-link" to="/forgot">Forgot password?</Link>
+      <button className="demo-link" onClick={() => { startDemo(); navigate("/"); }}>Explore the demo instead</button>
     </main>
   );
 }

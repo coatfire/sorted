@@ -1,19 +1,21 @@
-import { SignJWT, jwtVerify } from "jose";
+import { SignJWT, jwtVerify, type JWTPayload } from "jose";
 import type { MiddlewareHandler } from "hono";
 import { env } from "./env";
+import { eq } from "drizzle-orm";
+import { db, schema } from "../db";
 
 const secret = () => new TextEncoder().encode(env.jwtSecret());
 
-export async function issueJwt(userId: string): Promise<string> {
-  return new SignJWT({ sub: userId, purpose: "session" })
+export async function issueJwt(userId: string, sessionVersion: number): Promise<string> {
+  return new SignJWT({ sub: userId, purpose: "session", sv: sessionVersion })
     .setProtectedHeader({ alg: "HS256" })
     .setIssuedAt()
     .setExpirationTime("30d")
     .sign(secret());
 }
 
-export async function issueMagicLinkToken(userId: string, tokenId: string): Promise<string> {
-  return new SignJWT({ sub: userId, purpose: "magic-link" })
+export async function issueEmailToken(userId: string, tokenId: string): Promise<string> {
+  return new SignJWT({ sub: userId, purpose: "email-link" })
     .setProtectedHeader({ alg: "HS256" })
     .setJti(tokenId)
     .setIssuedAt()
@@ -21,10 +23,10 @@ export async function issueMagicLinkToken(userId: string, tokenId: string): Prom
     .sign(secret());
 }
 
-export async function verifyMagicLinkToken(token: string): Promise<{ userId: string; tokenId: string }> {
+export async function verifyEmailToken(token: string): Promise<{ userId: string; tokenId: string }> {
   const { payload } = await jwtVerify(token, secret());
-  if (payload.purpose !== "magic-link" || !payload.sub || !payload.jti) {
-    throw new Error("Invalid magic link");
+  if (payload.purpose !== "email-link" || !payload.sub || !payload.jti) {
+    throw new Error("Invalid email link");
   }
   return { userId: payload.sub, tokenId: payload.jti };
 }
@@ -36,16 +38,20 @@ export const requireAuth: MiddlewareHandler<{
   const header = c.req.header("Authorization");
   const token = header?.startsWith("Bearer ") ? header.slice(7) : null;
   if (!token) return c.json({ error: "Unauthorized" }, 401);
+  let payload: JWTPayload;
   try {
-    const { payload } = await jwtVerify(token, secret());
-    if (payload.purpose !== "session") {
-      return c.json({ error: "Unauthorized" }, 401);
-    }
-    c.set("userId", String(payload.sub));
-    await next();
+    ({ payload } = await jwtVerify(token, secret()));
   } catch {
     return c.json({ error: "Unauthorized" }, 401);
   }
+  if (payload.purpose !== "session" || !payload.sub || !Number.isInteger(payload.sv)) {
+    return c.json({ error: "Unauthorized" }, 401);
+  }
+  const [user] = await db.select({ sessionVersion: schema.users.sessionVersion })
+    .from(schema.users).where(eq(schema.users.id, payload.sub));
+  if (!user || user.sessionVersion !== payload.sv) return c.json({ error: "Unauthorized" }, 401);
+  c.set("userId", payload.sub);
+  await next();
 };
 
 /** For /internal/* routes called by n8n. */
