@@ -281,6 +281,12 @@ export const demoBackend: Backend = {
     const booking = mustFind(data().bookings, bookingId, "Booking");
     if (booking.status === "completed" || booking.status === "cancelled") throw new Error(`A ${booking.status} booking can't be edited`);
     if (draft.followUpOn != null && booking.status !== "enquiry") throw new Error("Only enquiries can have a follow-up date");
+    if (draft.priceCents !== undefined && draft.priceCents !== booking.priceCents) {
+      const owedCents = draft.priceCents - paidFor(bookingId);
+      if (owedCents < 0) throw new Error("The price can't be less than the amount already paid.");
+      const pending = data().payments.filter(payment => payment.bookingId === bookingId && payment.status === "pending");
+      if (!(pending.length === 1 && pending[0].amountCents === owedCents)) voidPending(bookingId);
+    }
     Object.assign(booking, draft);
     save();
   },

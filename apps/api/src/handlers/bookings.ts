@@ -330,7 +330,7 @@ bookingRoutes.patch("/:id", async (c) => {
   if (!parsed.success) return c.json({ error: parsed.error.flatten() }, 400);
   const input = parsed.data;
   const userId = c.get("userId");
-  return userTransaction(userId, async (tx) => {
+  const result = await userTransaction(userId, async (tx) => {
     const [current] = await tx
       .select()
       .from(schema.bookings)
@@ -364,9 +364,20 @@ bookingRoutes.patch("/:id", async (c) => {
     }
     const priceCents = input.price_cents ?? current.priceCents;
     const depositCents = input.deposit_cents ?? current.depositCents;
+    const payments = priceCents !== current.priceCents
+      ? await tx.select().from(schema.payments).where(and(eq(schema.payments.bookingId, current.id), eq(schema.payments.userId, userId))).orderBy(schema.payments.id).for("update")
+      : null;
+    const paidCents = payments?.filter(payment => payment.status === "paid").reduce((sum, payment) => sum + payment.amountCents, 0) ?? 0;
+    if (payments && priceCents < paidCents) {
+      return c.json({ error: "The price can't be less than the amount already paid." }, 409);
+    }
     if (depositCents > priceCents) {
       return c.json({ error: "Deposit cannot exceed price" }, 400);
     }
+    const pending = payments?.filter(payment => payment.status === "pending");
+    const voided = pending && !(pending.length === 1 && pending[0].amountCents === priceCents - paidCents)
+      ? await tx.update(schema.payments).set({ status: "cancelled" }).where(and(eq(schema.payments.bookingId, current.id), eq(schema.payments.userId, userId), eq(schema.payments.status, "pending"))).returning({ linkId: schema.payments.stripePaymentLinkId })
+      : [];
     const [booking] = await tx
       .update(schema.bookings)
       .set({
@@ -381,8 +392,11 @@ bookingRoutes.patch("/:id", async (c) => {
       })
       .where(and(eq(schema.bookings.id, current.id), eq(schema.bookings.userId, c.get("userId"))))
       .returning();
-    return c.json(booking);
+    return { booking, voided };
   });
+  if (result instanceof Response) return result;
+  for (const payment of result.voided) if (payment.linkId) await deactivatePaymentLink(payment.linkId);
+  return c.json(result.booking);
 });
 
 /** POST /api/bookings/:id/complete — confirmed → completed */
