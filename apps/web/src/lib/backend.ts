@@ -9,6 +9,7 @@ import type {
   User,
   BookingDocument,
   DocumentKind,
+  RecordPaymentInput,
 } from "@sorted/core";
 
 export type BookingRow = Booking & { client: Client };
@@ -68,6 +69,7 @@ export interface Backend {
   /** Creates (or returns the existing) payment link URL. */
   paymentLink(paymentId: string): Promise<string>;
   markPaid(paymentId: string, method: "cash" | "bank_transfer"): Promise<void>;
+  recordPayment(bookingId: string, input: RecordPaymentInput): Promise<void>;
   createExpense(draft: ExpenseDraft): Promise<void>;
   updateExpense(id: string, draft: ExpenseDraft): Promise<void>;
   deleteExpense(id: string): Promise<void>;

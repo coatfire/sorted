@@ -155,6 +155,18 @@ Stacked sections:
   kind · chip, and per-pending-row buttons `[Send payment link] [Mark paid]`.
   "Mark paid" opens a sheet: Cash / Bank transfer. Header line: "€120 of
   €350 paid".
+- **Record payment:** confirmed/completed bookings with money owed offer a
+  44px-minimum button opening a Sheet with a euro-prefixed decimal amount
+  (defaults to all outstanding), method (Cash / Bank transfer / Revolut), and
+  date (defaults to today in Ireland; no future dates). Validate on blur,
+  clear errors on edit, focus the first invalid field on submit. Success:
+  "Payment recorded". Custom rows are labelled "Payment" and each can have
+  its own Receipt. At paid ≥ price show **Paid in full** and hide the button.
+- **Request payment:** the manual-draft Sheet has an editable **Amount to
+  request**, initially the balance, from €0.01 to the balance. The draft's
+  balance placeholder uses this amount. Include a pending payment link only
+  when its amount matches the requested amount; disable draft actions for
+  invalid amounts. Manual drafts are never logged as sent.
 - **Messages (M3):** timeline of message_log rows — "✓ Confirmation sent
   Tue 14:02 · ✓ Reminder sent Fri 10:00". Failed sends show `--danger` with
   the reason. This card is what makes the automation trustworthy — the

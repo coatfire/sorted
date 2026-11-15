@@ -17,13 +17,59 @@ import {
   UpdateBookingInput,
   CreateDocumentInput,
   snapshotReceipt,
+  RecordPaymentInput,
+  paymentPaidAt,
 } from "@sorted/core";
 import { db, schema } from "../db";
 import { emitBookingEvent, emitEvent } from "../lib/events";
 import { deactivatePaymentLink } from "../lib/stripe";
+import { effectivePaymentVatRate } from "../lib/tax";
 import type { AppEnv } from "../app";
 
 export const bookingRoutes = new Hono<AppEnv>();
+
+bookingRoutes.post("/:id/payments", async (c) => {
+  const parsed = RecordPaymentInput.safeParse(await c.req.json());
+  if (!parsed.success) return c.json({ error: parsed.error.flatten() }, 400);
+  const userId = c.get("userId");
+  const bookingId = c.req.param("id");
+  const result = await db.transaction(async (tx) => {
+    const [booking] = await tx.select().from(schema.bookings).where(and(
+      eq(schema.bookings.id, bookingId), eq(schema.bookings.userId, userId),
+    )).for("update");
+    if (!booking) return c.json({ error: "Booking not found" }, 404);
+    if (booking.status !== "confirmed" && booking.status !== "completed") {
+      return c.json({ error: "Payments can only be recorded for confirmed or completed bookings." }, 409);
+    }
+    const payments = await tx.select().from(schema.payments).where(and(
+      eq(schema.payments.bookingId, bookingId), eq(schema.payments.userId, userId),
+    )).for("update");
+    const outstanding = booking.priceCents - payments.filter((payment) => payment.status === "paid").reduce((sum, payment) => sum + payment.amountCents, 0);
+    if (parsed.data.amount_cents > outstanding) {
+      const owed = new Intl.NumberFormat("en-IE", { style: "currency", currency: "EUR" }).format(Math.max(0, outstanding) / 100);
+      return c.json({ error: `That's more than the ${owed} still owed.` }, 400);
+    }
+    const [payment] = await tx.insert(schema.payments).values({
+      userId, bookingId, kind: "custom", status: "paid", amountCents: parsed.data.amount_cents,
+      method: parsed.data.method, paidAt: paymentPaidAt(parsed.data.paid_on), vatRateBp: effectivePaymentVatRate(userId),
+    }).returning();
+    const voided = await tx.update(schema.payments).set({ status: "cancelled" }).where(and(
+      eq(schema.payments.bookingId, bookingId), eq(schema.payments.userId, userId), eq(schema.payments.status, "pending"),
+    )).returning({ linkId: schema.payments.stripePaymentLinkId, createdAt: schema.payments.createdAt });
+    const remainder = outstanding - payment.amountCents;
+    if (booking.status === "completed" && remainder > 0) {
+      const createdAt = voided.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime())[0]?.createdAt ?? booking.completedAt ?? undefined;
+      await tx.insert(schema.payments).values({ userId, bookingId, kind: "balance", amountCents: remainder, createdAt });
+    }
+    return { payment, booking, voided };
+  });
+  if (result instanceof Response) return result;
+  for (const { linkId } of result.voided) if (linkId) await deactivatePaymentLink(linkId);
+  await emitBookingEvent(userId, bookingId, "payment.paid", {
+    id: result.payment.id, kind: result.payment.kind, amountCents: result.payment.amountCents, linkUrl: result.payment.linkUrl,
+  });
+  return c.json({ payment: result.payment, booking: result.booking }, 201);
+});
 
 bookingRoutes.post("/:id/documents", async (c) => {
   const parsed = CreateDocumentInput.safeParse(await c.req.json());

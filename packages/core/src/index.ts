@@ -4,3 +4,4 @@ export * from "./bank";
 export * from "./bookingMessages";
 export * from "./documents";
 export * from "./tax";
+export * from "./recordPayment";
