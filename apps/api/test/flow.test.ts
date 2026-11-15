@@ -454,6 +454,17 @@ describe("payment link safety", () => {
     const { call, booking, paymentId } = await pendingDeposit();
     configureStripe();
     await call(`/payments/${paymentId}/link`, "POST");
+    let committed = false;
+    const transaction: typeof db.transaction = db.transaction.bind(db);
+    vi.spyOn(db, "transaction").mockImplementationOnce(async (callback, config) => {
+      const result = await transaction(callback, config);
+      committed = true;
+      return result;
+    });
+    stripe.updateLink.mockImplementation(async () => {
+      expect(committed).toBe(true);
+      return {};
+    });
     const response = await call(`/bookings/${booking.id}/${action}`, "POST");
     expect(response.status).toBe(200);
     expect(stripe.updateLink).toHaveBeenCalledWith("plink_test", { active: false });
@@ -464,6 +475,28 @@ describe("payment link safety", () => {
     } else {
       expect(await json(response)).toMatchObject({ id: booking.id, status: "cancelled" });
     }
+  });
+
+  it.each(["complete", "cancel"])("does not deactivate links when %s rolls back", async (action) => {
+    const { call, booking, paymentId } = await pendingDeposit();
+    configureStripe();
+    await call(`/payments/${paymentId}/link`, "POST");
+    const transaction: typeof db.transaction = db.transaction.bind(db);
+    vi.spyOn(db, "transaction").mockImplementationOnce((callback, config) =>
+      transaction(async (tx) => {
+        await callback(tx);
+        throw new Error("forced rollback");
+      }, config),
+    );
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    expect((await call(`/bookings/${booking.id}/${action}`, "POST")).status).toBe(500);
+    expect(stripe.updateLink).not.toHaveBeenCalled();
+    const detail = await json<{ booking: { status: string }; payments: { status: string }[] }>(
+      await call(`/bookings/${booking.id}`),
+    );
+    expect(detail.booking.status).toBe("confirmed");
+    expect(detail.payments).toHaveLength(1);
+    expect(detail.payments[0].status).toBe("pending");
   });
 
   it("does nothing without a key and never throws on deactivation failure", async () => {
