@@ -155,6 +155,31 @@ describe("password auth", () => {
     expect(responses.map((response) => response.status).sort()).toEqual([200, 401]);
   });
 
+  it("revokes old sessions after reset and accepts only the new session version", async () => {
+    const address = email();
+    const first = await session(await post("verify", { token: await token(await signup(address)) }));
+    const second = await session(await login(address));
+    const me = (jwt: string) => app.request("/api/auth/me", { headers: { Authorization: `Bearer ${jwt}` } });
+    expect((await me(first.jwt)).status).toBe(200);
+    const reset = await token(await post("forgot", { email: address }));
+    const fresh = await session(await post("reset", { token: reset, password: nextPassword }));
+    expect((await me(first.jwt)).status).toBe(401);
+    expect((await me(second.jwt)).status).toBe(401);
+    expect((await me(fresh.jwt)).status).toBe(200);
+    expect((await me((await session(await login(address, nextPassword))).jwt)).status).toBe(200);
+    const [user] = await db.select().from(schema.users).where(eq(schema.users.id, first.user.id));
+    expect(user.sessionVersion).toBe(1);
+  });
+
+  it("rejects unversioned sessions and sessions for missing users", async () => {
+    const [user] = await db.insert(schema.users).values({ email: email() }).returning();
+    const legacy = await new SignJWT({ sub: user.id, purpose: "session" })
+      .setProtectedHeader({ alg: "HS256" }).setExpirationTime("30d").sign(new TextEncoder().encode(env.jwtSecret()));
+    for (const jwt of [legacy, await issueJwt(crypto.randomUUID(), 0), await issueJwt(user.id, 1)]) {
+      expect((await app.request("/api/auth/me", { headers: { Authorization: `Bearer ${jwt}` } })).status).toBe(401);
+    }
+  });
+
   it("omits password hashes from internal reminder and review responses too", async () => {
     vi.spyOn(env, "internalSecret").mockReturnValue("test-internal-secret");
     const address = email();

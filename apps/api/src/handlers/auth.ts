@@ -94,7 +94,7 @@ authRoutes.post("/login", async (c) => {
   });
   if (result === "limited") return c.json({ error: "Too many login attempts. Try again in 15 minutes." }, 429);
   if (!result) return c.json({ error: "Email or password is incorrect." }, 401);
-  return c.json({ jwt: await issueJwt(result.id), user: publicUser(result) });
+  return c.json({ jwt: await issueJwt(result.id, result.sessionVersion), user: publicUser(result) });
 });
 
 for (const purpose of ["verify", "reset"] as const) {
@@ -123,11 +123,12 @@ for (const purpose of ["verify", "reset"] as const) {
       ));
       const [updated] = await tx.update(schema.users).set({
         passwordHash, emailVerifiedAt: user.emailVerifiedAt ?? new Date(),
+        sessionVersion: purpose === "reset" ? user.sessionVersion + 1 : user.sessionVersion,
       }).where(eq(schema.users.id, user.id)).returning();
       return updated;
     });
     if (!result) return c.json({ error: invalidLink }, 401);
-    return c.json({ jwt: await issueJwt(result.id), user: publicUser(result) });
+    return c.json({ jwt: await issueJwt(result.id, result.sessionVersion), user: publicUser(result) });
   });
 }
 

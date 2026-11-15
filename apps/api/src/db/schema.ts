@@ -64,6 +64,7 @@ export const users = pgTable("users", {
   id: uuid("id").primaryKey().defaultRandom(),
   email: text("email").notNull().unique(),
   passwordHash: text("password_hash"),
+  sessionVersion: integer("session_version").notNull().default(0),
   emailVerifiedAt: timestamp("email_verified_at", { withTimezone: true }),
   address: text("address"),
   iban: text("iban"),
