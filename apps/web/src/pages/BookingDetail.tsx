@@ -130,6 +130,7 @@ export function BookingDetail() {
         </Button>
       )}
 
+      {booking.status === "enquiry" && <Button disabled={documentBusy} onClick={() => document("quote")}>Quote</Button>}
       <div className="action-pair">
         <Button kind="quiet" disabled={documentBusy} onClick={() => document("invoice")}>Invoice</Button>
         <Button kind="quiet" disabled={documentBusy || !hasPaidPayment} aria-describedby={!hasPaidPayment ? "receipt-unavailable" : undefined} onClick={() => {
@@ -138,6 +139,7 @@ export function BookingDetail() {
         }}>Receipt</Button>
       </div>
       {!hasPaidPayment && <p className="sheet-copy" id="receipt-unavailable">Record a payment to create a receipt.</p>}
+      {booking.status !== "enquiry" && <Button kind="soft" onClick={() => navigate(`/bookings/new?again=${booking.id}`)}>Book again</Button>}
 
       {booking.notes && (
         <Card className="notes-card">

@@ -21,6 +21,20 @@ const document: BookingDocument = { id: "document", bookingId: booking.id, kind:
 const paid: Payment = { id: "paid", bookingId: booking.id, kind: "deposit", status: "paid", amountCents: 2000, paidAt: "2026-07-01T12:00:00Z", method: "bank_transfer", linkUrl: null, createdAt: user.createdAt, vatRateBp: null };
 
 describe("document data", () => {
+  it("assembles quotes with current prices, stable numbering, Dublin validity date, deposit and inclusive VAT", () => {
+    const quote: BookingDocument = { ...document, kind: "quote", vatRateBp: 2300, issuedAt: "2026-03-14T23:30:00Z" };
+    const enquiry = { ...booking, status: "enquiry" as const, priceCents: 12300 };
+    const data = assembleBookingDocument({ ...user, vatRegistered: true, vatRateBp: 2300 }, enquiry, client, [], quote);
+    expect(data).toMatchObject({ title: "Quote", number: "QTE-0001", issuedDate: "14 Mar 2026", validUntil: "13 Apr 2026", total: "€123.00", deposit: "€20.00", confirmationLine: "To go ahead, just reply to confirm.", iban: null, bic: null });
+    expect(data.vat).toEqual({ rate: "23%", net: "€100.00", amount: "€23.00", total: "€123.00" });
+    const changed = assembleBookingDocument(user, { ...enquiry, priceCents: 24600 }, client, [], quote);
+    expect(changed).toMatchObject({ number: data.number, issuedDate: data.issuedDate, validUntil: data.validUntil, total: "€246.00" });
+    expect(changed.vat?.total).toBe("€246.00");
+    const noDeposit = assembleBookingDocument(user, { ...enquiry, depositCents: 0 }, client, [], { ...quote, vatRateBp: null });
+    expect(noDeposit.deposit).toBeNull();
+    expect(noDeposit.vat).toBeNull();
+    expect(assembleBookingDocument(user, enquiry, client, [], { ...quote, issuedAt: "2026-07-01T23:30:00Z" }).validUntil).toBe("01 Aug 2026");
+  });
   it("prefers a payment's captured VAT rate for receipts, including zero before registration", () => {
     const registered = { ...user, vatRegistered: true, vatRateBp: 2300 };
     expect(snapshotReceipt(booking, [{ ...paid, vatRateBp: 900 }], paid.id, document.issuedAt, registered).vatRateBp).toBe(900);

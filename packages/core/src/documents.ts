@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { Booking, Client, Payment, User } from "./types";
 import { inclusiveVat } from "./tax";
+import { addCalendarDays, dublinDateTime } from "./dates";
 
 export const DEFAULT_INVOICE_ACCENT = "#14532D";
 export const MAX_LOGO_BYTES = 300 * 1024;
@@ -14,7 +15,7 @@ export const InvoiceAccent = z.string().regex(/^#(?:[\da-f]{3}|[\da-f]{6})$/i, "
   .transform((value) => (value.length === 4 ? `#${[...value.slice(1)].map((c) => c + c).join("")}` : value).toUpperCase());
 export const IrishVatNumber = z.string().transform((value) => value.replace(/\s/g, "").toUpperCase())
   .refine((value) => /^IE\d{7}[A-Z]{1,2}$/.test(value), "Enter a valid Irish VAT number.");
-export const DocumentKind = z.enum(["invoice", "receipt"]);
+export const DocumentKind = z.enum(["invoice", "receipt", "quote"]);
 export type DocumentKind = z.infer<typeof DocumentKind>;
 export const CreateDocumentInput = z.object({ kind: DocumentKind, payment_id: z.string().uuid().optional() })
   .refine((input) => input.kind !== "receipt" || !!input.payment_id, { message: "Choose a paid payment for this receipt.", path: ["payment_id"] });
@@ -57,13 +58,14 @@ export interface BookingDocument {
 }
 
 export const documentNumber = (kind: DocumentKind, number: number) =>
-  `${kind === "invoice" ? "INV" : "RCT"}-${String(number).padStart(4, "0")}`;
+  `${kind === "invoice" ? "INV" : kind === "quote" ? "QTE" : "RCT"}-${String(number).padStart(4, "0")}`;
 
 export function assembleBookingDocument(user: User, booking: Booking, client: Client, payments: readonly Payment[], document: BookingDocument) {
   if (document.bookingId !== booking.id || booking.clientId !== client.id) throw new Error("Document does not match this booking.");
   const received = payments.filter((payment) => payment.bookingId === booking.id && payment.status === "paid")
     .slice().sort((a, b) => (a.paidAt ?? a.createdAt).localeCompare(b.paidAt ?? b.createdAt));
   const receipt = document.kind === "receipt";
+  const quote = document.kind === "quote";
   const snapshot = receipt ? document.receiptSnapshot : null;
   if (receipt && (!document.paymentId || !snapshot)) throw new Error("Choose a paid payment for this receipt.");
   const paid = snapshot ? snapshot.payment.amountCents : received.reduce((sum, payment) => sum + payment.amountCents, 0);
@@ -78,9 +80,12 @@ export function assembleBookingDocument(user: User, booking: Booking, client: Cl
   const methods = { cash: "Cash", bank_transfer: "Bank transfer", stripe: "Card", revolut: "Revolut" };
   return {
     kind: document.kind,
-    title: receipt ? "Receipt" : "Invoice",
+    title: receipt ? "Receipt" : quote ? "Quote" : "Invoice",
     number: documentNumber(document.kind, document.number),
     issuedDate: date(document.issuedAt),
+    validUntil: quote ? date(`${addCalendarDays(dublinDateTime(document.issuedAt).date, 30)}T12:00:00Z`) : null,
+    deposit: quote && booking.depositCents > 0 ? money(booking.depositCents) : null,
+    confirmationLine: quote ? "To go ahead, just reply to confirm." : null,
     bookingDate: date(snapshot?.bookingDate ?? booking.startAt),
     business: {
       name: user.businessName || user.name || "Your business", address: user.address,
@@ -96,8 +101,8 @@ export function assembleBookingDocument(user: User, booking: Booking, client: Cl
     bookingTotal: money(bookingTotal),
     paidToDate: money(paid),
     balanceDue: money(snapshot?.balanceDueCents ?? Math.max(0, bookingTotal - paid)),
-    iban: receipt ? null : user.iban,
-    bic: receipt ? null : user.bic,
+    iban: receipt || quote ? null : user.iban,
+    bic: receipt || quote ? null : user.bic,
     payments: (snapshot ? [{ ...snapshot.payment, paidAt: snapshot.payment.date, createdAt: snapshot.payment.date }] : received).map((payment) => ({
       date: date(payment.paidAt ?? payment.createdAt), amount: money(payment.amountCents),
       method: payment.method ? methods[payment.method] : "Payment",

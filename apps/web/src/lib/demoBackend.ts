@@ -5,7 +5,7 @@
  * payment links are simulated — nothing leaves the browser.
  */
 import type { Client, Expense, MessageLogEntry, Payment, BookingDocument } from "@sorted/core";
-import { snapshotReceipt, TaxSettings, ConfirmExpenseInput, RecordPaymentInput, paymentPaidAt, irelandToday, addCalendarDays, CalendarDate } from "@sorted/core";
+import { snapshotReceipt, TaxSettings, ConfirmExpenseInput, RecordPaymentInput, paymentPaidAt, irelandToday, addCalendarDays, CalendarDate, shiftDublinWeeks, RepeatInput } from "@sorted/core";
 import type { Backend, BookingRow, Snapshot } from "./backend";
 import { blobToDataUrl } from "./image";
 
@@ -207,16 +207,17 @@ export const demoBackend: Backend = {
   async document(bookingId, kind, paymentId) {
     const d = data();
     const booking = mustFind(d.bookings, bookingId, "Booking");
+    if (kind === "quote" && booking.status !== "enquiry") throw new Error("Quotes are only available for enquiries.");
     if (kind === "receipt" && !d.payments.some((payment) => payment.id === paymentId && payment.bookingId === bookingId && payment.status === "paid")) {
       throw new Error("Choose a paid payment for this receipt.");
     }
     const documents = d.documents ??= [];
-    const existing = documents.find((document) => document.bookingId === bookingId && document.kind === kind && (kind === "invoice" || document.paymentId === paymentId));
+    const existing = documents.find((document) => document.bookingId === bookingId && document.kind === kind && (kind !== "receipt" || document.paymentId === paymentId));
     if (existing) return structuredClone(existing);
     const issuedAt = now();
     const document: BookingDocument = {
       id: id(), bookingId, kind, issuedAt,
-      vatRateBp: kind === "invoice" ? d.user.vatRegistered ? d.user.vatRateBp : 0 : null,
+      vatRateBp: kind !== "receipt" ? d.user.vatRegistered ? d.user.vatRateBp : 0 : null,
       paymentId: kind === "receipt" ? paymentId! : null,
       receiptSnapshot: kind === "receipt" ? snapshotReceipt(booking, d.payments, paymentId!, issuedAt, d.user) : null,
       number: Math.max(0, ...documents.filter((item) => item.kind === kind).map((item) => item.number)) + 1,
@@ -238,6 +239,8 @@ export const demoBackend: Backend = {
 
   async createBooking(draft) {
     if (draft.followUpOn != null) CalendarDate.parse(draft.followUpOn);
+    const repeat = draft.repeat ? RepeatInput.parse({ every_weeks: draft.repeat.everyWeeks, count: draft.repeat.count }) : null;
+    const dates = Array.from({ length: repeat?.count ?? 1 }, (_, index) => shiftDublinWeeks(draft.startAt, index * (repeat?.every_weeks ?? 1)).toISOString());
     const d = data();
     let client: Client;
     if (draft.clientId) client = mustFind(d.clients, draft.clientId, "Client");
@@ -248,16 +251,16 @@ export const demoBackend: Backend = {
       };
       d.clients.unshift(client);
     }
-    const booking: BookingRow = {
-      id: id(), clientId: client.id, client, service: draft.service, startAt: draft.startAt,
+    const bookings: BookingRow[] = dates.map((startAt, index) => ({
+      id: id(), clientId: client.id, client, service: draft.service, startAt,
       endAt: null, priceCents: draft.priceCents, depositCents: draft.depositCents,
       status: "enquiry", location: draft.location, notes: draft.notes, gcalEventId: null,
       completedAt: null, createdAt: now(),
-      followUpOn: draft.followUpOn === undefined ? addCalendarDays(irelandToday(), 2) : draft.followUpOn, paymentRequestedAt: null,
-    };
-    d.bookings.push(booking);
+      followUpOn: index === 0 ? draft.followUpOn === undefined ? addCalendarDays(irelandToday(), 2) : draft.followUpOn : null, paymentRequestedAt: null,
+    }));
+    d.bookings.push(...bookings);
     save();
-    return { id: booking.id };
+    return { id: bookings[0].id, seriesCount: bookings.length };
   },
 
   async updateBooking(bookingId, draft) {

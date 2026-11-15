@@ -450,6 +450,9 @@ input::placeholder, textarea::placeholder { color: #6f746d; }
   font-weight: 600;
 }
 .filter-row, .receipt-form-card .category-row { margin-top: 0; }
+.repeat-week-chips { display: flex; flex-wrap: wrap; gap: 7px; }
+.repeat-week-chips button { flex: 1; min-height: 44px; padding: 5px 9px; border: 1px solid var(--line); border-radius: 99px; background: #fff; color: var(--ink); cursor: pointer; font-size: 0.8rem; }
+.repeat-week-chips button[aria-pressed="true"] { background: var(--brand); border-color: var(--brand); color: #fff; }
 .category-row button.active {
   border-color: var(--brand);
   background: var(--brand);

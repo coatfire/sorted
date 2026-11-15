@@ -257,11 +257,12 @@ export const invoices = pgTable("invoices", {
   bookingId: uuid("booking_id").notNull(),
   paymentId: uuid("payment_id"),
   receiptSnapshot: jsonb("receipt_snapshot").$type<ReceiptSnapshot>(),
-  kind: text("kind").$type<"invoice" | "receipt">().notNull(),
+  kind: text("kind").$type<"invoice" | "receipt" | "quote">().notNull(),
   number: integer("number").notNull(),
   issuedAt: timestamp("issued_at", { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [
   uniqueIndex("invoices_user_kind_number_idx").on(t.userId, t.kind, t.number),
   uniqueIndex("invoices_user_booking_invoice_idx").on(t.userId, t.bookingId).where(sql`${t.kind} = 'invoice'`),
+  uniqueIndex("invoices_user_booking_quote_idx").on(t.userId, t.bookingId).where(sql`${t.kind} = 'quote'`),
   uniqueIndex("invoices_user_payment_receipt_idx").on(t.userId, t.paymentId).where(sql`${t.kind} = 'receipt'`),
 ]);
