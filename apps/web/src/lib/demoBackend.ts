@@ -112,7 +112,7 @@ function seed(): DemoData {
       invoiceLogo: null, invoiceAccent: null, invoiceFooter: null, vatNumber: null,
       vatRegistered: false, vatRateBp: null, vatPeriodMonths: 2, incomeTaxRateBp: null,
     },
-    features: { automation: true, paymentLinks: true },
+    features: { automation: true, paymentLinks: true, googleSignIn: false },
     clients: [sarah, aoife, emma, ryan, niamh, laura],
     bookings: [...Object.values(b), ...history.map((h) => h.past)],
     payments: [
@@ -202,6 +202,9 @@ const voidPending = (bookingId: string) => {
 const csvCell = (value: unknown) => `"${String(value ?? "").replaceAll('"', '""')}"`;
 
 export const demoBackend: Backend = {
+  async health() { return { ok: true, features: { automation: true, paymentLinks: true, googleSignIn: false } }; },
+  googleStart() { throw new Error("Available when you sign in"); },
+  async googleExchange() { throw new Error("Available when you sign in"); },
   async calendar() { throw new Error("Available when you sign in"); },
   async resetCalendar() { throw new Error("Available when you sign in"); },
   async document(bookingId, kind, paymentId) {

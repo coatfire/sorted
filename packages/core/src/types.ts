@@ -297,6 +297,7 @@ export interface MessageLogEntry {
 export interface Health {
   ok: true;
   features: {
+    googleSignIn: boolean;
     /** n8n webhook configured → confirmations/reminders actually send */
     automation: boolean;
     /** Stripe key configured → payment links can be created */

@@ -9,10 +9,53 @@ responses are DB rows with camelCase keys (interfaces in the same file). This
 doc lists routes and semantics; the schemas are the source of truth for fields.
 Errors are `{ "error": "message" }` (or a zod `flatten()` object for 400s).
 
-`GET /health` (no auth) → `{ ok, features: { automation, paymentLinks } }` —
+`GET /health` (no auth) → `{ ok, features: { automation, paymentLinks, googleSignIn } }` —
 which integrations are configured, so the UI only offers what works.
 
 ## Auth
+
+### Google sign-in (optional)
+
+Only enabled when both `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` are set;
+otherwise `features.googleSignIn` is false and start/exchange return 404.
+
+- `GET /auth/google/start`: full-page redirect to Google's OpenID Connect
+  authorization endpoint (`openid email profile`, account selection, S256 PKCE).
+  A signed, HttpOnly, Secure, SameSite=Lax cookie holds state, nonce and verifier
+  for ten minutes, scoped to `/api/auth/google`. Redirect URI is
+  `{API_URL or APP_URL}/api/auth/google/callback`.
+- `GET /auth/google/callback`: clears the cookie, checks state, exchanges the
+  authorization code and verifies Google's RS256 ID token against Google's
+  JWKS, accepted Google issuers, client audience, expiry and nonce. Email must
+  be verified. Resolves Google subject first, then case-insensitive email;
+  links that account and verifies it, or creates a verified passwordless user.
+  Existing passwords are untouched. An account linked to a different Google
+  subject is not reassigned.
+- Success redirects to `{APP_URL}/login/google?code=…` with an opaque single-use
+  two-minute code, **never a session JWT**. Only its SHA-256 hash is stored in
+  `login_codes`, bound to the user's session version. The callback also generates
+  a random browser binding: its SHA-256 hash is stored alongside the code, and
+  the value is put in a separate HttpOnly, Secure, SameSite=Lax cookie scoped
+  to `/api/auth/google` for 120 seconds.
+- `POST /auth/google/exchange`, body `{code}`, requires that browser-binding
+  cookie and atomically consumes a code only when both hashes match, then clears
+  the binding cookie and returns the usual `{jwt,user}`. The web explicitly sends
+  credentials on this request (the production API and web share an origin).
+  Missing or mismatched cookies return the same generic 401 without consuming
+  the code, so forwarding a login link cannot sign another browser in.
+  Invalid, expired, used or revoked codes also return 401. Pre-0013 codes with
+  no binding are rejected; restart Google sign-in to obtain a bound code.
+  Start and exchange each allow ten attempts per proxy-reported IP per fifteen
+  minutes; exchange returns 429 when limited. Deploy behind a trusted proxy
+  which sets `X-Forwarded-For` (otherwise callers share the fallback limit).
+
+Callback/start failures redirect to `{APP_URL}/login?error=google`. The web
+also redirects there on exchange failure. OAuth routes use no-store and
+no-referrer headers and are excluded from request logging; provider responses,
+tokens, credentials and codes are never logged. Public user responses omit
+the Google subject. New users complete the existing profile onboarding.
+
+### Email and password
 | Method | Path                | Notes |
 |--------|---------------------|-------|
 | POST   | /auth/signup        | body `{email,password}` → `{ok:true}`; emails a 15-min verification link, or an account reminder with `/forgot` for existing verified accounts |

@@ -4,6 +4,7 @@ import { Button, Field, Icon } from "../components";
 import { useSession, useStore } from "../lib/store";
 import { useValidation } from "../lib/useValidation";
 import { authError } from "./Login";
+import { GoogleSignIn } from "../GoogleSignIn";
 
 function AccountPage({ children }: { children: ReactNode }) {
   return <main className="login-page">
@@ -68,6 +69,7 @@ function PasswordForm({ reset = false }: { reset?: boolean }) {
     {sent ? <CheckEmail email={email} devLink={sent.dev_link} /> : <>
       <h1>{reset ? "Choose a new password" : "Create your account"}</h1>
       <p>{reset ? "Make it one you haven’t used before." : "A little less admin starts here."}</p>
+      {!reset && <GoogleSignIn />}
       <form onSubmit={submit} noValidate>
         {!reset && <Field label="Email address" {...validation.field("email")}>
           <input name="email" type="email" required autoComplete="email" placeholder="you@business.ie"
@@ -152,4 +154,27 @@ export function Verify() {
       <Link className="button button-primary" to="/signup">Ask for a new link</Link>
     </> : <h1>Verifying your email…</h1>}
   </AccountPage>;
+}
+
+export function GoogleLogin() {
+  const { authBackend: backend } = useStore();
+  const { mode, signIn } = useSession();
+  const [params] = useSearchParams();
+  const code = useRef(params.get("code"));
+  const attempted = useRef(false);
+  const navigate = useNavigate();
+  useEffect(() => {
+    if (attempted.current) return;
+    attempted.current = true;
+    window.history.replaceState(null, "", "/login/google");
+    if (!code.current || mode === "demo") {
+      navigate("/login?error=google", { replace: true });
+      return;
+    }
+    backend.googleExchange(code.current).then(({ jwt, user }) => {
+      signIn(jwt);
+      navigate(!user.name || !user.businessName ? "/welcome" : "/", { replace: true });
+    }).catch(() => navigate("/login?error=google", { replace: true }));
+  }, [backend, mode, navigate, signIn]);
+  return <AccountPage><h1>Signing you in…</h1></AccountPage>;
 }

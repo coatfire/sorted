@@ -17,7 +17,25 @@ receivable"; "Owed to you", never "Outstanding invoices".
 
 ---
 
+## Authentication
+
+### Optional Google sign-in
+
+Login and Signup show **Continue with Google** above the email/password form
+only when `/api/health` reports `features.googleSignIn: true`. Use a white
+48px-minimum button, the standard coloured Google G on white, neutral border
+and dark label. The entire button is one tap target and performs a full-page
+navigation to the API start route. Never show it in demo mode or when disabled;
+email/password remains available without the integration.
+
+`/login/google` shows **Signing you in…**, removes the exchange code from browser
+history and swaps it once for a session through the backend. Existing profiles
+go to Today; new/incomplete profiles go to the same profile step as email signup.
+Failures return to Login with **Couldn't sign in with Google. Try again or use
+your email.** No Google SDK, account picker or provider tokens run in the app.
+
 ## Design tokens
+
 
 Already seeded in `apps/web/src/styles.css`; this is the fuller system to
 grow into (M8 polish, but use these values from M1 so there's no repaint).

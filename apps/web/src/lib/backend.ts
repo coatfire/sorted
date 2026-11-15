@@ -56,6 +56,9 @@ export interface ExpenseDraft {
  * try-before-you-sign-up demo). Pages never know which one they have.
  */
 export interface Backend {
+  health(): Promise<Health>;
+  googleStart(): void;
+  googleExchange(code: string): Promise<{ jwt: string; user: User }>;
   calendar(): Promise<CalendarLinks>;
   resetCalendar(): Promise<CalendarLinks>;
   signup(email: string, password: string): Promise<{ ok: true; dev_link?: string }>;

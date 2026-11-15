@@ -34,4 +34,7 @@ export const env = {
   stripeWebhookSecret: () => process.env.STRIPE_WEBHOOK_SECRET || undefined,
   resendKey: () => process.env.RESEND_API_KEY || undefined,
   emailFrom: () => process.env.EMAIL_FROM || "Sorted <login@sorted.app>",
+  googleClientId: () => process.env.GOOGLE_CLIENT_ID || undefined,
+  googleClientSecret: () => process.env.GOOGLE_CLIENT_SECRET || undefined,
+  googleSignIn: () => Boolean(env.googleClientId() && env.googleClientSecret()),
 };

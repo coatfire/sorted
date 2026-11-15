@@ -85,6 +85,20 @@
       "when": 1794747346220,
       "tag": "0011_booking_quotes",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1794748377332,
+      "tag": "0012_google_sign_in",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1794748903507,
+      "tag": "0013_google_exchange_binding",
+      "breakpoints": true
     }
   ]
 }

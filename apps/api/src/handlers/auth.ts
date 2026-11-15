@@ -8,8 +8,10 @@ import { issueJwt, issueEmailToken, requireAuth, verifyEmailToken } from "../lib
 import { checkPassword, hashPassword } from "../lib/password";
 import { publicUser } from "../lib/user";
 import type { AppEnv } from "../app";
+import { googleRoutes } from "./google";
 
 export const authRoutes = new Hono<AppEnv>();
+authRoutes.route("/google", googleRoutes);
 const Email = z.string().email().transform((value) => value.toLowerCase());
 const Password = z.string().min(8, "Use at least 8 characters.").max(1024);
 const Credentials = z.object({ email: Email, password: Password });
