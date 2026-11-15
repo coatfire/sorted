@@ -49,6 +49,9 @@ authRoutes.post("/magic-link", async (c) => {
   if (!parsed.success) return c.json({ error: "Valid email required" }, 400);
   const { email } = parsed.data;
 
+  // Insert first, then count: concurrent requests each see the others' rows,
+  // so a burst can't slip past the limit.
+  const [loginToken] = await db.insert(schema.loginTokens).values({ email }).returning();
   const [recent] = await db
     .select({ count: count() })
     .from(schema.loginTokens)
@@ -56,7 +59,8 @@ authRoutes.post("/magic-link", async (c) => {
       eq(schema.loginTokens.email, email),
       gte(schema.loginTokens.createdAt, new Date(Date.now() - 15 * 60 * 1000)),
     ));
-  if (recent.count >= 3) {
+  if (recent.count > 3) {
+    await db.delete(schema.loginTokens).where(eq(schema.loginTokens.id, loginToken.id));
     return c.json({ error: "Too many login links requested. Check your email, or try again in 15 minutes." }, 429);
   }
 
@@ -71,7 +75,6 @@ authRoutes.post("/magic-link", async (c) => {
       .returning();
   }
 
-  const [loginToken] = await db.insert(schema.loginTokens).values({ email }).returning();
   const token = await issueMagicLinkToken(user.id, loginToken.id);
   const link = `${env.appUrl()}/login?token=${token}`;
   const emailed = await sendLoginEmail(email, link);
