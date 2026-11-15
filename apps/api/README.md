@@ -27,6 +27,13 @@ The root `vercel.json` defines the `api` (Hono) and `web` (Vite) services.
 Vercel discovers the default export in `src/app.ts`. `/api/*` routes to the
 API; other paths route to the web service, with an `index.html` fallback for
 SPA routes such as `/login`. Deploy the repository root as one Vercel project.
+The services build and deploy together; this is the production deployment,
+not a separately hosted web app calling a Lambda Function URL.
+
+The API build keeps the alternative Lambda bundle at `dist/lambda/index.mjs`.
+Do not create or retain `apps/api/dist/index.mjs`: Vercel's Hono preset would
+pick that file as the entrypoint instead of `src/app.ts`. The API build clears
+`dist/` before bundling so a stale entrypoint cannot override the source app.
 
 Set these server-side variables for each Vercel environment:
 
@@ -36,7 +43,7 @@ Set these server-side variables for each Vercel environment:
 | `JWT_SECRET` | A securely generated secret of at least 32 characters |
 | `APP_URL` | Public HTTPS address of the Vercel project, no trailing slash |
 | `CORS_ORIGIN` | Same public origin as `APP_URL` |
-| `RESEND_API_KEY` | Resend API key for login emails |
+| `RESEND_API_KEY` | Resend API key for login emails; required for production login |
 | `EMAIL_FROM` | Sender on a verified Resend domain |
 
 Leave **`VITE_API_URL` unset**: the web and API share an origin. Never put a
@@ -54,31 +61,50 @@ section-8 no-transactions caveat for these multi-write operations; it does
 not make event delivery durable or retry failed external calls.
 
 Before the first deployment, the human must supply a new, empty Supabase
-database and run `pnpm --filter api db:migrate` from the repository root.
+database. From the repository root, apply the committed migrations using
+the Supabase transaction-pooler URL (the ellipsis is a placeholder, not a value):
+
+```bash
+DATABASE_URL=… pnpm --filter api db:migrate
+```
+
 Apply new migrations before deployments that need them. Do not run the
 initial migration against an existing, unmanaged schema without deciding
 how to baseline it first.
 
+Verify `/api/health` on the deployed origin, then request a login email and
+follow it back to `/login`. Production must never show an **Open login link**
+button or log a login token. If email delivery fails, the API deletes the
+undelivered token and returns 502; the login page shows the failure instead
+of claiming an email was sent. Only local mode logs/returns a development link.
+
+Optional server-side integrations (no secrets belong in the web service's
+`VITE_` variables):
+
+| Variables | Purpose |
+|-----------|---------|
+| `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET` | Card payment links and signature-verified Stripe webhooks |
+| `N8N_WEBHOOK_URL`, `INTERNAL_SECRET` | Emit automation events to n8n and authenticate n8n callbacks; provider credentials stay in n8n |
+| `ANTHROPIC_API_KEY` | Reserved for receipt OCR; not currently wired into the API |
+| `SENTRY_DSN` | Reserved for error reporting; not currently wired into the API |
+
+`GET /api/health` reports the implemented automation/payment-link features so
+the web app only offers what works. Resend is required for production login,
+not an optional integration.
+
 ## Optional AWS Lambda deployment
+From the repository root:
+
 ```bash
-pnpm build         # → dist/lambda/index.mjs (single bundled ESM file)
+pnpm --filter api build  # → apps/api/dist/lambda/index.mjs (bundled ESM)
 ```
-Create a Lambda (nodejs20.x, arm64, 512MB, 15s timeout), upload dist/lambda/,
+Create a Lambda (nodejs20.x, arm64, 512MB, 15s timeout), upload apps/api/dist/lambda/,
 handler `index.handler`, enable a Function URL (auth NONE — the app does its
-own auth), and set the server-side env vars above: `DATABASE_URL`,
-`JWT_SECRET`, `APP_URL` and `CORS_ORIGIN` at minimum. Run `pnpm db:migrate`
-against the production database before the first deploy and after each schema
-change. Build the web app with `VITE_API_URL=<function url>` if it is not
+own auth), and set the six production env vars above, including Resend's
+sender and key. Apply migrations with the same root command above before
+deployments that require them. Build the web app with
+`VITE_API_URL=<function url> pnpm --filter web build` only if it is not
 served from the same origin.
-
-Each integration switches on when its env vars are present, and
-`GET /api/health` reports which are live so the web app only offers what works:
-
-| Env | Turns on |
-|-----|----------|
-| `RESEND_API_KEY` | Emailed login links (otherwise logged) |
-| `STRIPE_SECRET_KEY` + `STRIPE_WEBHOOK_SECRET` | Card payment links |
-| `N8N_WEBHOOK_URL` + `INTERNAL_SECRET` | WhatsApp + calendar automation |
 
 ## Conventions
 - Every handler validates with @sorted/core zod schemas, scopes every query
