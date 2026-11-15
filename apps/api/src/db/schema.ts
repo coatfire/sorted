@@ -66,6 +66,7 @@ export const messageStatus = pgEnum("message_status", [
 ]);
 
 export const users = pgTable("users", {
+  driveBackedUpAt: timestamp("drive_backed_up_at", { withTimezone: true }),
   googleSub: text("google_sub").unique(),
   calendarToken: text("calendar_token").unique(),
   vatRegistered: boolean("vat_registered").notNull().default(false),

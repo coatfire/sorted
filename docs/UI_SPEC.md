@@ -312,6 +312,23 @@ kit; resist adding more.
 - Dates are human: "Tomorrow 10:00", "Thu 16 Jul". Money always €, always
   2dp, always tabular.
 
+## Google Drive backup (Settings)
+
+- Show a **Back up to Google Drive** card with one button only for signed-in
+  users when `features.googleDrive` is true. Hidden in demo and when disabled.
+- Explain that issued invoices, receipts, quotes, expense photos and yearly CSVs
+  go into a Sorted folder in their Google Drive. It runs only when tapped,
+  never automatically. Google consent requests access only to app-created files.
+- Load Google Identity Services and the backup module on tap, not on page load.
+  Keep the button disabled during a run, and announce **Backing up 12 of 40…**.
+- Show **Last backed up: today** / **Last backed up: N days ago** only after a
+  completed backup (remembered across visits). Success: **Backup finished**.
+- On popup closure, denied consent, network or upload failure:
+  **Backup didn't finish. Nothing was lost — try again.** Keep the previous
+  timestamp unchanged. Empty account: **No files to back up yet.**
+- Keep existing PDF/photo copies; refresh all yearly CSVs in place on every run.
+  Retrying a partial backup skips files already uploaded. Button target ≥44px.
+
 ## Accessibility & PWA floor (M8 checklist)
 
 Visible focus rings · chips never rely on colour alone (label text always

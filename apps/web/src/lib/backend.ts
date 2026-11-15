@@ -11,6 +11,7 @@ import type {
   DocumentKind,
   RecordPaymentInput,
   CalendarLinks,
+  DriveBackup,
 } from "@sorted/core";
 
 export type BookingRow = Booking & { client: Client };
@@ -57,6 +58,8 @@ export interface ExpenseDraft {
  */
 export interface Backend {
   health(): Promise<Health>;
+  driveFiles(): Promise<DriveBackup>;
+  driveBackedUp(): Promise<{ driveBackedUpAt: string }>;
   googleStart(): void;
   googleExchange(code: string): Promise<{ jwt: string; user: User }>;
   calendar(): Promise<CalendarLinks>;
@@ -84,7 +87,7 @@ export interface Backend {
   updateExpense(id: string, draft: ExpenseDraft): Promise<void>;
   deleteExpense(id: string): Promise<void>;
   /** A URL the browser can render for this expense's receipt photo. */
-  receiptUrl(expense: Expense): Promise<string | null>;
+  receiptUrl(expense: Pick<Expense, "id" | "receiptKey">): Promise<string | null>;
   updateClient(id: string, patch: { name: string; phone: string | null; email: string | null }): Promise<void>;
   deleteClient(id: string): Promise<void>;
   updateUser(patch: {

@@ -6,6 +6,7 @@ import {
 } from "@sorted/core";
 
 const user: User = {
+  driveBackedUpAt: null,
   vatRegistered: false, vatRateBp: null, vatPeriodMonths: 2, incomeTaxRateBp: null,
   id: "user", email: "studio@example.com", name: "Shane", businessName: "Studio by Shane", phone: "+353871234567",
   emailVerifiedAt: null, address: "Main Street\nDublin", iban: "IE29AIBK93115212345678", bic: "AIBKIE2D",
