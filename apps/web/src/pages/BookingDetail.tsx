@@ -9,7 +9,7 @@ import { RecordPaymentSheet } from "../RecordPaymentSheet";
 import { PaymentCorrectionSheet } from "../PaymentCorrectionSheet";
 import { BookingCalendarSheet } from "../BookingCalendarSheet";
 import { BookingSteps } from "../BookingSteps";
-import { bookingPaymentPhrase, pendingDepositCents, type BookingDetailAction } from "../lib/bookingDetail";
+import { bookingPaymentPhrase, unpaidDepositCents, type BookingDetailAction } from "../lib/bookingDetail";
 import {
   euros, firstName, kindLabel, longDay, messageLabel, methodLabel, stamp, time,
 } from "../lib/format";
@@ -67,7 +67,7 @@ export function BookingDetail() {
   const paidPayments = bookingPayments.filter((payment) => payment.status === "paid");
   const hasPaidPayment = paidPayments.length > 0;
   const { stage, owedCents } = bookingStage(booking, payments, new Date());
-  const depositDue = pendingDepositCents(booking, payments, owedCents);
+  const depositDue = unpaidDepositCents(booking, owedCents);
   const paymentPhrase = bookingPaymentPhrase(stage, owedCents, depositDue);
 
   async function document(kind: DocumentKind, paymentId?: string) {

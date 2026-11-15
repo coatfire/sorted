@@ -1,13 +1,15 @@
 import { useState, type FormEvent } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { normalisePhone, UpdateClientInput } from "@sorted/core";
+import { moneyOwed, normalisePhone, UpdateClientInput } from "@sorted/core";
 import { BackButton, Button, Card, EmptyState, Field, Icon, MoneyText, Sheet } from "../components";
 import { dayMonth, whatsappLink } from "../lib/format";
 import { useAction, useData, useStore } from "../lib/store";
 import { BookingRow } from "./Home";
 import { useValidation } from "../lib/useValidation";
+import { useNow } from "../lib/useNow";
 
 export function ClientDetail() {
+  const now = useNow();
   const { id } = useParams();
   const { clients, bookings, payments } = useData();
   const { backend } = useStore();
@@ -39,9 +41,10 @@ export function ClientDetail() {
   const ids = new Set(theirs.map((booking) => booking.id));
   const hasPaymentHistory = payments.some((payment) => ids.has(payment.bookingId) && (payment.status === "paid" || payment.paidAt !== null));
   const hasOpenBookings = theirs.some((booking) => booking.status === "enquiry" || booking.status === "confirmed");
-  const sum = (status: "paid" | "pending") =>
+  const { dueNowCents } = moneyOwed(theirs, payments, now);
+  const paidToDate =
     payments
-      .filter((payment) => ids.has(payment.bookingId) && payment.status === status)
+      .filter((payment) => ids.has(payment.bookingId) && payment.status === "paid")
       .reduce((total, payment) => total + payment.amountCents, 0);
 
   async function save(event: FormEvent<HTMLFormElement>) {
@@ -121,8 +124,8 @@ export function ClientDetail() {
 
       <Card className="year-card">
         <div className="year-stats">
-          <div><span>Paid to date</span><MoneyText cents={sum("paid")} /></div>
-          <div><span>Owes you</span><MoneyText cents={sum("pending")} className={sum("pending") ? "due-text" : ""} /></div>
+          <div><span>Paid to date</span><MoneyText cents={paidToDate} /></div>
+          <div><span>Owes you</span><MoneyText cents={dueNowCents} className={dueNowCents ? "due-text" : ""} /></div>
         </div>
       </Card>
 
