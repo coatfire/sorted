@@ -21,6 +21,7 @@ import {
   paymentPaidAt,
   irelandToday,
   addCalendarDays,
+  shiftDublinWeeks,
 } from "@sorted/core";
 import { db, schema } from "../db";
 import { emitBookingEvent, emitEvent } from "../lib/events";
@@ -85,6 +86,7 @@ bookingRoutes.post("/:id/documents", async (c) => {
         const [booking] = await tx.select().from(schema.bookings)
           .where(and(eq(schema.bookings.id, bookingId), eq(schema.bookings.userId, userId))).for("update");
         if (!booking) return c.json({ error: "Booking not found" }, 404);
+        if (kind === "quote" && booking.status !== "enquiry") return c.json({ error: "Quotes are only available for enquiries." }, 409);
         const paidPayments = kind === "receipt" ? await tx.select().from(schema.payments).where(and(
           eq(schema.payments.bookingId, bookingId), eq(schema.payments.userId, userId),
         )) : [];
@@ -109,7 +111,7 @@ bookingRoutes.post("/:id/documents", async (c) => {
         ) : null;
         const [document] = await tx.insert(schema.invoices).values({
           userId, bookingId, kind, number: Number(sequence.next), issuedAt,
-          vatRateBp: kind === "invoice" ? taxSettings.vatRegistered ? taxSettings.vatRateBp : 0 : null,
+          vatRateBp: kind !== "receipt" ? taxSettings.vatRegistered ? taxSettings.vatRateBp : 0 : null,
           paymentId: kind === "receipt" ? paymentId : null, receiptSnapshot,
         }).returning();
         return c.json(document);
@@ -186,23 +188,27 @@ bookingRoutes.post("/", async (c) => {
       if (!client) return c.json({ error: "Client not found" }, 404);
     }
 
-    const [booking] = await tx
+    const count = input.repeat?.count ?? 1;
+    const rows = await tx
       .insert(schema.bookings)
-      .values({
+      .values(Array.from({ length: count }, (_, index) => {
+        const startAt = shiftDublinWeeks(input.start_at, index * (input.repeat?.every_weeks ?? 1));
+        return {
         userId,
         clientId: clientId!,
         service: input.service,
-        startAt: input.start_at,
-        endAt: input.end_at,
+        startAt,
+        endAt: input.end_at ? new Date(startAt.getTime() + input.end_at.getTime() - input.start_at.getTime()) : undefined,
         priceCents: input.price_cents,
         depositCents: input.deposit_cents,
         location: input.location,
         notes: input.notes,
-        followUpOn: input.follow_up_on === undefined ? addCalendarDays(irelandToday(), 2) : input.follow_up_on,
-      })
+        followUpOn: index === 0 ? input.follow_up_on === undefined ? addCalendarDays(irelandToday(), 2) : input.follow_up_on : null,
+        };
+      }))
       .returning();
 
-    return c.json(booking, 201);
+    return c.json({ ...rows[0], seriesCount: count }, 201);
   });
 });
 

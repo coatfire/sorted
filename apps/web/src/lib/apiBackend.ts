@@ -43,12 +43,13 @@ export const apiBackend: Backend = {
   },
 
   createBooking: (draft) =>
-    post<Booking>("/bookings", {
+    post<Booking & { seriesCount: number }>("/bookings", {
       client_id: draft.clientId,
       client: draft.client,
       service: draft.service,
       start_at: draft.startAt,
       follow_up_on: draft.followUpOn,
+      repeat: draft.repeat ? { every_weeks: draft.repeat.everyWeeks, count: draft.repeat.count } : undefined,
       price_cents: draft.priceCents,
       deposit_cents: draft.depositCents,
       location: draft.location ?? undefined,

@@ -149,6 +149,20 @@ Sorted                                (gear)
 One scrollable form. No steps, no wizard. Field order matches how a vendor
 thinks: *who, what, when, how much.*
 
+**Book again:** confirmed, completed and cancelled booking details offer a
+44px-minimum **Book again** button. It opens the same new-booking form with the
+client, service, price, deposit, location and notes copied; the original is not
+changed. Default to the original weekday and Ireland-local time, at least one
+week after the later of the original date or today. **1 week / 2 weeks / 4 weeks
+/ 6 weeks** chips change the new date, retaining weekday and time.
+
+New bookings have **Repeat**: **Doesn’t repeat** (default), **Every week**,
+**Every 2 weeks**, **Every 4 weeks**. Repeating shows **How many times**, 2–12,
+with the explanation that this includes the first booking. Validate on blur.
+Every occurrence is an enquiry, with the same Ireland-local time across clock
+changes. Only the first has a follow-up date. Save shows **N bookings added**;
+the success screen explains that each enquiry is confirmed separately.
+
 Enquiry forms show **Follow up on**, defaulting to two days after today in
 Ireland. It is optional; blank removes it. Validate dates on blur. Enquiry
 detail displays the date (or **No follow-up set**) and **Change follow-up**,
@@ -216,6 +230,13 @@ Stacked sections:
   balance placeholder uses this amount. Include a pending payment link only
   when its amount matches the requested amount; disable draft actions for
   invalid amounts. Manual drafts are never logged as sent.
+- **Quote:** enquiries have a primary **Quote** action using the same PDF
+  share/download flow and branding as invoices. Title **Quote**, stable
+  **QTE-0001** number and issue date, **Valid until** (issue date + 30 days),
+  current service/date/price and VAT breakdown, deposit if positive, and
+  **To go ahead, just reply to confirm.** No paid/balance or bank-detail section.
+  It is a quote, not proof of acceptance or payment. Confirming remains the
+  existing Confirm action, and removes Quote availability.
 - **Messages (M3):** timeline of message_log rows — "✓ Confirmation sent
   Tue 14:02 · ✓ Reminder sent Fri 10:00". Failed sends show `--danger` with
   the reason. This card is what makes the automation trustworthy — the

@@ -80,8 +80,9 @@ export async function createBookingPdf(data: BookingDocumentData): Promise<Blob>
   rule();
   text(`${data.title} ${data.number}`, 20, accent);
   text(`Issued: ${data.issuedDate}`, 10, muted);
+  if (data.validUntil) text(`Valid until: ${data.validUntil}`, 10, muted);
   y -= 14;
-  text(data.kind === "receipt" ? "Received from" : "Bill to", 12, accent);
+  text(data.kind === "receipt" ? "Received from" : data.kind === "quote" ? "Quote for" : "Bill to", 12, accent);
   text(data.client.name);
   text([data.client.email, data.client.phone].filter(Boolean).join(" · "), 10);
   y -= 12;
@@ -96,7 +97,10 @@ export async function createBookingPdf(data: BookingDocumentData): Promise<Blob>
   }
   row(data.vat ? "Total including VAT" : data.kind === "receipt" ? "Total received" : "Total", data.total, 14);
   y -= 12;
-  if (data.kind === "invoice") {
+  if (data.kind === "quote") {
+    if (data.deposit) row("Deposit", data.deposit);
+    text(data.confirmationLine, 12, accent);
+  } else if (data.kind === "invoice") {
     row("Paid to date", data.paidToDate);
     row("Balance due", data.balanceDue);
     y -= 16;
