@@ -85,13 +85,15 @@ export function Login() {
               <input
                 required
                 type="email"
+                aria-invalid={error ? true : undefined}
+                aria-describedby={error ? "login-error" : undefined}
                 value={email}
                 onChange={(event) => setEmail(event.target.value)}
                 placeholder="you@business.ie"
                 autoComplete="email"
               />
             </label>
-            {error && <p className="form-error" role="alert">{error}</p>}
+            {error && <p id="login-error" className="form-error" role="alert">{error}</p>}
             <Button type="submit" disabled={loading}>
               {loading ? "Sending…" : "Send me a login link"} <Icon name="arrow" />
             </Button>

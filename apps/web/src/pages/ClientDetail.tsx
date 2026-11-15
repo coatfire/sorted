@@ -66,11 +66,13 @@ export function ClientDetail() {
                 type="tel"
                 inputMode="tel"
                 value={form.phone}
+                aria-invalid={error ? true : undefined}
+                aria-describedby={error ? "client-error" : undefined}
                 onChange={(event) => { setError(""); setForm({ ...form, phone: event.target.value }); }}
                 placeholder="087 123 4567"
               />
             </Field>
-            {error && <p className="form-error" role="alert">{error}</p>}
+            {error && <p id="client-error" className="form-error" role="alert">{error}</p>}
           </Card>
           <div className="action-pair">
             <Button type="button" kind="quiet" onClick={() => setEditing(false)}>Cancel</Button>

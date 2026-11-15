@@ -23,6 +23,7 @@ export function BookingForm() {
 
   const [savedId, setSavedId] = useState<string | null>(null);
   const [error, setError] = useState("");
+  const [errorField, setErrorField] = useState<keyof typeof form | null>(null);
   const [client, setClient] = useState<Client | null>(editing?.client ?? null);
   const [form, setForm] = useState(() => {
     const start = editing ? new Date(editing.startAt) : null;
@@ -72,6 +73,16 @@ export function BookingForm() {
   }
   const depositLocked = Boolean(editing && editing.status !== "enquiry");
 
+  function invalid(field: keyof typeof form, message: string) {
+    setErrorField(field);
+    setError(message);
+  }
+
+  const errorProps = (field: keyof typeof form) => ({
+    "aria-invalid": error && errorField === field ? true : undefined,
+    "aria-describedby": error && errorField === field ? "booking-error" : undefined,
+  });
+
   async function submit(event: FormEvent) {
     event.preventDefault();
     const priceCents = parseEuros(form.price);
@@ -80,13 +91,13 @@ export function BookingForm() {
     let phone: string | undefined;
     if (!client && form.clientPhone.trim()) {
       const normalised = normalisePhone(form.clientPhone);
-      if (!normalised) return setError("That mobile number doesn’t look right. Try it like 087 123 4567.");
+      if (!normalised) return invalid("clientPhone", "That mobile number doesn’t look right. Try it like 087 123 4567.");
       phone = normalised;
     }
-    if (priceCents === null) return setError("Add the price, like 120 or 120.50.");
-    if (depositCents === null) return setError("The deposit should be an amount, like 50.");
-    if (depositCents > priceCents) return setError("The deposit can’t be more than the price.");
-    if (Number.isNaN(startAt.getTime())) return setError("Pick a date and time.");
+    if (priceCents === null) return invalid("price", "Add the price, like 120 or 120.50.");
+    if (depositCents === null) return invalid("deposit", "The deposit should be an amount, like 50.");
+    if (depositCents > priceCents) return invalid("deposit", "The deposit can’t be more than the price.");
+    if (Number.isNaN(startAt.getTime())) return invalid("date", "Pick a date and time.");
 
     const details = {
       service: form.service.trim(),
@@ -170,7 +181,7 @@ export function BookingForm() {
                   <input
                     type="tel"
                     inputMode="tel"
-                    value={form.clientPhone}
+                    value={form.clientPhone} {...errorProps("clientPhone")}
                     onChange={(event) => update("clientPhone", event.target.value)}
                     placeholder="087 123 4567"
                     autoComplete="off"
@@ -201,10 +212,10 @@ export function BookingForm() {
           )}
           <div className="field-grid">
             <Field label="Date">
-              <input required type="date" value={form.date} onChange={(event) => update("date", event.target.value)} />
+              <input required type="date" value={form.date} {...errorProps("date")} onChange={(event) => update("date", event.target.value)} />
             </Field>
             <Field label="Time">
-              <input required type="time" value={form.time} onChange={(event) => update("time", event.target.value)} />
+              <input required type="time" value={form.time} {...errorProps("date")} onChange={(event) => update("time", event.target.value)} />
             </Field>
           </div>
           <Field label="Price">
@@ -213,7 +224,7 @@ export function BookingForm() {
               <input
                 required
                 inputMode="decimal"
-                value={form.price}
+                value={form.price} {...errorProps("price")}
                 onChange={(event) => update("price", event.target.value)}
                 placeholder="0.00"
               />
@@ -236,7 +247,7 @@ export function BookingForm() {
                 <span>€</span>
                 <input
                   inputMode="decimal"
-                  value={form.deposit}
+                  value={form.deposit} {...errorProps("deposit")}
                   onChange={(event) => update("deposit", event.target.value)}
                   placeholder="0.00"
                 />
@@ -269,7 +280,7 @@ export function BookingForm() {
           )}
         </Card>
         <div className={`sticky-action ${error ? "has-error" : ""}`}>
-          {error && <p className="form-error" role="alert">{error}</p>}
+          {error && <p id="booking-error" className="form-error" role="alert">{error}</p>}
           <Button type="submit" disabled={busy}>
             {busy ? "Saving…" : editing ? "Save changes" : "Save booking"} <Icon name="arrow" />
           </Button>
