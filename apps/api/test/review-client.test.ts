@@ -1,8 +1,37 @@
 import { describe, expect, it, vi } from "vitest";
-import { completeAction } from "../../web/src/lib/action";
+import { completeAction, createActionGuard } from "../../web/src/lib/action";
 import { jobDateLabel } from "../../web/src/lib/format";
 
 describe("mutation completion", () => {
+  it.each(["expense", "booking"])("blocks a second %s create after saving succeeds but reloading fails", async () => {
+    const run = createActionGuard();
+    const create = vi.fn(async () => {});
+    const refresh = vi.fn(async () => { throw new Error("Network unavailable"); });
+    const saved = vi.fn();
+    await expect(run(create, refresh, saved)).rejects.toThrow("Saved, but the screen couldn't update");
+    await expect(run(create, refresh, saved)).rejects.toThrow("Reload before recording anything else");
+    expect(create).toHaveBeenCalledOnce();
+    expect(refresh).toHaveBeenCalledOnce();
+    expect(saved).toHaveBeenCalledOnce();
+  });
+  it("allows subsequent creates after a successful reload", async () => {
+    const run = createActionGuard();
+    const create = vi.fn(async () => {});
+    const refresh = vi.fn(async () => {});
+    await run(create, refresh, vi.fn());
+    await run(create, refresh, vi.fn());
+    expect(create).toHaveBeenCalledTimes(2);
+  });
+  it("allows retrying a rejected create without claiming it was saved", async () => {
+    const run = createActionGuard();
+    const saved = vi.fn();
+    const refresh = vi.fn(async () => {});
+    await expect(run(async () => { throw new Error("Invalid expense"); }, refresh, saved)).rejects.toThrow("Invalid expense");
+    expect(saved).not.toHaveBeenCalled();
+    expect(refresh).not.toHaveBeenCalled();
+    await run(async () => {}, refresh, saved);
+    expect(saved).toHaveBeenCalledOnce();
+  });
   it("finishes only after both saving and reloading succeed", async () => {
     const steps: string[] = [];
     await completeAction(async () => { steps.push("write"); }, async () => { steps.push("reload"); }, () => { steps.push("saved"); });

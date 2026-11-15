@@ -18,7 +18,7 @@ const blank = () => ({
 export function Expenses() {
   const { expenses, user } = useData();
   const { backend, toast } = useStore();
-  const { busy, run } = useAction();
+  const { busy, run, error, committed } = useAction();
   const fileInput = useRef<HTMLInputElement>(null);
   const formTop = useRef<HTMLDivElement>(null);
   // null = closed · "new" = adding · Expense = editing
@@ -106,6 +106,7 @@ export function Expenses() {
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (busy || committed) return;
     if (!validation.validate(event.currentTarget)) return;
     const amountCents = parseEuros(form.amount);
     if (!amountCents) return;
@@ -132,6 +133,8 @@ export function Expenses() {
       />
 
       <div ref={formTop} className="scroll-anchor" />
+      {error && <p className="sheet-copy" role="alert">{error}</p>}
+      {committed && error && <Button kind="soft" onClick={() => window.location.reload()}>Reload</Button>}
       {!open ? (
         <div className="capture-stack">
           <button className="receipt-capture" onClick={() => fileInput.current?.click()}>
@@ -212,7 +215,7 @@ export function Expenses() {
                 </button>
               ))}
             </div>
-            <Button type="submit" disabled={busy}>
+            <Button type="submit" disabled={busy || committed}>
               <Icon name="check" /> {busy ? "Saving…" : editing ? "Save changes" : "Confirm expense"}
             </Button>
             <div className="form-footer">

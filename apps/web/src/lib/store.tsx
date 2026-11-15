@@ -13,7 +13,7 @@ import { apiBackend } from "./apiBackend";
 import type { Backend, Snapshot } from "./backend";
 import { demoBackend, resetDemo } from "./demoBackend";
 import { patchSnapshotUser } from "./snapshot";
-import { completeAction } from "./action";
+import { createActionGuard } from "./action";
 
 type Mode = "api" | "demo";
 const MODE_KEY = "sorted_mode";
@@ -218,13 +218,14 @@ export function useAction() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [committed, setCommitted] = useState(false);
+  const action = useRef(createActionGuard());
   const run = useCallback(
     async (work: () => Promise<unknown>, done?: string) => {
       setBusy(true);
       setError(null);
-      setCommitted(false);
       try {
-        await completeAction(work, () => refresh(true), () => setCommitted(true));
+        await action.current(work, () => refresh(true), () => setCommitted(true));
+        setCommitted(false);
         if (done) toast(done);
         return true;
       } catch (err) {
