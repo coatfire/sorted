@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from "react";
-import { Link, Navigate, useNavigate } from "react-router-dom";
+import { Link, Navigate, useNavigate, useSearchParams } from "react-router-dom";
+import { GoogleSignIn } from "../GoogleSignIn";
 import { Button, Field, Icon } from "../components";
 import { ApiError, isNetworkError } from "../lib/api";
 import { useSession, useStore } from "../lib/store";
@@ -20,6 +21,8 @@ export function Login() {
   const [loading, setLoading] = useState(false);
   const validation = useValidation({});
   const navigate = useNavigate();
+  const [params] = useSearchParams();
+  const googleError = params.get("error") === "google" ? "Couldn't sign in with Google. Try again or use your email." : "";
 
   if (mode === "api") return <Navigate to="/" replace />;
 
@@ -45,6 +48,8 @@ export function Login() {
       <p className="brand-wordmark">Sorted<span>.</span></p>
       <h1>Admin, without the accounting.</h1>
       <p>You do the work. We’ll track the money.</p>
+      {googleError && <p className="form-error" role="alert">{googleError}</p>}
+      <GoogleSignIn />
       <form onSubmit={submit} noValidate>
         <Field label="Email address" {...validation.field("email")}>
           <input name="email" required type="email" value={email} onChange={(event) => setEmail(event.target.value)}

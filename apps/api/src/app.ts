@@ -18,13 +18,14 @@ export type AppEnv = { Variables: { userId: string } };
 
 export const app = new Hono<AppEnv>();
 
-if (!process.env.VITEST) app.use((c, next) => c.req.path.startsWith("/api/calendar") ? next() : logger()(c, next));
+if (!process.env.VITEST) app.use((c, next) => c.req.path.startsWith("/api/calendar") || c.req.path.startsWith("/api/auth/google") ? next() : logger()(c, next));
 app.use("/api/*", cors({ origin: env.corsOrigins() ?? "*" }));
 
 app.get("/api/health", (c) =>
   c.json<Health>({
     ok: true,
     features: {
+      googleSignIn: env.googleSignIn(),
       automation: Boolean(env.n8nWebhookUrl()),
       paymentLinks: Boolean(env.stripeKey()),
     },

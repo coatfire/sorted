@@ -66,6 +66,7 @@ export const messageStatus = pgEnum("message_status", [
 ]);
 
 export const users = pgTable("users", {
+  googleSub: text("google_sub").unique(),
   calendarToken: text("calendar_token").unique(),
   vatRegistered: boolean("vat_registered").notNull().default(false),
   vatRateBp: integer("vat_rate_bp"),
@@ -113,6 +114,13 @@ export const loginAttempts = pgTable("login_attempts", {
   email: text("email").notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [index("login_attempts_email_idx").on(t.email)]);
+
+export const loginCodes = pgTable("login_codes", {
+  codeHash: text("code_hash").primaryKey(),
+  userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  sessionVersion: integer("session_version").notNull(),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+});
 
 export const clients = pgTable(
   "clients",
@@ -263,5 +271,6 @@ export const invoices = pgTable("invoices", {
 }, (t) => [
   uniqueIndex("invoices_user_kind_number_idx").on(t.userId, t.kind, t.number),
   uniqueIndex("invoices_user_booking_invoice_idx").on(t.userId, t.bookingId).where(sql`${t.kind} = 'invoice'`),
+  uniqueIndex("invoices_user_booking_quote_idx").on(t.userId, t.bookingId).where(sql`${t.kind} = 'quote'`),
   uniqueIndex("invoices_user_payment_receipt_idx").on(t.userId, t.paymentId).where(sql`${t.kind} = 'receipt'`),
 ]);

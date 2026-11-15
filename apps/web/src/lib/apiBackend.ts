@@ -1,5 +1,5 @@
 import type { Booking, Client, Expense, Health, MessageLogEntry, Payment, User, BookingDocument, CalendarLinks } from "@sorted/core";
-import { api, apiBlob, patch, post } from "./api";
+import { api, apiBlob, apiUrl, patch, post } from "./api";
 import type { Backend, ExpenseDraft } from "./backend";
 import { blobToDataUrl } from "./image";
 
@@ -12,6 +12,9 @@ const expenseBody = (draft: ExpenseDraft) => ({
 });
 
 export const apiBackend: Backend = {
+  health: () => api<Health>("/health"),
+  googleStart: () => window.location.assign(apiUrl("/auth/google/start")),
+  googleExchange: (code) => post("/auth/google/exchange", { code }),
   calendar: () => api<CalendarLinks>("/calendar"),
   resetCalendar: () => post<CalendarLinks>("/calendar/reset"),
   document: (bookingId, kind, paymentId) => post<BookingDocument>(`/bookings/${bookingId}/documents`, { kind, payment_id: paymentId }),

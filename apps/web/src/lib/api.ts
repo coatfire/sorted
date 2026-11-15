@@ -3,6 +3,7 @@
 const JWT_KEY = "sorted_jwt";
 /** Set VITE_API_URL when the API lives on another origin (e.g. a Lambda URL). */
 const BASE = (import.meta.env.VITE_API_URL ?? "").replace(/\/$/, "");
+export const apiUrl = (path: string) => `${BASE}/api${path}`;
 
 export const session = {
   get: () => localStorage.getItem(JWT_KEY),
@@ -38,7 +39,7 @@ function errorMessage(body: unknown, status: number): string {
 
 async function request(path: string, init: RequestInit = {}): Promise<Response> {
   const jwt = session.get();
-  const res = await fetch(`${BASE}/api${path}`, {
+  const res = await fetch(apiUrl(path), {
     ...init,
     headers: {
       ...(init.body ? { "Content-Type": "application/json" } : {}),

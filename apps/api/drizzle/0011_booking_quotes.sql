@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX IF NOT EXISTS "invoices_user_booking_quote_idx" ON "invoices" USING btree ("user_id","booking_id") WHERE "invoices"."kind" = 'quote';

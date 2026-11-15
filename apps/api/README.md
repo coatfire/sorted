@@ -14,6 +14,44 @@ links to the login screen instead of emailing them. Delete `.data/` to start
 clean. To develop against Supabase instead, copy `.env.example` to `.env`, set
 `DATABASE_URL`, and run `pnpm db:migrate`.
 
+## Optional Google sign-in
+
+Create a Google OAuth **Web application** client. Set `GOOGLE_CLIENT_ID` and
+`GOOGLE_CLIENT_SECRET` on the API only; both are required to enable sign-in.
+Until then `/api/health` reports `features.googleSignIn: false` and the UI hides
+the button. Do not use `VITE_` variables for either credential.
+
+Register this exact authorized redirect URI for production:
+
+```text
+https://sorted-weld.vercel.app/api/auth/google/callback
+```
+
+The callback URL is `${API_URL || APP_URL}/api/auth/google/callback`; set those
+values to the intended deployment origins, never a request-supplied host. For
+local development set `API_URL=http://localhost:3001`, `APP_URL=http://localhost:5173`
+and register `http://localhost:3001/api/auth/google/callback`. The cookie remains
+Secure in development; use localhost (modern browsers permit secure localhost
+cookies), or HTTPS for non-localhost testing. Add test users to Google's consent
+screen while the OAuth application is in testing mode.
+
+Sign-in uses state, nonce and PKCE with a signed ten-minute HttpOnly cookie.
+Google ID tokens are checked server-side against Google's JWKS. A verified
+Google email links an existing account without changing its password; a new
+account is verified and passwordless, then completes normal profile onboarding.
+The redirect carries only a single-use two-minute opaque code; exchange returns
+the normal session JWT in JSON, not in a URL. Code hashes are stored in
+`login_codes`; password resets invalidate outstanding codes via session version.
+Start/exchange have per-IP limits using trusted-proxy `X-Forwarded-For`, with a
+shared fallback when absent. OAuth routes omit request logging and use no-store.
+No access/refresh tokens are retained and only identity scopes are requested.
+
+Apply migration `0012_google_sign_in` after `0011_booking_quotes` before enabling
+credentials. Migration 0012 adds the unique nullable `users.google_sub` and the
+short-lived code table. No production Google credentials are provisioned by this
+feature. Tests generate an RSA key pair and mock Google's token endpoint/JWKS;
+they never need real Google credentials.
+
 ## Schema changes
 Edit `src/db/schema.ts`, then:
 ```bash
@@ -91,7 +129,7 @@ Optional server-side integrations (no secrets belong in the web service's
 | `ANTHROPIC_API_KEY` | Reserved for receipt OCR; not currently wired into the API |
 | `SENTRY_DSN` | Reserved for error reporting; not currently wired into the API |
 
-`GET /api/health` reports the implemented automation/payment-link features so
+`GET /api/health` reports automation, payment-link and Google sign-in features so
 the web app only offers what works. Resend is required for production login,
 not an optional integration.
 

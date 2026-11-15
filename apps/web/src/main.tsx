@@ -12,7 +12,7 @@ import { BookingDetail } from "./pages/BookingDetail";
 import { ClientDetail } from "./pages/ClientDetail";
 import { Settings } from "./pages/Settings";
 import { Login } from "./pages/Login";
-import { Signup, Verify, Forgot, Reset } from "./pages/Account";
+import { Signup, Verify, Forgot, Reset, GoogleLogin } from "./pages/Account";
 import { StoreProvider } from "./lib/store";
 import "./styles.css";
 
@@ -22,6 +22,7 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
       <StoreProvider>
         <Routes>
           <Route path="/login" element={<Login />} />
+          <Route path="/login/google" element={<GoogleLogin />} />
           <Route path="/signup" element={<Signup />} />
           <Route path="/verify" element={<Verify />} />
           <Route path="/forgot" element={<Forgot />} />
