@@ -33,6 +33,96 @@ async function login(email: string) {
 const json = async <T = any>(res: Response) => (await res.json()) as T;
 
 describe("auth", () => {
+  async function requestLink(email: string) {
+    return app.request("/api/auth/magic-link", {
+      method: "POST", body: JSON.stringify({ email }),
+    });
+  }
+
+  async function verify(token: string) {
+    return app.request("/api/auth/verify", {
+      method: "POST", body: JSON.stringify({ token }),
+    });
+  }
+
+  async function linkToken(response: Response) {
+    expect(response.status).toBe(200);
+    const { dev_link } = await json<{ dev_link: string }>(response);
+    const token = new URL(dev_link).searchParams.get("token");
+    if (!token) throw new Error("Missing login token");
+    return token;
+  }
+
+  it("allows a login link once and rejects reuse with the invalid-link error", async () => {
+    const token = await linkToken(await requestLink("single-use@example.com"));
+    const first = await verify(token);
+    expect(first.status).toBe(200);
+    const { jwt } = await json<{ jwt: string }>(first);
+    expect((await app.request("/api/auth/me", {
+      headers: { Authorization: `Bearer ${jwt}` },
+    })).status).toBe(200);
+    const reused = await verify(token);
+    expect(reused.status).toBe(401);
+    expect(await reused.json()).toEqual({ error: "Invalid or expired login link" });
+  });
+
+  it("consumes a link atomically when two verifications arrive together", async () => {
+    const token = await linkToken(await requestLink("simultaneous@example.com"));
+    const responses = await Promise.all([verify(token), verify(token)]);
+    expect(responses.map((response) => response.status).sort()).toEqual([200, 401]);
+  });
+
+  it("rate limits the fourth request per email, including used links and case variants", async () => {
+    const email = "rate-limit@example.com";
+    const token = await linkToken(await requestLink(email));
+    expect((await verify(token)).status).toBe(200);
+    expect((await requestLink(email.toUpperCase())).status).toBe(200);
+    expect((await requestLink(email)).status).toBe(200);
+    const fourth = await requestLink(email);
+    expect(fourth.status).toBe(429);
+    expect(await fourth.json()).toEqual({
+      error: "Too many login links requested. Check your email, or try again in 15 minutes.",
+    });
+    const rows = await db.select().from(schema.loginTokens).where(eq(schema.loginTokens.email, email));
+    expect(rows).toHaveLength(3);
+    expect((await requestLink("separate-limit@example.com")).status).toBe(200);
+  });
+
+  it("serializes concurrent requests for a new email", async () => {
+    const email = "concurrent-links@example.com";
+    const responses = await Promise.all(Array.from({ length: 6 }, () => requestLink(email)));
+    expect(responses.map((response) => response.status).sort()).toEqual([200, 200, 200, 429, 429, 429]);
+    const rows = await db.select().from(schema.loginTokens).where(eq(schema.loginTokens.email, email));
+    expect(rows).toHaveLength(3);
+  });
+
+  it("does not count requests older than fifteen minutes", async () => {
+    const email = "old-links@example.com";
+    await db.insert(schema.loginTokens).values(Array.from({ length: 3 }, () => ({
+      email, createdAt: new Date(Date.now() - 16 * 60 * 1000),
+    })));
+    expect((await requestLink(email)).status).toBe(200);
+  });
+
+  it("rejects missing, invalid, unrecorded and mismatched tokens", async () => {
+    expect((await verify("")).status).toBe(400);
+    expect((await verify("not-a-token")).status).toBe(401);
+    expect((await requestLink("not-an-email")).status).toBe(400);
+    const [user] = await db.insert(schema.users).values({ email: "invalid-token@example.com" }).returning();
+    const unrecorded = await issueMagicLinkToken(user.id, crypto.randomUUID());
+    expect((await verify(unrecorded)).status).toBe(401);
+    const missingId = await issueMagicLinkToken(user.id, "");
+    expect((await verify(missingId)).status).toBe(401);
+    const email = "different-owner@example.com";
+    const [record] = await db.insert(schema.loginTokens).values({ email }).returning();
+    const mismatch = await issueMagicLinkToken(user.id, record.id);
+    expect((await verify(mismatch)).status).toBe(401);
+    const [unchanged] = await db.select().from(schema.loginTokens).where(and(
+      eq(schema.loginTokens.id, record.id), eq(schema.loginTokens.email, email),
+    ));
+    expect(unchanged.usedAt).toBeNull();
+  });
+
   it("rejects requests without a session", async () => {
     expect((await app.request("/api/bookings")).status).toBe(401);
   });
@@ -42,7 +132,8 @@ describe("auth", () => {
       .insert(schema.users)
       .values({ email: "token@example.com" })
       .returning();
-    const token = await issueMagicLinkToken(user.id);
+    const [loginToken] = await db.insert(schema.loginTokens).values({ email: user.email }).returning();
+    const token = await issueMagicLinkToken(user.id, loginToken.id);
     const res = await app.request("/api/bookings", {
       headers: { Authorization: `Bearer ${token}` },
     });

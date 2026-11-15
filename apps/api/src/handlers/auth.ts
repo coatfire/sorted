@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { eq } from "drizzle-orm";
+import { and, count, eq, gte, isNull } from "drizzle-orm";
 import { z } from "zod";
 import { UpdateUserInput } from "@sorted/core";
 import { env } from "../lib/env";
@@ -49,18 +49,27 @@ authRoutes.post("/magic-link", async (c) => {
   if (!parsed.success) return c.json({ error: "Valid email required" }, 400);
   const { email } = parsed.data;
 
-  let [user] = await db
-    .select()
-    .from(schema.users)
-    .where(eq(schema.users.email, email));
-  if (!user) {
-    [user] = await db
-      .insert(schema.users)
-      .values({ email })
-      .returning();
+  const result = await db.transaction(async (tx) => {
+    await tx.insert(schema.users).values({ email }).onConflictDoNothing();
+    const [user] = await tx.select().from(schema.users)
+      .where(eq(schema.users.email, email)).for("update");
+    const [recent] = await tx
+    .select({ count: count() })
+    .from(schema.loginTokens)
+    .where(and(
+      eq(schema.loginTokens.email, email),
+      gte(schema.loginTokens.createdAt, new Date(Date.now() - 15 * 60 * 1000)),
+    ));
+    if (recent.count >= 3) return null;
+    const [loginToken] = await tx.insert(schema.loginTokens).values({ email }).returning();
+    return { user, loginToken };
+  });
+  if (!result) {
+    return c.json({ error: "Too many login links requested. Check your email, or try again in 15 minutes." }, 429);
   }
+  const { user, loginToken } = result;
 
-  const token = await issueMagicLinkToken(user.id);
+  const token = await issueMagicLinkToken(user.id, loginToken.id);
   const link = `${env.appUrl()}/login?token=${token}`;
   const emailed = await sendLoginEmail(email, link);
   if (!emailed) console.log(`\n🔑 Login link for ${email}: ${link}\n`);
@@ -76,12 +85,22 @@ authRoutes.post("/verify", async (c) => {
   const { token } = await c.req.json<{ token?: string }>();
   if (!token || typeof token !== "string") return c.json({ error: "token required" }, 400);
   try {
-    const userId = await verifyMagicLinkToken(token);
+    const { userId, tokenId } = await verifyMagicLinkToken(token);
     const [user] = await db
       .select()
       .from(schema.users)
       .where(eq(schema.users.id, userId));
     if (!user) return c.json({ error: "User not found" }, 404);
+    const [consumed] = await db
+      .update(schema.loginTokens)
+      .set({ usedAt: new Date() })
+      .where(and(
+        eq(schema.loginTokens.id, tokenId),
+        eq(schema.loginTokens.email, user.email),
+        isNull(schema.loginTokens.usedAt),
+      ))
+      .returning({ id: schema.loginTokens.id });
+    if (!consumed) return c.json({ error: "Invalid or expired login link" }, 401);
     return c.json({ jwt: await issueJwt(userId), user });
   } catch {
     return c.json({ error: "Invalid or expired login link" }, 401);
