@@ -50,6 +50,8 @@ describe("calendar files", () => {
   });
 });
 
+process.env.APP_URL = "https://sorted.example";
+
 async function account() {
   const [user] = await db.insert(schema.users).values({ email: `${crypto.randomUUID()}@example.com` }).returning();
   const [client] = await db.insert(schema.clients).values({ userId: user.id, name: `Client ${user.id}`, phone: "+353861234567" }).returning();
@@ -71,7 +73,7 @@ describe("calendar subscriptions", () => {
     const links = await responses[0].json() as CalendarLinks;
     expect(await responses[1].json()).toEqual(links);
     expect(responses[0].headers.get("cache-control")).toBe("no-store");
-    expect(links.confirmed.https).toMatch(/^https:\/\/api.sorted.example\/api\/calendar\/[A-Za-z0-9_-]{43}\/confirmed\.ics$/);
+    expect(links.confirmed.https).toMatch(/^https:\/\/sorted.example\/api\/calendar\/[A-Za-z0-9_-]{43}\/confirmed\.ics$/);
     expect(links.enquiries.https.replace("enquiries.ics", "confirmed.ics")).toBe(links.confirmed.https);
     expect(links.confirmed.webcal).toBe(links.confirmed.https.replace("https:", "webcal:"));
     expect(new URL(links.confirmed.google).searchParams.get("cid")).toBe(links.confirmed.webcal);
