@@ -7,7 +7,7 @@ import { useValidation } from "./lib/useValidation";
 
 export function RecordPaymentSheet({ bookingId, outstanding, onClose }: { bookingId: string; outstanding: number; onClose: () => void }) {
   const { backend } = useStore();
-  const { busy, run } = useAction();
+  const { busy, run, error, committed } = useAction();
   const [amount, setAmount] = useState(centsToInput(outstanding));
   const [method, setMethod] = useState<Exclude<PaymentMethod, "stripe">>("cash");
   const [date, setDate] = useState(irelandToday());
@@ -33,7 +33,9 @@ export function RecordPaymentSheet({ bookingId, outstanding, onClose }: { bookin
         </select>
       </Field>
       <Field label="Date" {...validation.field("paid_on")}><input name="paid_on" type="date" required max={irelandToday()} value={date} onChange={(event) => setDate(event.target.value)} /></Field>
-      <Button type="submit" disabled={busy}>Record payment</Button>
+      {error && <p className="sheet-copy" role="alert">{error}</p>}
+      {committed && error && <Button type="button" kind="soft" onClick={() => window.location.reload()}>Reload</Button>}
+      <Button type="submit" disabled={busy || committed}>Record payment</Button>
     </form>
     <Button kind="quiet" disabled={busy} onClick={onClose}>Cancel</Button>
   </Sheet>;

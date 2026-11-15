@@ -16,7 +16,7 @@ export function BookingForm() {
   const { id } = useParams();
   const { bookings, clients, features } = useData();
   const { backend, toast } = useStore();
-  const { busy, run } = useAction();
+  const { busy, run, error, committed } = useAction();
   const navigate = useNavigate();
   const editing = id ? bookings.find((booking) => booking.id === id) : undefined;
   const [params] = useSearchParams();
@@ -105,6 +105,7 @@ export function BookingForm() {
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (busy || committed) return;
     if (!validation.validate(event.currentTarget)) return;
     const priceCents = parseEuros(form.price);
     const depositCents = form.deposit.trim() ? parseEuros(form.deposit) : 0;
@@ -162,6 +163,8 @@ export function BookingForm() {
         title={editing ? editing.service : original ? "Book again" : "Who are you seeing?"}
       />
       {!editing && <p className="page-intro">One quick form. That’s it.</p>}
+      {error && <p className="sheet-copy" role="alert">{error}</p>}
+      {committed && error && <Button kind="soft" onClick={() => window.location.reload()}>Reload</Button>}
       <form onSubmit={submit} noValidate>
         {!editing && (
           <Card className="form-card">
@@ -328,7 +331,7 @@ export function BookingForm() {
           </Field>}
         </Card>}
         <div className={`sticky-action ${validation.hasErrors ? "has-error" : ""}`}>
-          <Button type="submit" disabled={busy}>
+          <Button type="submit" disabled={busy || committed}>
             {busy ? "Saving…" : editing ? "Save changes" : "Save booking"} <Icon name="arrow" />
           </Button>
         </div>

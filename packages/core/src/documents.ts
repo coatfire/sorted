@@ -97,7 +97,7 @@ export function assembleBookingDocument(user: User, booking: Booking, client: Cl
     footer: user.invoiceFooter ?? "",
     lineItem: { description: `${snapshot?.service ?? booking.service}${receipt ? " — payment received" : ""}`, amount: money(receipt ? paid : bookingTotal) },
     total: money(receipt ? paid : bookingTotal),
-    vat: vatRateBp === null ? null : { rate: `${vatRateBp / 100}%`, net: money(grossCents - vatCents), amount: money(vatCents), total: money(grossCents) },
+    vat: vatRateBp === null || (vatRateBp === 0 && !user.vatRegistered) ? null : { rate: `${vatRateBp / 100}%`, net: money(grossCents - vatCents), amount: money(vatCents), total: money(grossCents) },
     bookingTotal: money(bookingTotal),
     paidToDate: money(paid),
     balanceDue: money(snapshot?.balanceDueCents ?? Math.max(0, bookingTotal - paid)),

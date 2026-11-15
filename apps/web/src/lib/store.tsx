@@ -13,6 +13,7 @@ import { apiBackend } from "./apiBackend";
 import type { Backend, Snapshot } from "./backend";
 import { demoBackend, resetDemo } from "./demoBackend";
 import { patchSnapshotUser } from "./snapshot";
+import { createActionGuard } from "./action";
 
 type Mode = "api" | "demo";
 const MODE_KEY = "sorted_mode";
@@ -36,7 +37,7 @@ interface DataValue {
   stale: boolean;
   backend: Backend;
   authBackend: Pick<Backend, "signup" | "login" | "verify" | "forgot" | "resetPassword" | "health" | "googleStart" | "googleExchange">;
-  refresh: () => Promise<void>;
+  refresh: (required?: boolean) => Promise<void>;
   patchUser: (userId: string, patch: Partial<Omit<Snapshot["user"], "id">>) => void;
   resetDemo: () => Promise<void>;
   toast: (message: string, tone?: "ok" | "error") => void;
@@ -62,12 +63,15 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const backend = mode === "demo" ? demoBackend : apiBackend;
   const generation = useRef(0);
 
-  const refresh = useCallback(async () => {
+  const refresh = useCallback(async (required = false) => {
     if (!mode) return;
     const mine = ++generation.current;
     try {
       const snapshot = await backend.load();
-      if (mine !== generation.current) return; // a newer load superseded this one
+      if (mine !== generation.current) {
+        if (required) throw new Error("A newer reload is still in progress.");
+        return;
+      }
       setData(snapshot);
       setLoadError(null);
       setStale(false);
@@ -79,7 +83,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         }
       }
     } catch (err) {
-      if (mine !== generation.current) return;
+      if (mine !== generation.current) {
+        if (required) throw err;
+        return;
+      }
       const cached = mode === "api" && isNetworkError(err) ? readCache() : null;
       if (cached) {
         setData((current) => current ?? cached);
@@ -87,6 +94,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       } else {
         setLoadError(err instanceof Error ? err.message : "Couldn't load your data.");
       }
+      if (required) throw err;
     }
   }, [backend, mode]);
 
@@ -208,23 +216,27 @@ export function useData(): Snapshot {
 export function useAction() {
   const { refresh, toast } = useStore();
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [committed, setCommitted] = useState(false);
+  const action = useRef(createActionGuard());
   const run = useCallback(
     async (work: () => Promise<unknown>, done?: string) => {
       setBusy(true);
+      setError(null);
       try {
-        await work();
-        await refresh();
+        await action.current(work, () => refresh(true), () => setCommitted(true));
+        setCommitted(false);
         if (done) toast(done);
         return true;
       } catch (err) {
-        toast(
+        const message =
           isNetworkError(err)
             ? "You're offline — that didn't save. Try again when you're connected."
             : err instanceof Error
               ? err.message
-              : "That didn't work. Try again.",
-          "error",
-        );
+              : "That didn't work. Try again.";
+        setError(message);
+        toast(message, "error");
         return false;
       } finally {
         setBusy(false);
@@ -232,5 +244,5 @@ export function useAction() {
     },
     [refresh, toast],
   );
-  return { busy, run };
+  return { busy, run, error, committed };
 }

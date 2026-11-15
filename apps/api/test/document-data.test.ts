@@ -22,6 +22,11 @@ const document: BookingDocument = { id: "document", bookingId: booking.id, kind:
 const paid: Payment = { id: "paid", bookingId: booking.id, kind: "deposit", status: "paid", amountCents: 2000, paidAt: "2026-07-01T12:00:00Z", method: "bank_transfer", linkUrl: null, createdAt: user.createdAt, vatRateBp: null };
 
 describe("document data", () => {
+  it.each(["invoice", "receipt", "quote"] as const)("omits legacy zero VAT for an unregistered trader's %s", kind => {
+    const issued: BookingDocument = { ...document, kind, vatRateBp: 0, paymentId: kind === "receipt" ? paid.id : null, receiptSnapshot: kind === "receipt" ? snapshotReceipt(booking, [{ ...paid, vatRateBp: 0 }], paid.id, document.issuedAt, user) : null };
+    expect(assembleBookingDocument(user, booking, client, [paid], issued).vat).toBeNull();
+    expect(assembleBookingDocument({ ...user, vatRegistered: true, vatRateBp: 0 }, booking, client, [paid], issued).vat).toMatchObject({ rate: "0%", amount: "€0.00" });
+  });
   it("assembles quotes with current prices, stable numbering, Dublin validity date, deposit and inclusive VAT", () => {
     const quote: BookingDocument = { ...document, kind: "quote", vatRateBp: 2300, issuedAt: "2026-03-14T23:30:00Z" };
     const enquiry = { ...booking, status: "enquiry" as const, priceCents: 12300 };

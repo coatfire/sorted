@@ -12,6 +12,7 @@ import { useValidation } from "../lib/useValidation";
 import { prepareInvoiceLogo } from "../lib/image";
 import { CalendarSettings } from "../CalendarSettings";
 import { DriveSettings } from "../DriveSettings";
+import { vatNumberUpdate } from "../lib/settings";
 
 export function Settings({ welcome = false }: { welcome?: boolean }) {
   const { user, features } = useData();
@@ -49,7 +50,7 @@ export function Settings({ welcome = false }: { welcome?: boolean }) {
     vatCustomPercent: () => form.vatRegistered && form.vatRateChoice === "custom" && percentToBasisPoints(form.vatCustomPercent, 3000) === null ? "Enter a rate from 0 to 30%, with up to two decimal places." : undefined,
     incomeTaxPercent: () => form.incomeTaxPercent.trim() && percentToBasisPoints(form.incomeTaxPercent) === null ? "Enter a rate from 0 to 100%, with up to two decimal places." : undefined,
     invoiceAccent: () => !InvoiceAccent.safeParse(form.invoiceAccent).success ? "Enter a hex colour, like #14532D." : undefined,
-    vatNumber: () => form.vatNumber.trim() && !IrishVatNumber.safeParse(form.vatNumber).success ? "Enter a valid Irish VAT number." : undefined,
+    vatNumber: () => form.vatRegistered && form.vatNumber.trim() && !IrishVatNumber.safeParse(form.vatNumber).success ? "Enter a valid Irish VAT number." : undefined,
     phone: () => form.phone.trim() && !normalisePhone(form.phone)
       ? "That mobile number doesn’t look right. Try it like 087 123 4567." : undefined,
     name: () => welcome && !form.name.trim() ? "Enter your name." : undefined,
@@ -81,7 +82,7 @@ export function Settings({ welcome = false }: { welcome?: boolean }) {
             invoiceLogo: form.invoiceLogo,
             invoiceAccent: InvoiceAccent.parse(form.invoiceAccent) === DEFAULT_INVOICE_ACCENT ? null : InvoiceAccent.parse(form.invoiceAccent),
             invoiceFooter: form.invoiceFooter.trim() || null,
-            vatNumber: form.vatNumber.trim() ? IrishVatNumber.parse(form.vatNumber) : null,
+            ...vatNumberUpdate(form.vatRegistered, form.vatNumber),
             vatRegistered: form.vatRegistered,
             vatRateBp: form.vatRateChoice === "custom" ? percentToBasisPoints(form.vatCustomPercent, 3000) : form.vatRateChoice ? Number(form.vatRateChoice) : null,
             vatPeriodMonths: Number(form.vatPeriodMonths),
@@ -152,9 +153,9 @@ export function Settings({ welcome = false }: { welcome?: boolean }) {
                 </select>
               </Field>
             </>}
-            <Field label="VAT number (optional)" {...validation.field("vatNumber")}>
+            {form.vatRegistered && <Field label="VAT number (optional)" {...validation.field("vatNumber")}>
               <input name="vatNumber" value={form.vatNumber} onChange={set("vatNumber")} placeholder="IE1234567AB" autoCapitalize="characters" />
-            </Field>
+            </Field>}
             <Field label="Income tax rate (%)" helper="e.g. 20% or 40% — the rate you expect on your profit." {...validation.field("incomeTaxPercent")}>
               <input name="incomeTaxPercent" inputMode="decimal" value={form.incomeTaxPercent} onChange={set("incomeTaxPercent")} placeholder="e.g. 20" />
             </Field>

@@ -75,7 +75,7 @@ export async function createBookingPdf(data: BookingDocumentData): Promise<Blob>
   text(data.business.name, 19, accent);
   text(data.business.address, 10);
   text([data.business.phone, data.business.email].filter(Boolean).join(" · "), 10);
-  if (data.business.vatNumber) text(`VAT number: ${data.business.vatNumber}`, 10);
+  if (data.vat && data.business.vatNumber) text(`VAT number: ${data.business.vatNumber}`, 10);
   y -= 16;
   rule();
   text(`${data.title} ${data.number}`, 20, accent);
@@ -95,7 +95,7 @@ export async function createBookingPdf(data: BookingDocumentData): Promise<Blob>
     row("Net", data.vat.net);
     row(`VAT at ${data.vat.rate}`, data.vat.amount);
   }
-  row(data.vat ? "Total including VAT" : data.kind === "receipt" ? "Total received" : "Total", data.total, 14);
+  row(data.vat ? "Total including VAT" : "Total", data.total, 14);
   y -= 12;
   if (data.kind === "quote") {
     if (data.deposit) row("Deposit", data.deposit);

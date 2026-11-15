@@ -1,4 +1,12 @@
 import type { ExpenseCategory, MessageLogEntry, Payment } from "@sorted/core";
+import { calendarDaysBetween, dublinDateTime, irelandToday } from "@sorted/core";
+
+export function jobDateLabel(startAt: string, now = new Date()) {
+  const days = calendarDaysBetween(irelandToday(now), dublinDateTime(startAt).date);
+  if (days === 0) return "job today";
+  if (days < 0) return `job was ${-days} ${days === -1 ? "day" : "days"} ago`;
+  return `job on ${new Intl.DateTimeFormat("en-IE", { weekday: "short", day: "numeric", month: "short", timeZone: "Europe/Dublin" }).format(new Date(startAt)).replace(/,/g, "")}`;
+}
 
 export const euros = (cents: number) =>
   new Intl.NumberFormat("en-IE", { style: "currency", currency: "EUR" }).format(cents / 100);

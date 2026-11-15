@@ -1,9 +1,12 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { and, eq } from "drizzle-orm";
 import { irelandToday, paymentPaidAt, RecordPaymentInput, type BookingDocument, type Payment } from "@sorted/core";
 import { app } from "../src/app";
 import { db, schema } from "../src/db";
 import { issueJwt } from "../src/lib/auth";
+import { completeAction } from "../../web/src/lib/action";
+
+afterEach(() => { vi.useRealTimers(); });
 
 async function fixture(status: "confirmed" | "completed" | "cancelled" | "enquiry" = "confirmed") {
   const [user] = await db.insert(schema.users).values({ email: `${crypto.randomUUID()}@example.com`, vatRegistered: true, vatRateBp: 2300 }).returning();
@@ -18,6 +21,34 @@ async function fixture(status: "confirmed" | "completed" | "cancelled" | "enquir
 }
 
 describe("record instalment payments", () => {
+  it("records the €55 cash balance on a completed €80 booking with a paid €25 deposit on 15 November", async () => {
+    vi.setSystemTime(new Date("2026-11-15T14:00:00Z"));
+    const f = await fixture("completed");
+    await db.update(schema.bookings).set({ priceCents: 8000, depositCents: 2500, completedAt: new Date("2026-11-14T12:30:00Z") }).where(eq(schema.bookings.id, f.booking.id));
+    await db.update(schema.payments).set({ amountCents: 2500, status: "paid", method: "bank_transfer", paidAt: new Date("2026-11-09T08:00:00Z") }).where(eq(schema.payments.id, f.deposit.id));
+    await db.insert(schema.payments).values({ userId: f.user.id, bookingId: f.booking.id, kind: "balance", amountCents: 5500, createdAt: new Date("2026-11-14T12:30:00Z") });
+    const response = await f.record(5500, { method: "cash", paid_on: "2026-11-15" });
+    expect(response.status).toBe(201);
+    const rows = await f.payments();
+    expect(rows.filter(row => row.status === "paid").reduce((sum, row) => sum + row.amountCents, 0)).toBe(8000);
+    expect(rows.filter(row => row.status === "pending")).toEqual([]);
+  });
+
+  it("reports a failed reload after the real payment handler commits, rather than treating it as success", async () => {
+    const f = await fixture("completed");
+    const saved = vi.fn();
+    await expect(completeAction(async () => {
+      expect((await f.record(3000)).status).toBe(201);
+    }, async () => { throw new TypeError("Network unavailable"); }, saved)).rejects.toThrow("Saved, but the screen couldn't update");
+    expect(saved).toHaveBeenCalledOnce();
+    expect((await f.payments()).filter(row => row.status === "paid")).toMatchObject([{ amountCents: 3000 }]);
+  });
+
+  it.each(["cash", "bank_transfer", "revolut"] as const)("marks an existing pending payment paid by %s", async method => {
+    const f = await fixture();
+    expect((await f.request(`/payments/${f.deposit.id}/mark-paid`, { method })).status).toBe(200);
+    expect((await f.payments()).find(row => row.id === f.deposit.id)).toMatchObject({ status: "paid", method });
+  });
   it("records multiple part payments, freezes VAT, cancels the deposit and gives each a stable receipt", async () => {
     const f = await fixture();
     const response = await f.record();
