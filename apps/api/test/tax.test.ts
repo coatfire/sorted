@@ -11,6 +11,31 @@ const expense = (amountCents: number, vatCents: number | null, expenseDate = "20
 });
 
 describe("Ireland tax estimates", () => {
+  it("reports the common paid-period VAT rate rather than the current settings rate", () => {
+    const payments = [payment(10000, undefined, { vatRateBp: 2300 }), payment(12300, undefined, { vatRateBp: 2300 }),
+      payment(12300, undefined, { status: "pending", vatRateBp: 900 }), payment(12300, undefined, { status: "cancelled", vatRateBp: 900 }),
+      payment(12300, "2026-10-31T23:59:59Z", { vatRateBp: 900 }), payment(12300, "2027-01-01T00:00:00Z", { vatRateBp: 900 }),
+      payment(12300, "invalid", { vatRateBp: 900 }), payment(12300, undefined, { paidAt: null, vatRateBp: 900 })];
+    expect(taxEstimate({ payments, expenses: [], settings: { ...settings, vatRateBp: 900 }, now }))
+      .toMatchObject({ salesVatRateBp: 2300, salesVatCents: 4170 });
+  });
+
+  it("omits a common VAT rate for mixed rates or no paid payments in the period", () => {
+    const payments = [payment(12300, undefined, { vatRateBp: 2300 }), payment(10900, undefined, { vatRateBp: 900 })];
+    expect(taxEstimate({ payments, expenses: [], settings, now })).toMatchObject({ salesVatRateBp: null, salesVatCents: 3200 });
+    expect(taxEstimate({ payments: [], expenses: [], settings, now }).salesVatRateBp).toBeNull();
+    expect(taxEstimate({ payments: [payment(12300, undefined, { status: "pending" })], expenses: [], settings, now }).salesVatRateBp).toBeNull();
+  });
+
+  it("includes legacy fallback rates and zero-rated payments when finding the common rate", () => {
+    const legacy = payment(10000);
+    expect(taxEstimate({ payments: [legacy, payment(10000, undefined, { vatRateBp: 2300 })], expenses: [], settings, now }).salesVatRateBp).toBe(2300);
+    expect(taxEstimate({ payments: [legacy, payment(10000, undefined, { vatRateBp: 900 })], expenses: [], settings, now }).salesVatRateBp).toBeNull();
+    expect(taxEstimate({ payments: [payment(10000, undefined, { vatRateBp: 0 })], expenses: [], settings, now }).salesVatRateBp).toBe(0);
+    expect(taxEstimate({ payments: [legacy, payment(10000, undefined, { vatRateBp: 0 })], expenses: [], settings, now }).salesVatRateBp).toBeNull();
+    expect(taxEstimate({ payments: [legacy], expenses: [], settings: { ...settings, vatRegistered: false }, now }).salesVatRateBp).toBe(0);
+  });
+
   it("keeps zero VAT before registration, preserves old paid rates and falls back only for legacy null", () => {
     const payments = [payment(12300, undefined, { vatRateBp: 0 }), payment(10900, undefined, { vatRateBp: 900 }), payment(12300)];
     expect(taxEstimate({ payments, expenses: [], settings, now })).toMatchObject({ salesVatCents: 3200, yearSalesVatCents: 3200, netIncomeCents: 32300 });

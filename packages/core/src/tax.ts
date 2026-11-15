@@ -48,14 +48,17 @@ export function taxEstimate({ payments, expenses, settings, now }: {
   const end = lastMonth === 12 ? `${year + 1}-01-01` : `${year}-${String(lastMonth + 1).padStart(2, "0")}-01`;
   const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
   const rate = config.vatRegistered ? config.vatRateBp! : 0;
+  const periodVatRates = new Set<number>();
   let periodIncomeCents = 0, salesVatCents = 0, purchaseVatCents = 0;
   let yearIncomeCents = 0, yearSalesVatCents = 0, yearExpenseCents = 0, yearPurchaseVatCents = 0;
   for (const payment of payments) {
     if (payment.status !== "paid" || !payment.paidAt) continue;
     const date = irelandDate(payment.paidAt);
     if (!date) continue;
-    const vat = inclusiveVat(payment.amountCents, payment.vatRateBp ?? rate);
+    const paymentRate = payment.vatRateBp ?? rate;
+    const vat = inclusiveVat(payment.amountCents, paymentRate);
     if (date >= start && date < end) {
+      periodVatRates.add(paymentRate);
       periodIncomeCents += payment.amountCents;
       salesVatCents += vat;
     }
@@ -81,6 +84,7 @@ export function taxEstimate({ payments, expenses, settings, now }: {
   return {
     periodLabel: `${months[firstMonth]}–${months[lastMonth - 1]} ${year}`, periodStart: start, periodEnd: end,
     year, ...config, periodIncomeCents, salesVatCents, purchaseVatCents, vatDueCents: salesVatCents - purchaseVatCents,
+    salesVatRateBp: periodVatRates.size === 1 ? [...periodVatRates][0] : null,
     yearIncomeCents, yearSalesVatCents, yearExpenseCents, yearPurchaseVatCents, netIncomeCents, netExpenseCents, profitCents,
     incomeTaxCents: config.incomeTaxRateBp === null ? null : Math.round(Math.max(0, profitCents) * config.incomeTaxRateBp / 10000),
   };
