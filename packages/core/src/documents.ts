@@ -47,6 +47,7 @@ export function snapshotReceipt(
 }
 
 export interface BookingDocument {
+  documentSnapshot?: DocumentSnapshot | null;
   vatRateBp: number | null;
   id: string;
   bookingId: string;
@@ -60,7 +61,7 @@ export interface BookingDocument {
 export const documentNumber = (kind: DocumentKind, number: number) =>
   `${kind === "invoice" ? "INV" : kind === "quote" ? "QTE" : "RCT"}-${String(number).padStart(4, "0")}`;
 
-export function assembleBookingDocument(user: User, booking: Booking, client: Client, payments: readonly Payment[], document: BookingDocument) {
+function liveBookingDocument(user: User, booking: Booking, client: Client, payments: readonly Payment[], document: BookingDocument) {
   if (document.bookingId !== booking.id || booking.clientId !== client.id) throw new Error("Document does not match this booking.");
   const received = payments.filter((payment) => payment.bookingId === booking.id && payment.status === "paid")
     .slice().sort((a, b) => (a.paidAt ?? a.createdAt).localeCompare(b.paidAt ?? b.createdAt));
@@ -103,10 +104,26 @@ export function assembleBookingDocument(user: User, booking: Booking, client: Cl
     balanceDue: money(snapshot?.balanceDueCents ?? Math.max(0, bookingTotal - paid)),
     iban: receipt || quote ? null : user.iban,
     bic: receipt || quote ? null : user.bic,
+    revolutLink: receipt ? null : user.revolutLink ?? null,
     payments: (snapshot ? [{ ...snapshot.payment, paidAt: snapshot.payment.date, createdAt: snapshot.payment.date }] : received).map((payment) => ({
       date: date(payment.paidAt ?? payment.createdAt), amount: money(payment.amountCents),
       method: payment.method ? methods[payment.method] : "Payment",
     })),
   };
 }
-export type BookingDocumentData = ReturnType<typeof assembleBookingDocument>;
+export type BookingDocumentData = ReturnType<typeof liveBookingDocument>;
+
+export interface DocumentSnapshot {
+  version: 1;
+  vatRegistered: boolean;
+  data: BookingDocumentData;
+}
+
+export function assembleBookingDocument(user: User, booking: Booking, client: Client, payments: readonly Payment[], document: BookingDocument): BookingDocumentData {
+  if (document.bookingId !== booking.id || booking.clientId !== client.id) throw new Error("Document does not match this booking.");
+  return document.documentSnapshot?.data ?? liveBookingDocument(user, booking, client, payments, document);
+}
+
+export function snapshotDocument(user: User, booking: Booking, client: Client, payments: readonly Payment[], document: BookingDocument): DocumentSnapshot {
+  return { version: 1, vatRegistered: user.vatRegistered, data: liveBookingDocument(user, booking, client, payments, document) };
+}

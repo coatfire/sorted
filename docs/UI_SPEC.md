@@ -238,8 +238,11 @@ Stacked sections:
 - **Quote:** enquiries have a primary **Quote** action using the same PDF
   share/download flow and branding as invoices. Title **Quote**, stable
   **QTE-0001** number and issue date, **Valid until** (issue date + 30 days),
-  current service/date/price and VAT breakdown, deposit if positive, and
+  service/date/price at issue time and VAT breakdown, deposit if positive, and
   **To go ahead, just reply to confirm.** No paid/balance or bank-detail section.
+  Newly issued PDFs freeze their visible content, including branding, client
+  details, prices, payment details and VAT. Reopening a new document does not
+  change it; legacy documents without a snapshot retain live rendering.
   It is a quote, not proof of acceptance or payment. Confirming remains the
   existing Confirm action, and removes Quote availability.
 - **Messages (M3):** timeline of message_log rows — "✓ Confirmation sent
@@ -319,6 +322,28 @@ kit; resist adding more.
   (button "Mark paid" → toast "Marked paid").
 - Dates are human: "Tomorrow 10:00", "Thu 16 Jul". Money always €, always
   2dp, always tabular.
+
+## Payment details and issued documents (Settings)
+
+### Revolut payment details and documents
+
+- Settings has **Revolut.me link** beside bank details. Accept a username,
+  `@username` or full Revolut.me link and save its canonical HTTPS URL. Allow
+  letters, digits, dots, underscores and hyphens; show a field error otherwise.
+  Blank turns the link off. Demo supports the same settings and document flow.
+- Payment drafts include **Pay by Revolut: <link>** via `{revolut_link}` or
+  one automatic append for older customised payment templates. Do not append
+  another copy when that URL is already present. Confirmations with bank
+  details and a deposit due include it too. No undocumented amount suffix.
+- Invoices and quotes include a clickable **Pay by Revolut** line. Receipts
+  do not ask for another payment. Record payment defaults to Revolut when a
+  link is set; Cash and Bank transfer remain available. Money's immediate
+  Mark paid choices stay explicit rather than selecting or saving for the user.
+- New issued documents preserve their branding, business/client details,
+  financial data and payment links. VAT-registered documents, including 0%,
+  keep their VAT breakdown and VAT number after deregistration. Settings edits
+  affect future documents, not issued ones. Legacy unsnapshotted documents
+  keep existing behaviour.
 
 ## Google Drive backup (Settings)
 

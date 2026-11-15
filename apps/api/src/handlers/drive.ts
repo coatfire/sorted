@@ -32,7 +32,7 @@ driveRoutes.get("/files", async (c) => {
   for (const payment of payments) if (payment.status === "paid" && payment.paidAt) years.add(payment.paidAt.getUTCFullYear());
   for (const expense of expenses) if (expense.status === "confirmed" && expense.expenseDate) years.add(expense.expenseDate.getUTCFullYear());
   return c.json<DriveBackup>({ userId, logo: user.invoiceLogo, years: [...years].sort(), photos: photos.map((photo) => ({ ...photo, date: photo.date.toISOString().slice(0, 10) })), documents: documents.map(({ document, booking, client }) => {
-    const { logo: _logo, ...data } = assembleBookingDocument(
+    const data = assembleBookingDocument(
       safeUser,
       { ...booking, startAt: booking.startAt.toISOString(), endAt: booking.endAt?.toISOString() ?? null, completedAt: booking.completedAt?.toISOString() ?? null, paymentRequestedAt: booking.paymentRequestedAt?.toISOString() ?? null, createdAt: booking.createdAt.toISOString() },
       { ...client, createdAt: client.createdAt.toISOString() }, paid,

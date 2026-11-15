@@ -5,7 +5,7 @@
  * payment links are simulated — nothing leaves the browser.
  */
 import type { Client, Expense, MessageLogEntry, Payment, BookingDocument } from "@sorted/core";
-import { snapshotReceipt, TaxSettings, ConfirmExpenseInput, RecordPaymentInput, paymentPaidAt, irelandToday, addCalendarDays, CalendarDate, shiftDublinWeeks, RepeatInput } from "@sorted/core";
+import { snapshotReceipt, snapshotDocument, TaxSettings, ConfirmExpenseInput, RecordPaymentInput, paymentPaidAt, irelandToday, addCalendarDays, CalendarDate, shiftDublinWeeks, RepeatInput } from "@sorted/core";
 import type { Backend, BookingRow, Snapshot } from "./backend";
 import { blobToDataUrl } from "./image";
 
@@ -108,7 +108,7 @@ function seed(): DemoData {
       id: "demo", email: "demo@sorted.app", name: "Shane", businessName: "Studio by Shane",
       phone: "+353871234567", reviewLink: "https://g.page/r/example/review",
       currency: "EUR", createdAt: at(-200, 9),
-      emailVerifiedAt: at(-200, 9), address: null, iban: null, bic: null,
+      emailVerifiedAt: at(-200, 9), address: null, iban: null, bic: null, revolutLink: null,
       bookingConfirmationTemplate: null, paymentRequestTemplate: null,
       invoiceLogo: null, invoiceAccent: null, invoiceFooter: null, vatNumber: null,
       vatRegistered: false, vatRateBp: null, vatPeriodMonths: 2, incomeTaxRateBp: null,
@@ -228,6 +228,7 @@ export const demoBackend: Backend = {
       receiptSnapshot: kind === "receipt" ? snapshotReceipt(booking, d.payments, paymentId!, issuedAt, d.user) : null,
       number: Math.max(0, ...documents.filter((item) => item.kind === kind).map((item) => item.number)) + 1,
     };
+    document.documentSnapshot = snapshotDocument(d.user, booking, mustFind(d.clients, booking.clientId, "Client"), d.payments, document);
     documents.push(document);
     save();
     return structuredClone(document);

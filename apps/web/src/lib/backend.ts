@@ -104,6 +104,7 @@ export interface Backend {
     invoiceAccent?: string | null;
     invoiceFooter?: string | null;
     vatNumber?: string | null;
+    revolutLink?: string | null;
     vatRegistered?: boolean;
     vatRateBp?: number | null;
     vatPeriodMonths?: number;

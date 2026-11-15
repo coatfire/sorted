@@ -32,6 +32,7 @@ export function BookingMessageSheet({ booking, kind, onClose, initialAmountCents
     ? user.bookingConfirmationTemplate ?? DEFAULT_BOOKING_CONFIRMATION_TEMPLATE
     : user.paymentRequestTemplate ?? DEFAULT_PAYMENT_REQUEST_TEMPLATE;
   const message = renderBookingMessage(template, {
+    kind, revolutLink: user.revolutLink,
     client: client.name,
     business: user.businessName || user.name || "your trader",
     date: longDay(booking.startAt),

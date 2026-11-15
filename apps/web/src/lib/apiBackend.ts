@@ -136,6 +136,7 @@ export const apiBackend: Backend = {
       invoice_accent: changes.invoiceAccent,
       invoice_footer: changes.invoiceFooter,
       vat_number: changes.vatNumber,
+      revolut_link: changes.revolutLink,
       vat_registered: changes.vatRegistered,
       vat_rate_bp: changes.vatRateBp,
       vat_period_months: changes.vatPeriodMonths,

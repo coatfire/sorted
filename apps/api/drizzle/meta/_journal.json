@@ -106,6 +106,13 @@
       "when": 1794749453259,
       "tag": "0014_google_drive_backup",
       "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "7",
+      "when": 1794777660713,
+      "tag": "0015_revolut_document_snapshots",
+      "breakpoints": true
     }
   ]
 }

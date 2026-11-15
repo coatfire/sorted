@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   assembleBookingDocument, documentNumber, InvoiceLogo, UpdateUserInput, MAX_LOGO_BYTES,
-  snapshotReceipt,
+  snapshotReceipt, snapshotDocument,
   type User, type Booking, type Client, type Payment, type BookingDocument,
 } from "@sorted/core";
 
@@ -22,6 +22,17 @@ const document: BookingDocument = { id: "document", bookingId: booking.id, kind:
 const paid: Payment = { id: "paid", bookingId: booking.id, kind: "deposit", status: "paid", amountCents: 2000, paidAt: "2026-07-01T12:00:00Z", method: "bank_transfer", linkUrl: null, createdAt: user.createdAt, vatRateBp: null };
 
 describe("document data", () => {
+  it.each(["invoice", "receipt", "quote"] as const)("freezes all rendered %s data, including zero-rate VAT, after settings and booking changes", kind => {
+    for (const rate of [0, 2300]) {
+      const registered = { ...user, vatRegistered: true, vatRateBp: rate, revolutLink: "https://revolut.me/studio", iban: "IE29AIBK93115212345678", invoiceFooter: "Original footer" };
+      const issued: BookingDocument = { ...document, kind, vatRateBp: rate, paymentId: kind === "receipt" ? paid.id : null, receiptSnapshot: kind === "receipt" ? snapshotReceipt(booking, [{ ...paid, vatRateBp: rate }], paid.id, document.issuedAt, registered) : null };
+      issued.documentSnapshot = snapshotDocument(registered, booking, client, [paid], issued);
+      const before = assembleBookingDocument(registered, booking, client, [paid], issued);
+      expect(before.vat?.rate).toBe(`${rate / 100}%`);
+      expect(before.business.vatNumber).toBe(user.vatNumber);
+      expect(assembleBookingDocument({ ...user, businessName: "New name", address: "New address", vatNumber: null, invoiceAccent: "#000000", invoiceFooter: "New footer", revolutLink: null }, { ...booking, priceCents: 99900, service: "New service", startAt: "2027-01-01T10:00:00Z" }, { ...client, name: "New client", email: null, phone: null }, [], issued)).toEqual(before);
+    }
+  });
   it.each(["invoice", "receipt", "quote"] as const)("omits legacy zero VAT for an unregistered trader's %s", kind => {
     const issued: BookingDocument = { ...document, kind, vatRateBp: 0, paymentId: kind === "receipt" ? paid.id : null, receiptSnapshot: kind === "receipt" ? snapshotReceipt(booking, [{ ...paid, vatRateBp: 0 }], paid.id, document.issuedAt, user) : null };
     expect(assembleBookingDocument(user, booking, client, [paid], issued).vat).toBeNull();

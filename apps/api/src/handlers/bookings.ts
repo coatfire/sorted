@@ -17,6 +17,7 @@ import {
   UpdateBookingInput,
   CreateDocumentInput,
   snapshotReceipt,
+  snapshotDocument,
   RecordPaymentInput,
   paymentPaidAt,
   irelandToday,
@@ -27,6 +28,7 @@ import { db, schema } from "../db";
 import { emitBookingEvent, emitEvent } from "../lib/events";
 import { deactivatePaymentLink } from "../lib/stripe";
 import { effectivePaymentVatRate } from "../lib/tax";
+import { lockBookingWithClient, userTransaction } from "../lib/transaction";
 import type { AppEnv } from "../app";
 
 export const bookingRoutes = new Hono<AppEnv>();
@@ -36,7 +38,7 @@ bookingRoutes.post("/:id/payments", async (c) => {
   if (!parsed.success) return c.json({ error: parsed.error.flatten() }, 400);
   const userId = c.get("userId");
   const bookingId = c.req.param("id");
-  const result = await db.transaction(async (tx) => {
+  const result = await userTransaction(userId, async (tx) => {
     const [booking] = await tx.select().from(schema.bookings).where(and(
       eq(schema.bookings.id, bookingId), eq(schema.bookings.userId, userId),
     )).for("update");
@@ -46,7 +48,7 @@ bookingRoutes.post("/:id/payments", async (c) => {
     }
     const payments = await tx.select().from(schema.payments).where(and(
       eq(schema.payments.bookingId, bookingId), eq(schema.payments.userId, userId),
-    )).for("update");
+    )).orderBy(schema.payments.id).for("update");
     const outstanding = booking.priceCents - payments.filter((payment) => payment.status === "paid").reduce((sum, payment) => sum + payment.amountCents, 0);
     if (parsed.data.amount_cents > outstanding) {
       const owed = new Intl.NumberFormat("en-IE", { style: "currency", currency: "EUR" }).format(Math.max(0, outstanding) / 100);
@@ -80,49 +82,47 @@ bookingRoutes.post("/:id/documents", async (c) => {
   const userId = c.get("userId");
   const bookingId = c.req.param("id");
   const { kind, payment_id: paymentId } = parsed.data;
-  for (let attempt = 0; ; attempt++) {
-    try {
-      return await db.transaction(async (tx) => {
-        const [booking] = await tx.select().from(schema.bookings)
-          .where(and(eq(schema.bookings.id, bookingId), eq(schema.bookings.userId, userId))).for("update");
-        if (!booking) return c.json({ error: "Booking not found" }, 404);
-        if (kind === "quote" && booking.status !== "enquiry") return c.json({ error: "Quotes are only available for enquiries." }, 409);
-        const paidPayments = kind === "receipt" ? await tx.select().from(schema.payments).where(and(
-          eq(schema.payments.bookingId, bookingId), eq(schema.payments.userId, userId),
-        )) : [];
-        if (kind === "receipt") {
-          const payment = paidPayments.find((payment) => payment.id === paymentId);
-          if (!payment) return c.json({ error: "Payment not found" }, 404);
-          if (payment.status !== "paid") return c.json({ error: "Choose a paid payment for this receipt." }, 400);
-        }
-        const [existing] = await tx.select().from(schema.invoices).where(and(
-          eq(schema.invoices.userId, userId), eq(schema.invoices.bookingId, bookingId), eq(schema.invoices.kind, kind),
-          ...(kind === "receipt" ? [eq(schema.invoices.paymentId, paymentId!)] : []),
-        ));
-        if (existing) return c.json(existing);
-        const [sequence] = await tx.select({ next: sql<number>`coalesce(max(${schema.invoices.number}), 0) + 1` })
-          .from(schema.invoices).where(and(eq(schema.invoices.userId, userId), eq(schema.invoices.kind, kind)));
-        const issuedAt = new Date();
-        const [taxSettings] = await tx.select({ vatRegistered: schema.users.vatRegistered, vatRateBp: schema.users.vatRateBp }).from(schema.users).where(eq(schema.users.id, userId));
-        const receiptSnapshot = kind === "receipt" ? snapshotReceipt(
-          { ...booking, startAt: booking.startAt.toISOString() },
-          paidPayments.map((payment) => ({ ...payment, paidAt: payment.paidAt?.toISOString() ?? null, createdAt: payment.createdAt.toISOString() })),
-          paymentId!, issuedAt.toISOString(), taxSettings,
-        ) : null;
-        const [document] = await tx.insert(schema.invoices).values({
-          userId, bookingId, kind, number: Number(sequence.next), issuedAt,
-          vatRateBp: kind !== "receipt" ? taxSettings.vatRegistered ? taxSettings.vatRateBp : 0 : null,
-          paymentId: kind === "receipt" ? paymentId : null, receiptSnapshot,
-        }).returning();
-        return c.json(document);
-      });
-    } catch (error) {
-      const code = error && typeof error === "object"
-        ? ("code" in error ? error.code : "cause" in error && error.cause && typeof error.cause === "object" && "code" in error.cause ? error.cause.code : null)
-        : null;
-      if (code !== "23505" || attempt >= 2) throw error;
+  return userTransaction(userId, async (tx, taxSettings) => {
+    const row = await lockBookingWithClient(tx, userId, bookingId);
+    if (!row) return c.json({ error: "Booking not found" }, 404);
+    const { booking, client } = row;
+    if (kind === "quote" && booking.status !== "enquiry") return c.json({ error: "Quotes are only available for enquiries." }, 409);
+    const paidPayments = await tx.select().from(schema.payments).where(and(
+      eq(schema.payments.bookingId, bookingId), eq(schema.payments.userId, userId),
+    ));
+    if (kind === "receipt") {
+      const payment = paidPayments.find((payment) => payment.id === paymentId);
+      if (!payment) return c.json({ error: "Payment not found" }, 404);
+      if (payment.status !== "paid") return c.json({ error: "Choose a paid payment for this receipt." }, 400);
     }
-  }
+    const [existing] = await tx.select().from(schema.invoices).where(and(
+      eq(schema.invoices.userId, userId), eq(schema.invoices.bookingId, bookingId), eq(schema.invoices.kind, kind),
+      ...(kind === "receipt" ? [eq(schema.invoices.paymentId, paymentId!)] : []),
+    ));
+    if (existing) return c.json(existing);
+    const [sequence] = await tx.select({ next: sql<number>`coalesce(max(${schema.invoices.number}), 0) + 1` })
+      .from(schema.invoices).where(and(eq(schema.invoices.userId, userId), eq(schema.invoices.kind, kind)));
+    const issuedAt = new Date();
+    const receiptSnapshot = kind === "receipt" ? snapshotReceipt(
+      { ...booking, startAt: booking.startAt.toISOString() },
+      paidPayments.map((payment) => ({ ...payment, paidAt: payment.paidAt?.toISOString() ?? null, createdAt: payment.createdAt.toISOString() })),
+      paymentId!, issuedAt.toISOString(), taxSettings,
+    ) : null;
+    const [document] = await tx.insert(schema.invoices).values({
+      userId, bookingId, kind, number: Number(sequence.next), issuedAt,
+      vatRateBp: kind !== "receipt" ? taxSettings.vatRegistered ? taxSettings.vatRateBp : 0 : null,
+      paymentId: kind === "receipt" ? paymentId : null, receiptSnapshot,
+    }).returning();
+    const documentSnapshot = snapshotDocument(
+      { ...taxSettings, createdAt: taxSettings.createdAt.toISOString(), emailVerifiedAt: taxSettings.emailVerifiedAt?.toISOString() ?? null, driveBackedUpAt: taxSettings.driveBackedUpAt?.toISOString() ?? null },
+      { ...booking, startAt: booking.startAt.toISOString(), endAt: booking.endAt?.toISOString() ?? null, completedAt: booking.completedAt?.toISOString() ?? null, paymentRequestedAt: booking.paymentRequestedAt?.toISOString() ?? null, createdAt: booking.createdAt.toISOString() },
+      { ...client, createdAt: client.createdAt.toISOString() },
+      paidPayments.map((payment) => ({ ...payment, paidAt: payment.paidAt?.toISOString() ?? null, createdAt: payment.createdAt.toISOString() })),
+      { ...document, issuedAt: document.issuedAt.toISOString() },
+    );
+    const [frozen] = await tx.update(schema.invoices).set({ documentSnapshot }).where(and(eq(schema.invoices.id, document.id), eq(schema.invoices.userId, userId))).returning();
+    return c.json(frozen);
+  }, true);
 });
 
 /** GET /api/bookings?from=&to=&status= */
@@ -165,7 +165,7 @@ bookingRoutes.post("/", async (c) => {
   }
   const input = parsed.data;
 
-  return db.transaction(async (tx) => {
+  return userTransaction(userId, async (tx) => {
     // Resolve or create the client
     let clientId = input.client_id;
     if (input.client) {
@@ -184,7 +184,7 @@ bookingRoutes.post("/", async (c) => {
             eq(schema.clients.id, clientId!),
             eq(schema.clients.userId, userId),
           ),
-        );
+        ).for("share");
       if (!client) return c.json({ error: "Client not found" }, 404);
     }
 
@@ -217,18 +217,8 @@ bookingRoutes.post("/:id/confirm", async (c) => {
   const userId = c.get("userId");
   const id = c.req.param("id");
 
-  const result = await db.transaction(async (tx) => {
-    const [row] = await tx
-      .select({
-        booking: schema.bookings,
-        client: schema.clients,
-      })
-      .from(schema.bookings)
-      .innerJoin(schema.clients, eq(schema.bookings.clientId, schema.clients.id))
-      .where(
-        and(eq(schema.bookings.id, id), eq(schema.bookings.userId, userId)),
-      )
-      .for("update");
+  const result = await userTransaction(userId, async (tx, user) => {
+    const row = await lockBookingWithClient(tx, userId, id);
 
     if (!row) return c.json({ error: "Booking not found" }, 404);
     if (row.booking.status !== "enquiry") {
@@ -254,10 +244,6 @@ bookingRoutes.post("/:id/confirm", async (c) => {
       });
     }
 
-    const [user] = await tx
-      .select()
-      .from(schema.users)
-      .where(eq(schema.users.id, userId));
     return { row, booking, user };
   });
   if (result instanceof Response) return result;
@@ -332,7 +318,8 @@ bookingRoutes.patch("/:id", async (c) => {
   const parsed = UpdateBookingInput.safeParse(await c.req.json());
   if (!parsed.success) return c.json({ error: parsed.error.flatten() }, 400);
   const input = parsed.data;
-  return db.transaction(async (tx) => {
+  const userId = c.get("userId");
+  return userTransaction(userId, async (tx) => {
     const [current] = await tx
       .select()
       .from(schema.bookings)
@@ -391,7 +378,7 @@ bookingRoutes.patch("/:id", async (c) => {
 bookingRoutes.post("/:id/complete", async (c) => {
   const userId = c.get("userId");
   const id = c.req.param("id");
-  const result = await db.transaction(async (tx) => {
+  const result = await userTransaction(userId, async (tx) => {
     const [booking] = await tx
       .select()
       .from(schema.bookings)
@@ -476,7 +463,7 @@ bookingRoutes.post("/:id/complete", async (c) => {
 bookingRoutes.post("/:id/cancel", async (c) => {
   const userId = c.get("userId");
   const id = c.req.param("id");
-  const result = await db.transaction(async (tx) => {
+  const result = await userTransaction(userId, async (tx) => {
     const [booking] = await tx
       .select()
       .from(schema.bookings)

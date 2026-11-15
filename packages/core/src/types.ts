@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { RevolutLink } from "./revolut";
 import { CalendarDate } from "./dates";
 import { InvoiceLogo, InvoiceAccent, IrishVatNumber } from "./documents";
 import { VatRateBp, IncomeTaxRateBp, VatPeriodMonths } from "./tax";
@@ -133,6 +134,7 @@ export const UpdateBookingInput = z.object({
 export type UpdateBookingInput = z.infer<typeof UpdateBookingInput>;
 
 export const UpdateUserInput = z.object({
+  revolut_link: z.union([z.string().trim().length(0).transform(() => null), RevolutLink]).nullable().optional(),
   vat_registered: z.boolean().optional(),
   vat_rate_bp: VatRateBp.nullable().optional(),
   vat_period_months: VatPeriodMonths.optional(),
@@ -209,6 +211,7 @@ export const ConfirmExpenseInput = z.object(expenseFields).refine(expenseVatWith
 // ISO timestamp strings). Request bodies above are snake_case.
 
 export interface User {
+  revolutLink?: string | null;
   driveBackedUpAt: string | null;
   vatRegistered: boolean;
   vatRateBp: number | null;

@@ -35,7 +35,7 @@ describe("booking message templates", () => {
 
   it("renders every placeholder from cents without recursively interpreting client content", () => {
     expect(renderBookingMessage(MESSAGE_PLACEHOLDERS.map((key) => `{${key}}`).join("|"), details))
-      .toBe("Sarah & Jane|Studio by Shane|15 November|10:00|Wedding hair|€350.50|€100.00|€250.50|IE29AIBK93115212345678|AIBKIE2D|");
+      .toBe("Sarah & Jane|Studio by Shane|15 November|10:00|Wedding hair|€350.50|€100.00|€250.50|IE29AIBK93115212345678|AIBKIE2D||");
     expect(renderBookingMessage("Hi {client}: {balance}", { ...details, client: "{balance}" }))
       .toBe("Hi {balance}: €250.50");
   });
