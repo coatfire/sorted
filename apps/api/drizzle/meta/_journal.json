@@ -64,6 +64,13 @@
       "when": 1794740364975,
       "tag": "0008_square_red_skull",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1794745568398,
+      "tag": "0009_tidy_siren",
+      "breakpoints": true
     }
   ]
 }

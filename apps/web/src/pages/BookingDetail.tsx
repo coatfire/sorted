@@ -5,6 +5,7 @@ import { BackButton, Button, Card, EmptyState, Icon, MoneyText, Sheet, StatusChi
 import { PaymentActions } from "../PaymentActions";
 import { BookingMessageSheet } from "../BookingMessageSheet";
 import { RecordPaymentSheet } from "../RecordPaymentSheet";
+import { BookingCalendarSheet } from "../BookingCalendarSheet";
 import {
   confirmCopy, firstName, kindLabel, longDay, messageLabel, methodLabel, stamp, time,
 } from "../lib/format";
@@ -19,6 +20,7 @@ export function BookingDetail() {
   const [documentBusy, setDocumentBusy] = useState(false);
   const [chooseReceipt, setChooseReceipt] = useState(false);
   const [recordPayment, setRecordPayment] = useState(false);
+  const [calendar, setCalendar] = useState(false);
   const { busy, run } = useAction();
   const [confirmCancel, setConfirmCancel] = useState(false);
   const [message, setMessage] = useState<"confirmation" | "payment_request" | null>(null);
@@ -102,7 +104,7 @@ export function BookingDetail() {
         {booking.location && (
           <div className="detail-line">
             <span className="detail-icon"><Icon name="map" /></span>
-            <div><strong>{booking.location}</strong><span>Location</span></div>
+            <a className="detail-link calendar-directions" href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(booking.location)}`} target="_blank" rel="noreferrer"><strong>{booking.location}</strong><span>Get directions</span></a>
           </div>
         )}
         <div className="detail-line">
@@ -113,6 +115,10 @@ export function BookingDetail() {
           </Link>
         </div>
       </Card>
+
+      {booking.status !== "cancelled" && (
+        <Button kind="soft" onClick={() => setCalendar(true)}>Add to calendar</Button>
+      )}
 
       {booking.status !== "cancelled" && (
         <Button kind="soft" onClick={() => setMessage("confirmation")}>
@@ -266,6 +272,7 @@ export function BookingDetail() {
         </Sheet>
       )}
       {message && <BookingMessageSheet booking={booking} kind={message} onClose={() => setMessage(null)} />}
+      {calendar && <BookingCalendarSheet booking={booking} onClose={() => setCalendar(false)} />}
       {recordPayment && <RecordPaymentSheet bookingId={booking.id} outstanding={Math.max(0, booking.priceCents - paid)} onClose={() => setRecordPayment(false)} />}
       {chooseReceipt && <Sheet title="Choose a payment" onClose={() => setChooseReceipt(false)}>
         <p className="sheet-copy">Each payment has its own receipt number.</p>

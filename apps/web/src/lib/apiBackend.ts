@@ -1,4 +1,4 @@
-import type { Booking, Client, Expense, Health, MessageLogEntry, Payment, User, BookingDocument } from "@sorted/core";
+import type { Booking, Client, Expense, Health, MessageLogEntry, Payment, User, BookingDocument, CalendarLinks } from "@sorted/core";
 import { api, apiBlob, patch, post } from "./api";
 import type { Backend, ExpenseDraft } from "./backend";
 import { blobToDataUrl } from "./image";
@@ -12,6 +12,8 @@ const expenseBody = (draft: ExpenseDraft) => ({
 });
 
 export const apiBackend: Backend = {
+  calendar: () => api<CalendarLinks>("/calendar"),
+  resetCalendar: () => post<CalendarLinks>("/calendar/reset"),
   document: (bookingId, kind, paymentId) => post<BookingDocument>(`/bookings/${bookingId}/documents`, { kind, payment_id: paymentId }),
   signup: (email, password) => post("/auth/signup", { email, password }),
   login: (email, password) => post("/auth/login", { email, password }),
