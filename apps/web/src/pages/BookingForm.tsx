@@ -5,6 +5,7 @@ import { BackButton, Button, Card, EmptyState, Field, Icon, MoneyText, PageHeade
 import type { BookingRow } from "../lib/backend";
 import { centsToInput, confirmCopy, longDay, parseEuros, time, toDateInput, toTimeInput } from "../lib/format";
 import { useAction, useData, useStore } from "../lib/store";
+import { useValidation } from "../lib/useValidation";
 
 function tomorrow() {
   const date = new Date();
@@ -22,8 +23,6 @@ export function BookingForm() {
   const editing = id ? bookings.find((booking) => booking.id === id) : undefined;
 
   const [savedId, setSavedId] = useState<string | null>(null);
-  const [error, setError] = useState("");
-  const [errorField, setErrorField] = useState<keyof typeof form | null>(null);
   const [client, setClient] = useState<Client | null>(editing?.client ?? null);
   const [form, setForm] = useState(() => {
     const start = editing ? new Date(editing.startAt) : null;
@@ -41,6 +40,26 @@ export function BookingForm() {
   });
   const [showDeposit, setShowDeposit] = useState(Boolean(editing?.depositCents));
   const [showMore, setShowMore] = useState(Boolean(editing?.location || editing?.notes));
+  const validation = useValidation({
+    clientPhone: () => form.clientPhone.trim() && !normalisePhone(form.clientPhone)
+      ? "That mobile number doesn’t look right. Try it like 087 123 4567." : undefined,
+    price: () => {
+      const price = parseEuros(form.price);
+      if (price === null) return "Add the price, like 120 or 120.50.";
+      if (editing && editing.status !== "enquiry" && editing.depositCents > price) {
+        return "The deposit can’t be more than the price.";
+      }
+    },
+    deposit: () => {
+      const deposit = form.deposit.trim() ? parseEuros(form.deposit) : 0;
+      const price = parseEuros(form.price);
+      if (deposit === null) return "The deposit should be an amount, like 50.";
+      if (price !== null && deposit > price) return "The deposit can’t be more than the price.";
+    },
+    date: () => !form.date ? "Pick a date and time." : undefined,
+    time: () => !form.time || Number.isNaN(new Date(`${form.date}T${form.time}`).getTime())
+      ? "Pick a date and time." : undefined,
+  });
 
   const services = useMemo(
     () =>
@@ -59,7 +78,7 @@ export function BookingForm() {
   }, [client, clients, form.clientName]);
 
   function update(field: keyof typeof form, value: string) {
-    setError("");
+    validation.field(field).onChangeCapture();
     setForm((current) => ({ ...current, [field]: value }));
   }
 
@@ -73,31 +92,18 @@ export function BookingForm() {
   }
   const depositLocked = Boolean(editing && editing.status !== "enquiry");
 
-  function invalid(field: keyof typeof form, message: string) {
-    setErrorField(field);
-    setError(message);
-  }
-
-  const errorProps = (field: keyof typeof form) => ({
-    "aria-invalid": error && errorField === field ? true : undefined,
-    "aria-describedby": error && errorField === field ? "booking-error" : undefined,
-  });
-
-  async function submit(event: FormEvent) {
+  async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (!validation.validate(event.currentTarget)) return;
     const priceCents = parseEuros(form.price);
     const depositCents = form.deposit.trim() ? parseEuros(form.deposit) : 0;
     const startAt = new Date(`${form.date}T${form.time}`);
     let phone: string | undefined;
     if (!client && form.clientPhone.trim()) {
       const normalised = normalisePhone(form.clientPhone);
-      if (!normalised) return invalid("clientPhone", "That mobile number doesn’t look right. Try it like 087 123 4567.");
-      phone = normalised;
+      phone = normalised ?? undefined;
     }
-    if (priceCents === null) return invalid("price", "Add the price, like 120 or 120.50.");
-    if (depositCents === null) return invalid("deposit", "The deposit should be an amount, like 50.");
-    if (depositCents > priceCents) return invalid("deposit", "The deposit can’t be more than the price.");
-    if (Number.isNaN(startAt.getTime())) return invalid("date", "Pick a date and time.");
+    if (priceCents === null || depositCents === null) return;
 
     const details = {
       service: form.service.trim(),
@@ -139,7 +145,7 @@ export function BookingForm() {
         title={editing ? editing.service : "Who are you seeing?"}
       />
       {!editing && <p className="page-intro">One quick form. That’s it.</p>}
-      <form onSubmit={submit} noValidate={false}>
+      <form onSubmit={submit} noValidate>
         {!editing && (
           <Card className="form-card">
             {client ? (
@@ -153,11 +159,12 @@ export function BookingForm() {
               </div>
             ) : (
               <>
-                <Field label="Client name">
+                <Field label="Client name" {...validation.field("clientName")}>
                   <div className="input-with-icon">
                     <Icon name="user" />
                     <input
                       required
+                      name="clientName"
                       autoFocus
                       value={form.clientName}
                       onChange={(event) => update("clientName", event.target.value)}
@@ -169,7 +176,7 @@ export function BookingForm() {
                 {matches.length > 0 && (
                   <div className="client-matches" role="group" aria-label="Existing clients">
                     {matches.map((match) => (
-                      <button type="button" key={match.id} onClick={() => { setClient(match); setError(""); }}>
+                      <button type="button" key={match.id} onClick={() => { setClient(match); validation.clear(); }}>
                         <span className="client-initial">{match.name[0]?.toUpperCase()}</span>
                         <span><strong>{match.name}</strong><small>{match.phone ?? "No mobile"}</small></span>
                         <em>Use</em>
@@ -177,11 +184,11 @@ export function BookingForm() {
                     ))}
                   </div>
                 )}
-                <Field label="Mobile (optional)" helper="Add a mobile so Sorted can send confirmations for you.">
+                <Field label="Mobile (optional)" helper="Add a mobile so Sorted can send confirmations for you." {...validation.field("clientPhone")}>
                   <input
                     type="tel"
                     inputMode="tel"
-                    value={form.clientPhone} {...errorProps("clientPhone")}
+                    name="clientPhone" value={form.clientPhone}
                     onChange={(event) => update("clientPhone", event.target.value)}
                     placeholder="087 123 4567"
                     autoComplete="off"
@@ -193,9 +200,10 @@ export function BookingForm() {
         )}
 
         <Card className="form-card">
-          <Field label="Service">
+          <Field label="Service" {...validation.field("service")}>
             <input
               required
+              name="service"
               value={form.service}
               onChange={(event) => update("service", event.target.value)}
               placeholder="e.g. Bridal makeup"
@@ -211,20 +219,20 @@ export function BookingForm() {
             </div>
           )}
           <div className="field-grid">
-            <Field label="Date">
-              <input required type="date" value={form.date} {...errorProps("date")} onChange={(event) => update("date", event.target.value)} />
+            <Field label="Date" {...validation.field("date")}>
+              <input name="date" required type="date" value={form.date} onChange={(event) => update("date", event.target.value)} />
             </Field>
-            <Field label="Time">
-              <input required type="time" value={form.time} {...errorProps("date")} onChange={(event) => update("time", event.target.value)} />
+            <Field label="Time" {...validation.field("time")}>
+              <input name="time" required type="time" value={form.time} onChange={(event) => update("time", event.target.value)} />
             </Field>
           </div>
-          <Field label="Price">
+          <Field label="Price" {...validation.field("price")}>
             <div className="money-input">
               <span>€</span>
               <input
                 required
                 inputMode="decimal"
-                value={form.price} {...errorProps("price")}
+                name="price" value={form.price}
                 onChange={(event) => update("price", event.target.value)}
                 placeholder="0.00"
               />
@@ -242,12 +250,12 @@ export function BookingForm() {
               <Icon name="plus" size={17} /> Add deposit
             </button>
           ) : (
-            <Field label="Deposit" helper="Requested when you confirm the booking.">
+            <Field label="Deposit" helper="Requested when you confirm the booking." {...validation.field("deposit")}>
               <div className="money-input">
                 <span>€</span>
                 <input
                   inputMode="decimal"
-                  value={form.deposit} {...errorProps("deposit")}
+                  name="deposit" value={form.deposit}
                   onChange={(event) => update("deposit", event.target.value)}
                   placeholder="0.00"
                 />
@@ -279,8 +287,7 @@ export function BookingForm() {
             </>
           )}
         </Card>
-        <div className={`sticky-action ${error ? "has-error" : ""}`}>
-          {error && <p id="booking-error" className="form-error" role="alert">{error}</p>}
+        <div className={`sticky-action ${validation.hasErrors ? "has-error" : ""}`}>
           <Button type="submit" disabled={busy}>
             {busy ? "Saving…" : editing ? "Save changes" : "Save booking"} <Icon name="arrow" />
           </Button>

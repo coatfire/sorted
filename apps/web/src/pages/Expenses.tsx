@@ -5,6 +5,7 @@ import { CATEGORIES, categoryLabel, centsToInput, dayMonth, monthYear, parseEuro
 import { downscaleImage } from "../lib/image";
 import { manageDialogFocus } from "../lib/dialogFocus";
 import { useAction, useData, useStore } from "../lib/store";
+import { useValidation } from "../lib/useValidation";
 
 const blank = () => ({
   merchant: "",
@@ -23,7 +24,9 @@ export function Expenses() {
   const [open, setOpen] = useState<"new" | Expense | null>(null);
   const [photo, setPhoto] = useState<{ blob?: Blob; url: string } | null>(null);
   const [form, setForm] = useState(blank);
-  const [error, setError] = useState("");
+  const validation = useValidation({
+    amount: () => !parseEuros(form.amount) ? "Add the amount, like 24.60." : undefined,
+  });
   const [filter, setFilter] = useState<ExpenseCategory | "all">("all");
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [zoom, setZoom] = useState(false);
@@ -58,13 +61,13 @@ export function Expenses() {
     setOpen(null);
     setPhoto(null);
     setForm(blank());
-    setError("");
+    validation.clear();
     if (fileInput.current) fileInput.current.value = "";
   }
 
   function show(target: "new" | Expense) {
     setOpen(target);
-    setError("");
+    validation.clear();
     requestAnimationFrame(() => formTop.current?.scrollIntoView({ block: "start", behavior: "smooth" }));
   }
 
@@ -98,10 +101,11 @@ export function Expenses() {
     }
   }
 
-  async function submit(event: FormEvent) {
+  async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (!validation.validate(event.currentTarget)) return;
     const amountCents = parseEuros(form.amount);
-    if (!amountCents) return setError("Add the amount, like 24.60.");
+    if (!amountCents) return;
     const draft = {
       merchant: form.merchant.trim(),
       amountCents,
@@ -149,35 +153,36 @@ export function Expenses() {
               </button>
             )
           )}
-          <form onSubmit={submit}>
+          <form onSubmit={submit} noValidate>
             <p className="eyebrow">{editing ? "Edit expense" : "New expense"}</p>
-            <Field label="Merchant">
+            <Field label="Merchant" {...validation.field("merchant")}>
               <input
                 autoFocus={!editing}
                 required
+                name="merchant"
                 value={form.merchant}
                 onChange={(event) => setForm({ ...form, merchant: event.target.value })}
                 placeholder="Where did you buy it?"
               />
             </Field>
             <div className="field-grid">
-              <Field label="Amount">
+              <Field label="Amount" {...validation.field("amount")}>
                 <div className="money-input">
                   <span>€</span>
                   <input
                     required
                     inputMode="decimal"
                     value={form.amount}
-                    aria-invalid={error ? true : undefined}
-                    aria-describedby={error ? "expense-error" : undefined}
-                    onChange={(event) => { setError(""); setForm({ ...form, amount: event.target.value }); }}
+                    name="amount"
+                    onChange={(event) => setForm({ ...form, amount: event.target.value })}
                     placeholder="0.00"
                   />
                 </div>
               </Field>
-              <Field label="Date">
+              <Field label="Date" {...validation.field("date")}>
                 <input
                   required
+                  name="date"
                   type="date"
                   max={toDateInput(new Date())}
                   value={form.date}
@@ -200,7 +205,6 @@ export function Expenses() {
                 </button>
               ))}
             </div>
-            {error && <p id="expense-error" className="form-error" role="alert">{error}</p>}
             <Button type="submit" disabled={busy}>
               <Icon name="check" /> {busy ? "Saving…" : editing ? "Save changes" : "Confirm expense"}
             </Button>
