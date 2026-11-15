@@ -1,10 +1,10 @@
 /**
- * "Local" = not running on Lambda and not explicitly production. Local mode
+ * "Local" = not running on Vercel/Lambda and not explicitly production. Local mode
  * is zero-config: embedded Postgres (PGlite), a dev JWT secret, and login
  * links returned straight to the browser instead of emailed.
  */
 const isLocal =
-  !process.env.AWS_LAMBDA_FUNCTION_NAME && process.env.NODE_ENV !== "production";
+  !process.env.VERCEL && !process.env.AWS_LAMBDA_FUNCTION_NAME && process.env.NODE_ENV !== "production";
 
 const DEV_JWT_SECRET = "sorted-local-dev-secret-not-for-production";
 

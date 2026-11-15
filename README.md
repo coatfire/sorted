@@ -15,7 +15,7 @@ sorted/
 │   ├── DATA_MODEL.md          # Entity reference + state machines
 │   └── IMPLEMENTATION_PLAN.md # Ordered milestones with acceptance criteria ← START HERE
 ├── apps/
-│   ├── api/                   # AWS Lambda backend (TypeScript, Hono, Drizzle)
+│   ├── api/                   # Hono API (Vercel, with a Lambda adapter)
 │   └── web/                   # PWA frontend (Vite + React, mobile-first)
 ├── packages/
 │   └── core/                  # Shared types, zod schemas, event definitions
@@ -43,7 +43,9 @@ pnpm typecheck
 pnpm build      # Lambda bundle + static PWA
 ```
 
-Going to production (Neon, Stripe, email, n8n): see `apps/api/README.md`.
+Going to production (Supabase, Vercel, Stripe, email, n8n): see `apps/api/README.md`.
+The root `vercel.json` serves the web and API in one Vercel project using
+services. Leave `VITE_API_URL` unset so browser requests use the same origin.
 Each integration switches on when its env vars are set, and the app only
 offers what is actually connected.
 
@@ -80,8 +82,8 @@ offers what is actually connected.
 
 | Layer      | Choice                          | Why (short version)                          |
 |------------|---------------------------------|----------------------------------------------|
-| API        | Hono on AWS Lambda              | Tiny, fast, runs locally without emulation    |
-| DB         | Postgres (Neon) + Drizzle       | Year-end report = SQL aggregation             |
+| API        | Hono on Vercel services         | Same-origin web + API; Lambda adapter retained |
+| DB         | Supabase Postgres + Drizzle     | Transactions and SQL year-end aggregation      |
 | Frontend   | Vite + React PWA                | Mobile-first, installable, no app-store tax   |
 | Automation | n8n + Meta WhatsApp Cloud API   | Side-effects live outside the request path    |
 | Payments   | Stripe Payment Links (Revolut later) | One integration to validate the flow     |

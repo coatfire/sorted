@@ -62,3 +62,5 @@ app.onError((err, c) => {
   console.error(err);
   return c.json({ error: "Internal error" }, 500);
 });
+
+export default app;

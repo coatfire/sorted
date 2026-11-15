@@ -1,10 +1,10 @@
-import { neon } from "@neondatabase/serverless";
-import { drizzle, type NeonHttpDatabase } from "drizzle-orm/neon-http";
+import postgres from "postgres";
+import { drizzle, type PostgresJsDatabase } from "drizzle-orm/postgres-js";
 import * as schema from "./schema";
 
 /**
  * Two drivers, one query API:
- *  - DATABASE_URL set   → Neon over HTTP (production, or dev against Neon)
+ *  - DATABASE_URL set   → Supabase Postgres via postgres-js
  *  - DATABASE_URL unset → PGlite, an embedded Postgres. Persists to
  *    apps/api/.data in dev, in-memory under test. Migrations are applied on
  *    boot so `pnpm dev` works with nothing installed.
@@ -12,13 +12,13 @@ import * as schema from "./schema";
  * PGlite is loaded lazily and marked external in the Lambda bundle, so it
  * never ships to production.
  */
-type Db = NeonHttpDatabase<typeof schema>;
+type Db = PostgresJsDatabase<typeof schema>;
 
 async function connect(): Promise<Db> {
   const url = process.env.DATABASE_URL;
-  if (url) return drizzle(neon(url), { schema });
+  if (url) return drizzle(postgres(url, { prepare: false, max: 2 }), { schema });
 
-  if (process.env.AWS_LAMBDA_FUNCTION_NAME || process.env.NODE_ENV === "production") {
+  if (process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME || process.env.NODE_ENV === "production") {
     throw new Error("DATABASE_URL is required in production");
   }
   const { PGlite } = await import("@electric-sql/pglite");

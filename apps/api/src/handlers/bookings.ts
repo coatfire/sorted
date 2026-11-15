@@ -62,44 +62,46 @@ bookingRoutes.post("/", async (c) => {
   }
   const input = parsed.data;
 
-  // Resolve or create the client
-  let clientId = input.client_id;
-  if (input.client) {
-    const [client] = await db
-      .insert(schema.clients)
-      .values({ userId, ...input.client })
+  return db.transaction(async (tx) => {
+    // Resolve or create the client
+    let clientId = input.client_id;
+    if (input.client) {
+      const [client] = await tx
+        .insert(schema.clients)
+        .values({ userId, ...input.client })
+        .returning();
+      clientId = client.id;
+    } else {
+      // Verify the referenced client belongs to this user
+      const [client] = await tx
+        .select()
+        .from(schema.clients)
+        .where(
+          and(
+            eq(schema.clients.id, clientId!),
+            eq(schema.clients.userId, userId),
+          ),
+        );
+      if (!client) return c.json({ error: "Client not found" }, 404);
+    }
+
+    const [booking] = await tx
+      .insert(schema.bookings)
+      .values({
+        userId,
+        clientId: clientId!,
+        service: input.service,
+        startAt: input.start_at,
+        endAt: input.end_at,
+        priceCents: input.price_cents,
+        depositCents: input.deposit_cents,
+        location: input.location,
+        notes: input.notes,
+      })
       .returning();
-    clientId = client.id;
-  } else {
-    // Verify the referenced client belongs to this user
-    const [client] = await db
-      .select()
-      .from(schema.clients)
-      .where(
-        and(
-          eq(schema.clients.id, clientId!),
-          eq(schema.clients.userId, userId),
-        ),
-      );
-    if (!client) return c.json({ error: "Client not found" }, 404);
-  }
 
-  const [booking] = await db
-    .insert(schema.bookings)
-    .values({
-      userId,
-      clientId: clientId!,
-      service: input.service,
-      startAt: input.start_at,
-      endAt: input.end_at,
-      priceCents: input.price_cents,
-      depositCents: input.deposit_cents,
-      location: input.location,
-      notes: input.notes,
-    })
-    .returning();
-
-  return c.json(booking, 201);
+    return c.json(booking, 201);
+  });
 });
 
 /** POST /api/bookings/:id/confirm — enquiry → confirmed, emits automation */
@@ -107,45 +109,51 @@ bookingRoutes.post("/:id/confirm", async (c) => {
   const userId = c.get("userId");
   const id = c.req.param("id");
 
-  const [row] = await db
-    .select({
-      booking: schema.bookings,
-      client: schema.clients,
-    })
-    .from(schema.bookings)
-    .innerJoin(schema.clients, eq(schema.bookings.clientId, schema.clients.id))
-    .where(
-      and(eq(schema.bookings.id, id), eq(schema.bookings.userId, userId)),
-    );
+  const result = await db.transaction(async (tx) => {
+    const [row] = await tx
+      .select({
+        booking: schema.bookings,
+        client: schema.clients,
+      })
+      .from(schema.bookings)
+      .innerJoin(schema.clients, eq(schema.bookings.clientId, schema.clients.id))
+      .where(
+        and(eq(schema.bookings.id, id), eq(schema.bookings.userId, userId)),
+      )
+      .for("update");
 
-  if (!row) return c.json({ error: "Booking not found" }, 404);
-  if (row.booking.status !== "enquiry") {
-    return c.json(
-      { error: `Cannot confirm a booking in status '${row.booking.status}'` },
-      409,
-    );
-  }
+    if (!row) return c.json({ error: "Booking not found" }, 404);
+    if (row.booking.status !== "enquiry") {
+      return c.json(
+        { error: `Cannot confirm a booking in status '${row.booking.status}'` },
+        409,
+      );
+    }
 
-  const [booking] = await db
-    .update(schema.bookings)
-    .set({ status: "confirmed" })
-    .where(eq(schema.bookings.id, id))
-    .returning();
+    const [booking] = await tx
+      .update(schema.bookings)
+      .set({ status: "confirmed" })
+      .where(and(eq(schema.bookings.id, id), eq(schema.bookings.userId, userId)))
+      .returning();
 
-  // Deposit expected? Create the pending payment row now.
-  if (booking.depositCents > 0) {
-    await db.insert(schema.payments).values({
-      userId,
-      bookingId: booking.id,
-      kind: "deposit",
-      amountCents: booking.depositCents,
-    });
-  }
+    // Deposit expected? Create the pending payment row now.
+    if (booking.depositCents > 0) {
+      await tx.insert(schema.payments).values({
+        userId,
+        bookingId: booking.id,
+        kind: "deposit",
+        amountCents: booking.depositCents,
+      });
+    }
 
-  const [user] = await db
-    .select()
-    .from(schema.users)
-    .where(eq(schema.users.id, userId));
+    const [user] = await tx
+      .select()
+      .from(schema.users)
+      .where(eq(schema.users.id, userId));
+    return { row, booking, user };
+  });
+  if (result instanceof Response) return result;
+  const { row, booking, user } = result;
 
   await emitEvent({
     event: "booking.confirmed",
@@ -269,61 +277,67 @@ bookingRoutes.patch("/:id", async (c) => {
 bookingRoutes.post("/:id/complete", async (c) => {
   const userId = c.get("userId");
   const id = c.req.param("id");
-  const [booking] = await db
-    .select()
-    .from(schema.bookings)
-    .where(
-      and(eq(schema.bookings.id, id), eq(schema.bookings.userId, userId)),
-    );
-  if (!booking) return c.json({ error: "Booking not found" }, 404);
-  if (booking.status !== "confirmed") {
-    return c.json(
-      { error: `Cannot complete a booking in status '${booking.status}'` },
-      409,
-    );
-  }
+  const result = await db.transaction(async (tx) => {
+    const [booking] = await tx
+      .select()
+      .from(schema.bookings)
+      .where(
+        and(eq(schema.bookings.id, id), eq(schema.bookings.userId, userId)),
+      )
+      .for("update");
+    if (!booking) return c.json({ error: "Booking not found" }, 404);
+    if (booking.status !== "confirmed") {
+      return c.json(
+        { error: `Cannot complete a booking in status '${booking.status}'` },
+        409,
+      );
+    }
 
-  const [expected] = await db
-    .select({
-      amount: sql<number>`coalesce(sum(${schema.payments.amountCents}), 0)`,
-    })
-    .from(schema.payments)
-    .where(
-      and(
-        eq(schema.payments.bookingId, id),
-        eq(schema.payments.userId, userId),
-        eq(schema.payments.status, "paid"),
-      ),
-    );
-  const paidCents = Number(expected?.amount ?? 0);
-  const remainder = Math.max(booking.priceCents - paidCents, 0);
-  await db
-    .update(schema.payments)
-    .set({ status: "cancelled" })
-    .where(
-      and(
-        eq(schema.payments.bookingId, id),
-        eq(schema.payments.userId, userId),
-        eq(schema.payments.status, "pending"),
-      ),
-    );
-  let payment: typeof schema.payments.$inferSelect | undefined;
-  if (remainder > 0) {
-    [payment] = await db
-      .insert(schema.payments)
-      .values({
-        userId,
-        bookingId: id,
-        kind: paidCents > 0 ? "balance" : "full",
-        amountCents: remainder,
+    const [expected] = await tx
+      .select({
+        amount: sql<number>`coalesce(sum(${schema.payments.amountCents}), 0)`,
       })
+      .from(schema.payments)
+      .where(
+        and(
+          eq(schema.payments.bookingId, id),
+          eq(schema.payments.userId, userId),
+          eq(schema.payments.status, "paid"),
+        ),
+      );
+    const paidCents = Number(expected?.amount ?? 0);
+    const remainder = Math.max(booking.priceCents - paidCents, 0);
+    await tx
+      .update(schema.payments)
+      .set({ status: "cancelled" })
+      .where(
+        and(
+          eq(schema.payments.bookingId, id),
+          eq(schema.payments.userId, userId),
+          eq(schema.payments.status, "pending"),
+        ),
+      );
+    let payment: typeof schema.payments.$inferSelect | undefined;
+    if (remainder > 0) {
+      [payment] = await tx
+        .insert(schema.payments)
+        .values({
+          userId,
+          bookingId: id,
+          kind: paidCents > 0 ? "balance" : "full",
+          amountCents: remainder,
+        })
+        .returning();
+    }
+    const [completed] = await tx
+      .update(schema.bookings)
+      .set({ status: "completed", completedAt: new Date() })
+      .where(and(eq(schema.bookings.id, id), eq(schema.bookings.userId, userId)))
       .returning();
-  }
-  const [completed] = await db
-    .update(schema.bookings)
-    .set({ status: "completed", completedAt: new Date() })
-    .where(eq(schema.bookings.id, id))
-    .returning();
+    return { completed, payment };
+  });
+  if (result instanceof Response) return result;
+  const { completed, payment } = result;
   await emitBookingEvent(
     userId,
     id,
@@ -344,34 +358,40 @@ bookingRoutes.post("/:id/complete", async (c) => {
 bookingRoutes.post("/:id/cancel", async (c) => {
   const userId = c.get("userId");
   const id = c.req.param("id");
-  const [booking] = await db
-    .select()
-    .from(schema.bookings)
-    .where(
-      and(eq(schema.bookings.id, id), eq(schema.bookings.userId, userId)),
-    );
-  if (!booking) return c.json({ error: "Booking not found" }, 404);
-  if (booking.status === "completed" || booking.status === "cancelled") {
-    return c.json(
-      { error: `Cannot cancel a booking in status '${booking.status}'` },
-      409,
-    );
-  }
-  await db
-    .update(schema.payments)
-    .set({ status: "cancelled" })
-    .where(
-      and(
-        eq(schema.payments.bookingId, id),
-        eq(schema.payments.userId, userId),
-        eq(schema.payments.status, "pending"),
-      ),
-    );
-  const [cancelled] = await db
-    .update(schema.bookings)
-    .set({ status: "cancelled" })
-    .where(eq(schema.bookings.id, id))
-    .returning();
+  const result = await db.transaction(async (tx) => {
+    const [booking] = await tx
+      .select()
+      .from(schema.bookings)
+      .where(
+        and(eq(schema.bookings.id, id), eq(schema.bookings.userId, userId)),
+      )
+      .for("update");
+    if (!booking) return c.json({ error: "Booking not found" }, 404);
+    if (booking.status === "completed" || booking.status === "cancelled") {
+      return c.json(
+        { error: `Cannot cancel a booking in status '${booking.status}'` },
+        409,
+      );
+    }
+    await tx
+      .update(schema.payments)
+      .set({ status: "cancelled" })
+      .where(
+        and(
+          eq(schema.payments.bookingId, id),
+          eq(schema.payments.userId, userId),
+          eq(schema.payments.status, "pending"),
+        ),
+      );
+    const [cancelled] = await tx
+      .update(schema.bookings)
+      .set({ status: "cancelled" })
+      .where(and(eq(schema.bookings.id, id), eq(schema.bookings.userId, userId)))
+      .returning();
+    return { cancelled };
+  });
+  if (result instanceof Response) return result;
+  const { cancelled } = result;
   await emitBookingEvent(userId, id, "booking.cancelled");
   return c.json(cancelled);
 });

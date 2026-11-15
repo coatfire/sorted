@@ -25,7 +25,7 @@ The checklists below are the original plan, kept for the acceptance criteria.
 
 ## M0 — Repo runs (½ day)
 - [ ] `pnpm install` at root succeeds
-- [ ] Neon project created, `DATABASE_URL` in `apps/api/.env`
+- [ ] Supabase project created, transaction-pooler `DATABASE_URL` (:6543) configured server-side
 - [ ] `pnpm --filter api db:migrate` creates all tables
 - [ ] `pnpm --filter api dev` → `GET /api/health` returns `{ok:true}`
 - [ ] `pnpm --filter web dev` → PWA shell loads, hits health endpoint
@@ -101,8 +101,8 @@ person says "yes I could use this".
 
 ## M8 — Beta hardening (ongoing)
 - [ ] Real magic-link email (Resend/SES)
-- [ ] Deploy: API to Lambda (see `apps/api/README.md`), web to Cloudflare
-      Pages/S3, custom domain
+- [ ] Deploy: API + web in one Vercel project using services
+      (see `apps/api/README.md`), Supabase database, custom domain
 - [ ] PWA installability (manifest done — verify Lighthouse), offline shell
 - [ ] GDPR delete-client cascade
 - [ ] Error tracking (Sentry), basic analytics (PostHog)
