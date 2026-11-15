@@ -252,6 +252,7 @@ export interface Booking {
 }
 
 export interface Payment {
+  vatRateBp: number | null;
   id: string;
   bookingId: string;
   kind: PaymentKind;

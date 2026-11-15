@@ -38,7 +38,7 @@ export function snapshotReceipt(
   const payment = received.find((item) => item.id === paymentId);
   if (!payment) throw new Error("Choose a paid payment for this receipt.");
   return {
-    vatRateBp: settings.vatRegistered ? settings.vatRateBp : null,
+    vatRateBp: payment.vatRateBp ?? (settings.vatRegistered ? settings.vatRateBp : null),
     service: booking.service, bookingDate: booking.startAt, bookingTotalCents: booking.priceCents,
     balanceDueCents: Math.max(0, booking.priceCents - received.reduce((sum, item) => sum + item.amountCents, 0)),
     payment: { date: payment.paidAt ?? payment.createdAt, amountCents: payment.amountCents, method: payment.method },

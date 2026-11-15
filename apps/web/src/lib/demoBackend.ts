@@ -69,6 +69,7 @@ function seed(): DemoData {
     bk: BookingRow, kind: Payment["kind"], amountCents: number,
     paid?: { method: Payment["method"]; at: string },
   ): Payment => ({
+    vatRateBp: paid ? 0 : null,
     id: id(), bookingId: bk.id, kind, amountCents, method: paid?.method ?? null,
     status: paid ? "paid" : "pending", linkUrl: null, paidAt: paid?.at ?? null,
     createdAt: paid?.at ?? bk.startAt,
@@ -151,6 +152,7 @@ function read(): DemoData {
       const data = JSON.parse(saved) as DemoData;
       data.user = { ...data.user, ...TaxSettings.parse(data.user) };
       data.expenses = data.expenses.map((expense) => ({ ...expense, vatCents: expense.vatCents ?? null }));
+      data.payments = data.payments.map((payment) => ({ ...payment, vatRateBp: payment.vatRateBp ?? null }));
       return data;
     }
   } catch {
@@ -264,7 +266,7 @@ export const demoBackend: Backend = {
     if (booking.depositCents > 0) {
       d.payments.push({
         id: id(), bookingId, kind: "deposit", amountCents: booking.depositCents,
-        method: null, status: "pending", linkUrl: null, paidAt: null, createdAt: now(),
+        method: null, status: "pending", linkUrl: null, paidAt: null, createdAt: now(), vatRateBp: null,
       });
     }
     if (booking.client.phone) log(bookingId, "confirmation");
@@ -280,7 +282,7 @@ export const demoBackend: Backend = {
     if (remainder > 0) {
       d.payments.push({
         id: id(), bookingId, kind: paid > 0 ? "balance" : "full", amountCents: remainder,
-        method: null, status: "pending", linkUrl: null, paidAt: null, createdAt: now(),
+        method: null, status: "pending", linkUrl: null, paidAt: null, createdAt: now(), vatRateBp: null,
       });
     }
     booking.status = "completed";
@@ -313,8 +315,10 @@ export const demoBackend: Backend = {
   },
 
   async markPaid(paymentId, method) {
-    Object.assign(mustFind(data().payments, paymentId, "Payment"), {
-      status: "paid", method, paidAt: now(),
+    const payment = mustFind(data().payments, paymentId, "Payment");
+    if (payment.status !== "pending") throw new Error("Payment is not pending");
+    Object.assign(payment, {
+      status: "paid", method, paidAt: now(), vatRateBp: data().user.vatRegistered ? data().user.vatRateBp : 0,
     });
     save();
   },

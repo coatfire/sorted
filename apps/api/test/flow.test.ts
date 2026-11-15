@@ -770,11 +770,20 @@ describe("payment link safety", () => {
     expect(error).toHaveBeenCalledWith("missing", "cs_test");
     await webhook({ payment_id: paymentId, user_id: crypto.randomUUID() });
     expect((await payment()).status).toBe("pending");
+    expect((await call("/auth/me", "PATCH", { vat_registered: true, vat_rate_bp: 2300 })).status).toBe(200);
     await webhook({ payment_id: paymentId, user_id: booking.userId });
     const paid = await payment();
     expect(paid.status).toBe("paid");
+    expect(paid.vatRateBp).toBe(2300);
+    await call("/auth/me", "PATCH", { vat_rate_bp: 900 });
     await webhook({ payment_id: paymentId, user_id: booking.userId });
     expect((await payment()).paidAt).toEqual(paid.paidAt);
+    expect((await payment()).vatRateBp).toBe(2300);
+
+    const unregistered = await pendingDeposit();
+    await webhook({ payment_id: unregistered.paymentId, user_id: unregistered.booking.userId });
+    const received = await json<{ payments: { vatRateBp: number | null }[] }>(await unregistered.call(`/bookings/${unregistered.booking.id}`));
+    expect(received.payments[0].vatRateBp).toBe(0);
 
     const cancelled = await pendingDeposit();
     await cancelled.call(`/bookings/${cancelled.booking.id}/cancel`, "POST");

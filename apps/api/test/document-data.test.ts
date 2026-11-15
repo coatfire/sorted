@@ -18,9 +18,15 @@ const booking: Booking = {
   priceCents: 12050, depositCents: 2000, status: "confirmed", location: null, notes: null, gcalEventId: null, completedAt: null, createdAt: user.createdAt,
 };
 const document: BookingDocument = { id: "document", bookingId: booking.id, kind: "invoice", number: 1, issuedAt: "2026-07-02T12:00:00Z", paymentId: null, receiptSnapshot: null, vatRateBp: null };
-const paid: Payment = { id: "paid", bookingId: booking.id, kind: "deposit", status: "paid", amountCents: 2000, paidAt: "2026-07-01T12:00:00Z", method: "bank_transfer", linkUrl: null, createdAt: user.createdAt };
+const paid: Payment = { id: "paid", bookingId: booking.id, kind: "deposit", status: "paid", amountCents: 2000, paidAt: "2026-07-01T12:00:00Z", method: "bank_transfer", linkUrl: null, createdAt: user.createdAt, vatRateBp: null };
 
 describe("document data", () => {
+  it("prefers a payment's captured VAT rate for receipts, including zero before registration", () => {
+    const registered = { ...user, vatRegistered: true, vatRateBp: 2300 };
+    expect(snapshotReceipt(booking, [{ ...paid, vatRateBp: 900 }], paid.id, document.issuedAt, registered).vatRateBp).toBe(900);
+    expect(snapshotReceipt(booking, [{ ...paid, vatRateBp: 0 }], paid.id, document.issuedAt, registered).vatRateBp).toBe(0);
+    expect(snapshotReceipt(booking, [paid], paid.id, document.issuedAt, registered).vatRateBp).toBe(2300);
+  });
   it("keeps issued invoice VAT independent of current settings and falls back for legacy invoices", () => {
     const issued = { ...document, vatRateBp: 2300 };
     const original = assembleBookingDocument({ ...user, vatRegistered: true, vatRateBp: 2300 }, booking, client, [], issued);

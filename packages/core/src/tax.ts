@@ -54,7 +54,7 @@ export function taxEstimate({ payments, expenses, settings, now }: {
     if (payment.status !== "paid" || !payment.paidAt) continue;
     const date = irelandDate(payment.paidAt);
     if (!date) continue;
-    const vat = inclusiveVat(payment.amountCents, rate);
+    const vat = inclusiveVat(payment.amountCents, payment.vatRateBp ?? rate);
     if (date >= start && date < end) {
       periodIncomeCents += payment.amountCents;
       salesVatCents += vat;

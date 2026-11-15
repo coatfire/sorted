@@ -162,6 +162,7 @@ export const bookings = pgTable(
 export const payments = pgTable(
   "payments",
   {
+    vatRateBp: integer("vat_rate_bp"),
     id: uuid("id").primaryKey().defaultRandom(),
     userId: uuid("user_id")
       .notNull()

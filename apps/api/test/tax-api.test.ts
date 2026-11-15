@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { app } from "../src/app";
 import { db, schema } from "../src/db";
 import { issueJwt } from "../src/lib/auth";
-import type { BookingDocument, Expense, User } from "@sorted/core";
+import type { BookingDocument, Expense, User, Payment } from "@sorted/core";
 
 async function account() {
   const [user] = await db.insert(schema.users).values({ email: `${crypto.randomUUID()}@example.com` }).returning();
@@ -14,6 +14,29 @@ async function account() {
 }
 
 describe("VAT and tax persistence", () => {
+  it("captures VAT on the first manual paid transition and never overwrites it", async () => {
+    const { user, request } = await account();
+    const [client] = await db.insert(schema.clients).values({ userId: user.id, name: "Paid client" }).returning();
+    const [booking] = await db.insert(schema.bookings).values({ userId: user.id, clientId: client.id, service: "Makeup", startAt: new Date(), priceCents: 12300 }).returning();
+    const captured: Payment[] = [];
+    for (const rate of [0, 2300, 900]) {
+      if (rate) await request("/auth/me", "PATCH", { vat_registered: true, vat_rate_bp: rate });
+      const [pending] = await db.insert(schema.payments).values({ userId: user.id, bookingId: booking.id, kind: "full", amountCents: 12300 }).returning();
+      const responses = await Promise.all([request(`/payments/${pending.id}/mark-paid`, "POST", { method: "cash" }), request(`/payments/${pending.id}/mark-paid`, "POST", { method: "bank_transfer" })]);
+      expect(responses.map((response) => response.status).sort()).toEqual([200, 409]);
+      const paid = await responses.find((response) => response.status === 200)!.json() as Payment;
+      expect(paid.vatRateBp).toBe(rate);
+      captured.push(paid);
+    }
+    await request("/auth/me", "PATCH", { vat_rate_bp: 1350 });
+    for (const payment of captured) {
+      expect((await request(`/payments/${payment.id}/mark-paid`, "POST", { method: "cash" })).status).toBe(409);
+      const receipt = await (await request(`/bookings/${booking.id}/documents`, "POST", { kind: "receipt", payment_id: payment.id })).json() as BookingDocument;
+      expect(receipt.receiptSnapshot?.vatRateBp).toBe(payment.vatRateBp);
+    }
+    const stored = await (await request("/payments")).json() as { payment: Payment }[];
+    expect(stored.map(({ payment }) => payment.vatRateBp).sort()).toEqual([0, 2300, 900]);
+  });
   it("captures effective VAT only when allocating a new invoice, including zero before registration", async () => {
     const { user, request } = await account();
     const [client] = await db.insert(schema.clients).values({ userId: user.id, name: "Invoice client" }).returning();

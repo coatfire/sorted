@@ -6,6 +6,7 @@ import { db, schema } from "../db";
 import { emitBookingEvent } from "../lib/events";
 import { env } from "../lib/env";
 import { deactivatePaymentLink } from "../lib/stripe";
+import { effectivePaymentVatRate } from "../lib/tax";
 import type { AppEnv } from "../app";
 
 export const paymentRoutes = new Hono<AppEnv>();
@@ -133,11 +134,13 @@ paymentRoutes.post("/:id/mark-paid", async (c) => {
     .update(schema.payments)
     .set({
       status: "paid",
+      vatRateBp: effectivePaymentVatRate(userId),
       method: parsed.data.method,
       paidAt: new Date(),
     })
-    .where(and(eq(schema.payments.id, current.id), eq(schema.payments.userId, userId)))
+    .where(and(eq(schema.payments.id, current.id), eq(schema.payments.userId, userId), eq(schema.payments.status, "pending")))
     .returning();
+  if (!payment) return c.json({ error: "Payment is not pending" }, 409);
   if (payment.stripePaymentLinkId) {
     await deactivatePaymentLink(payment.stripePaymentLinkId);
   }

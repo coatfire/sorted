@@ -4,13 +4,19 @@ import { taxEstimate, TaxSettings, percentToBasisPoints, inclusiveVat, CreateExp
 const now = "2026-11-15T12:00:00Z";
 const settings = { vatRegistered: true, vatRateBp: 2300, vatPeriodMonths: 2, incomeTaxRateBp: 2000 };
 const payment = (amountCents: number, paidAt = "2026-11-10T12:00:00Z", patch: Partial<Payment> = {}): Payment => ({
-  id: "payment", bookingId: "booking", kind: "full", amountCents, method: "cash", status: "paid", linkUrl: null, paidAt, createdAt: paidAt, ...patch,
+  id: "payment", bookingId: "booking", kind: "full", amountCents, method: "cash", status: "paid", linkUrl: null, paidAt, createdAt: paidAt, vatRateBp: null, ...patch,
 });
 const expense = (amountCents: number, vatCents: number | null, expenseDate = "2026-11-10T12:00:00Z", patch: Partial<Expense> = {}): Expense => ({
   id: "expense", merchant: "Supplies", amountCents, vatCents, category: "materials", expenseDate, status: "confirmed", receiptKey: null, createdAt: expenseDate, ...patch,
 });
 
 describe("Ireland tax estimates", () => {
+  it("keeps zero VAT before registration, preserves old paid rates and falls back only for legacy null", () => {
+    const payments = [payment(12300, undefined, { vatRateBp: 0 }), payment(10900, undefined, { vatRateBp: 900 }), payment(12300)];
+    expect(taxEstimate({ payments, expenses: [], settings, now })).toMatchObject({ salesVatCents: 3200, yearSalesVatCents: 3200, netIncomeCents: 32300 });
+    expect(taxEstimate({ payments, expenses: [], settings: { ...settings, vatRateBp: 1350 }, now }).salesVatCents).toBe(2363);
+    expect(taxEstimate({ payments, expenses: [], settings: { ...settings, vatRegistered: false }, now }).salesVatCents).toBe(900);
+  });
   it("calculates every component from VAT-inclusive paid income and confirmed expenses", () => {
     const result = taxEstimate({ payments: [payment(12300)], expenses: [expense(2460, 460)], settings, now });
     expect(result).toMatchObject({ periodLabel: "Nov–Dec 2026", periodStart: "2026-11-01", periodEnd: "2027-01-01", year: 2026,
