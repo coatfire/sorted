@@ -45,7 +45,6 @@ for (const purpose of ["verify", "reset"] as const) {
     if (!parsed.success) return c.json({ error: parsed.error.flatten() }, 400);
     const { email } = parsed.data;
     const password = "password" in parsed.data ? parsed.data.password : undefined;
-    const pendingHash = typeof password === "string" ? await hashPassword(password) : null;
     const result = await db.transaction(async (tx) => {
       if (purpose === "verify") await tx.insert(schema.users).values({ email }).onConflictDoNothing();
       const [user] = await tx.select().from(schema.users).where(eq(schema.users.email, email)).for("update");
@@ -54,6 +53,7 @@ for (const purpose of ["verify", "reset"] as const) {
       ));
       if (requests.count >= 3) return null;
       const existing = purpose === "verify" && Boolean(user?.emailVerifiedAt && user.passwordHash);
+      const pendingHash = !existing && typeof password === "string" ? await hashPassword(password) : null;
       const [record] = await tx.insert(schema.loginTokens).values({
         email, purpose, pendingPasswordHash: existing ? null : pendingHash,
       }).returning();

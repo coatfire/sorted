@@ -5,6 +5,7 @@ import { app } from "../src/app";
 import { db, schema } from "../src/db";
 import { env } from "../src/lib/env";
 import { hashPassword, checkPassword } from "../src/lib/password";
+import * as passwords from "../src/lib/password";
 import { issueEmailToken, issueJwt } from "../src/lib/auth";
 import { UpdateUserInput, normaliseIban, validIban, validBic } from "@sorted/core";
 
@@ -230,7 +231,7 @@ describe("password auth", () => {
     const expiredJwt = await new SignJWT({ sub: user.id, purpose: "email-link" }).setJti(record.id)
       .setProtectedHeader({ alg: "HS256" }).setExpirationTime("0s").sign(new TextEncoder().encode(env.jwtSecret()));
     expect((await post("reset", { token: expiredJwt, password })).status).toBe(401);
-    expect((await post("verify", { token: await issueJwt(user.id) })).status).toBe(401);
+    expect((await post("verify", { token: await issueJwt(user.id, user.sessionVersion) })).status).toBe(401);
     expect((await post("reset", { token: await issueEmailToken(user.id, record.id), password })).status).toBe(200);
   });
 
@@ -259,6 +260,23 @@ describe("password auth", () => {
     expect((await signup("not-an-email")).status).toBe(400);
     expect((await post("reset", { token: "invalid", password: "short" })).status).toBe(400);
     expect((await post("magic-link", { email: email() })).status).toBe(404);
+  });
+
+  it("does not hash throttled signups, existing-account reminders, or forgot requests", async () => {
+    const address = email();
+    await signup(address);
+    await signup(address);
+    await signup(address);
+    const hash = vi.spyOn(passwords, "hashPassword");
+    expect((await signup(address)).status).toBe(429);
+    expect((await post("forgot", { email: address })).status).toBe(429);
+    expect(hash).not.toHaveBeenCalled();
+    const verifiedAddress = email();
+    await post("verify", { token: await token(await signup(verifiedAddress)) });
+    hash.mockClear();
+    expect((await signup(verifiedAddress, nextPassword)).status).toBe(200);
+    expect((await post("forgot", { email: verifiedAddress })).status).toBe(200);
+    expect(hash).not.toHaveBeenCalled();
   });
 
   it("safely handles production forgot email failures and keeps local reset links usable", async () => {
