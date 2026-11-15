@@ -12,6 +12,7 @@ import type {
   RecordPaymentInput,
   CalendarLinks,
   DriveBackup,
+  Service,
 } from "@sorted/core";
 
 export type BookingRow = Booking & { client: Client };
@@ -27,6 +28,7 @@ export interface Snapshot {
 }
 
 export interface BookingDraft {
+  status?: "confirmed" | "enquiry";
   /** Existing client, or… */
   clientId?: string;
   /** …a new one created inline. */
@@ -71,7 +73,7 @@ export interface Backend {
   resetPassword(token: string, password: string): Promise<{ jwt: string; user: User }>;
   load(): Promise<Snapshot>;
   createBooking(draft: BookingDraft): Promise<{ id: string; seriesCount: number }>;
-  updateBooking(id: string, draft: Omit<BookingDraft, "clientId" | "client">): Promise<void>;
+  updateBooking(id: string, draft: Omit<BookingDraft, "clientId" | "client" | "status">): Promise<void>;
   confirmBooking(id: string): Promise<void>;
   completeBooking(id: string): Promise<void>;
   cancelBooking(id: string): Promise<void>;
@@ -105,6 +107,7 @@ export interface Backend {
     invoiceFooter?: string | null;
     vatNumber?: string | null;
     revolutLink?: string | null;
+    services?: Service[];
     vatRegistered?: boolean;
     vatRateBp?: number | null;
     vatPeriodMonths?: number;

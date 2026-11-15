@@ -523,6 +523,12 @@ a.button { text-decoration: none; }
   padding-top: 0;
   background: transparent;
 }
+.service-editor-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 105px;
+  gap: 10px;
+}
+.service-editor-row > .button { grid-column: 1 / -1; justify-self: end; width: auto; }
 .success-page {
   min-height: 70dvh;
   align-items: center;

@@ -48,6 +48,7 @@ export const apiBackend: Backend = {
     post<Booking & { seriesCount: number }>("/bookings", {
       client_id: draft.clientId,
       client: draft.client,
+      status: draft.status,
       service: draft.service,
       start_at: draft.startAt,
       follow_up_on: draft.followUpOn,
@@ -137,6 +138,7 @@ export const apiBackend: Backend = {
       invoice_footer: changes.invoiceFooter,
       vat_number: changes.vatNumber,
       revolut_link: changes.revolutLink,
+      services: changes.services?.map(service => ({ name: service.name, price_cents: service.priceCents })),
       vat_registered: changes.vatRegistered,
       vat_rate_bp: changes.vatRateBp,
       vat_period_months: changes.vatPeriodMonths,

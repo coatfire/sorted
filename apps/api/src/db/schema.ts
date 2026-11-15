@@ -12,7 +12,7 @@ import {
   date,
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
-import type { ReceiptSnapshot, DocumentSnapshot } from "@sorted/core";
+import type { ReceiptSnapshot, DocumentSnapshot, Service } from "@sorted/core";
 
 // Enums mirror packages/core/src/types.ts — keep in sync.
 export const bookingStatus = pgEnum("booking_status", [
@@ -88,6 +88,7 @@ export const users = pgTable("users", {
   invoiceFooter: text("invoice_footer"),
   vatNumber: text("vat_number"),
   revolutLink: text("revolut_link"),
+  services: jsonb("services").$type<Service[]>().notNull().default([]),
   name: text("name"),
   businessName: text("business_name"),
   phone: text("phone"), // E.164

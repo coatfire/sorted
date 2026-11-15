@@ -196,6 +196,7 @@ bookingRoutes.post("/", async (c) => {
         return {
         userId,
         clientId: clientId!,
+        status: input.status,
         service: input.service,
         startAt,
         endAt: input.end_at ? new Date(startAt.getTime() + input.end_at.getTime() - input.start_at.getTime()) : undefined,
@@ -203,11 +204,16 @@ bookingRoutes.post("/", async (c) => {
         depositCents: input.deposit_cents,
         location: input.location,
         notes: input.notes,
-        followUpOn: index === 0 ? input.follow_up_on === undefined ? addCalendarDays(irelandToday(), 2) : input.follow_up_on : null,
+        followUpOn: input.status === "enquiry" && index === 0 ? input.follow_up_on === undefined ? addCalendarDays(irelandToday(), 2) : input.follow_up_on : null,
         };
       }))
       .returning();
 
+    if (input.status === "confirmed" && input.deposit_cents > 0) {
+      await tx.insert(schema.payments).values(rows.map(booking => ({
+        userId, bookingId: booking.id, kind: "deposit" as const, amountCents: booking.depositCents,
+      })));
+    }
     return c.json({ ...rows[0], seriesCount: count }, 201);
   });
 });

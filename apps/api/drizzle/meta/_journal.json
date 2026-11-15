@@ -113,6 +113,13 @@
       "when": 1794777660713,
       "tag": "0015_revolut_document_snapshots",
       "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1794779411555,
+      "tag": "0016_appointment_services",
+      "breakpoints": true
     }
   ]
 }

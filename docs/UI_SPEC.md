@@ -147,7 +147,8 @@ Sorted                                (gear)
 
 ### 2. Add Booking — `/bookings/new` (M1) — THE screen
 One scrollable form. No steps, no wizard. Field order matches how a vendor
-thinks: *who, what, when, how much.*
+thinks: *who, what, when, how much.* Most bookings are already agreed
+appointments: the primary save creates confirmed bookings, not enquiries.
 
 **Book again:** confirmed, completed and cancelled booking details offer a
 44px-minimum **Book again** button. It opens the same new-booking form with the
@@ -155,44 +156,54 @@ client, service, price, deposit, location and notes copied; the original is not
 changed. Default to the original weekday and Ireland-local time, at least one
 week after the later of the original date or today. **1 week / 2 weeks / 4 weeks
 / 6 weeks** chips change the new date, retaining weekday and time.
+The primary **Save booking** also defaults to confirmed when booking again.
 
-New bookings have **Repeat**: **Doesn’t repeat** (default), **Every week**,
+New bookings have a collapsed **Repeat this booking** extra. Opening it shows
+**Repeat**: **Doesn’t repeat** (default), **Every week**,
 **Every 2 weeks**, **Every 4 weeks**. Repeating shows **How many times**, 2–12,
 with the explanation that this includes the first booking. Validate on blur.
-Every occurrence is an enquiry, with the same Ireland-local time across clock
-changes. Only the first has a follow-up date. Save shows **N bookings added**;
-the success screen explains that each enquiry is confirmed separately.
+Every occurrence uses the chosen save status, with the same Ireland-local
+time across clock changes. Confirmed repeats each get their own pending deposit
+if positive, with no follow-up. Enquiry repeats have a follow-up only on the first.
 
-Enquiry forms show **Follow up on**, defaulting to two days after today in
-Ireland. It is optional; blank removes it. Validate dates on blur. Enquiry
-detail displays the date (or **No follow-up set**) and **Change follow-up**,
-opening the same date Sheet. Confirm/cancel clears the date.
+There is no **Follow up on** field in Add/Edit Booking. Saving as enquiry
+defaults to two days after today in Ireland. Change/remove it through Today's
+**Later** sheet or enquiry detail's **Change follow-up** action. Editing other
+booking details preserves it. Confirm/cancel clears the date.
 Enquiry calendar descriptions include “Follow up: YYYY-MM-DD” when set.
 
-1. **Client** — search-as-you-type against `GET /clients?q=`. First result row
-   is always "＋ New: '<typed text>'" which expands inline: Name (pre-filled
-   with what they typed) + Mobile. Mobile is optional but nudged:
-   helper text "Add a mobile so Sorted can send confirmations for you."
-2. **Service** — plain text with recent-services suggestions (local, from
-   last 10 bookings — no API needed).
+1. **Client** — required name, searching loaded clients locally as you type
+   (up to four matches). Choose an existing client or enter a new name with
+   optional mobile and email directly; the new client is created on save.
+   A selected client becomes a summary with **Change**. Mobile helper text:
+   "For WhatsApp drafts you send yourself."
+2. **Service** — required free text with up to six priced suggestion chips:
+   saved services first, then recent booking services, deduplicated by name
+   case-insensitively. Recent services use their newest booking price. Chips
+   fill name and price if empty or still chip-filled; never replace a manually
+   typed price (or Book again's prefilled price). Clearing price allows filling again.
 3. **Date & time** — native pickers (`<input type="date/time">`). Fastest
    and most familiar; do not build a custom calendar.
 4. **Price** — numeric keypad (`inputmode="decimal"`), € prefix, converts to
    cents on submit.
 5. **Deposit** — collapsed behind "＋ Add deposit"; most bookings skip it.
-6. **Location / Notes** — collapsed behind "＋ More".
+6. **Location / Notes** — collapsed behind **Location or notes**.
+7. **Repeat** — collapsed behind **Repeat this booking**.
 
-Sticky bottom button: **Save booking**.
+Sticky bottom buttons: primary **Save booking** creates confirmed appointments;
+quiet **Save as enquiry** keeps the two-day follow-up default. Enter submits the
+primary choice. Both are disabled during saving and after a committed save whose
+reload failed; show the saved-error message with **Reload**, never resubmit.
 
-After save → interstitial, not a redirect:
-> **Booking saved.**
-> [ Confirm & notify Sarah ]  ← primary; fires POST /confirm (WhatsApp + cal)
-> [ Keep as enquiry ]         ← quiet secondary
-> If client has no phone, primary reads "Confirm booking" and a caption says
-> "No mobile on file — no message will be sent."
-
-This makes the automation moment explicit and consented, every time. No
-surprise messages to clients = trust.
+After save, a short success state replaces the old confirmation decision:
+- Confirmed: **Booked** (or **N bookings added**), booking summary,
+  **Send confirmation** and **Done**. Send confirmation opens the existing
+  WhatsApp/email draft sheet for the first booking only. Explicitly say it opens
+  a draft for the user to review and send, and that nothing has been sent.
+- Enquiry: **Saved as enquiry**, "We'll remind you on <date>", summary and
+  **Done**. For repeats, explain only the first has the reminder.
+- Done opens the first booking's detail. Creation itself sends no messages,
+  even with automation enabled, and never records a deposit as paid.
 
 ### 3. Booking detail — `/bookings/:id` (M1–M3)
 Stacked sections:
@@ -289,6 +300,13 @@ show “Sent” for a manual draft. Keep existing payment-recording actions.
 - **Never auto-confirm OCR** — the confirm tap is what makes it a tax record.
 
 ### 6. Settings — `/settings` (M3/M7/M8)
+**Your services** lets traders add, edit or remove up to 30 name/price pairs.
+Show names and euro prices side by side, a Remove action for each, and
+**Add service**. Names must be unique case-insensitively; prices are integer
+cents after parsing. Show inline validation. Empty lists are allowed. Changes
+use **Save settings**, not immediate auto-save; catalogue edits never change
+existing bookings or issued documents.
+
 Business name · your mobile · Google review link (M7) · calendar
 subscriptions (Confirmed / Enquiries) · currency (locked EUR for now,
 visible) · logout.

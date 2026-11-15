@@ -131,7 +131,15 @@ regardless of account existence; development links are never returned in product
 
 ## Bookings
 
-### Quotes and repeat enquiries
+`POST /bookings` accepts optional `status: "confirmed" | "enquiry"`.
+Omission defaults to enquiry for older clients. Confirmed creation clears any
+follow-up and creates a pending deposit payment when `deposit_cents > 0`, in
+the same transaction as the client and booking(s). No money is marked paid.
+Creation sends no messages or automation events; the web offers a manual
+confirmation draft after saving. All multi-table mutations keep the documented
+users → clients → bookings → payments → invoices lock order.
+
+### Quotes and repeat bookings
 
 `POST /bookings/:id/documents` accepts `{ kind: "quote" }` alongside invoice
 and receipt. A quote is an enquiry's PDF, not a separate entity. The booking
@@ -169,13 +177,15 @@ details also include the link when money is due. No amount is embedded in the
 URL. Opening drafts still records nothing; sent confirmation remains explicit.
 
 `POST /bookings` optionally accepts `repeat: { every_weeks: 1 | 2 | 4,
-count: 2..12 }`. Count is the total, including the first booking. All enquiries
+count: 2..12 }`. Count is the total, including the first booking. All bookings
 and an optional inline client are created in one transaction. Dates and optional
 start times shift by calendar weeks in Europe/Dublin, not fixed UTC durations.
 Optional end times preserve the original duration relative to each shifted start.
-Only the first gets `follow_up_on` (including the normal two-day default);
-later bookings get null. The response is the first booking with `seriesCount`
-(1 without repeat). No confirmations, payments or messages are created.
+Every occurrence gets the chosen status. For enquiries, only the first gets
+`follow_up_on` (including the normal two-day default); later bookings get null.
+Confirmed repeats all have null follow-up and each gets its own pending deposit
+payment if positive. The response is the first booking with `seriesCount`
+(1 without repeat). No messages are created.
 Invalid intervals/counts return 400 without creating anything.
 
 During a skipped spring-clock hour, the time moves forward by the clock gap;
@@ -184,9 +194,20 @@ ambiguous autumn times preserve the original offset when possible.
 
 Bookings include `followUpOn` (nullable YYYY-MM-DD) and `paymentRequestedAt`
 (nullable UTC timestamp). Create/PATCH accept `follow_up_on`: a valid calendar
-date, or null to remove the follow-up. Omitted on creation defaults to two days
+date, or null to remove the follow-up. Omitted on enquiry creation defaults to two days
 after today in Europe/Dublin; omitted on PATCH preserves it. Only enquiries
 may be assigned a follow-up date. Confirming or cancelling clears it.
+
+### Saved services
+
+`PATCH /auth/me` accepts optional `services: [{ name, price_cents }]`, up to
+30 entries. Names are trimmed, nonempty, at most 200 characters, and unique
+case-insensitively. Prices are nonnegative integer cents, at most 2147483647.
+Invalid lists return 400. Omission preserves the catalogue; `[]` clears it.
+User responses and the `users.services` JSONB column contain camelCase
+`[{ name, priceCents }]`, defaulting to `[]`. Updates are authenticated and
+tenant-scoped. These are suggestions: bookings retain their own service text
+and price, unaffected by later catalogue changes.
 
 `POST /bookings/:id/payment-requested` (authenticated, no body) records the
 current time in `paymentRequestedAt` and returns the booking. Missing or foreign

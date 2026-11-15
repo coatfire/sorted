@@ -9,3 +9,4 @@ export * from "./recordPayment";
 export * from "./dates";
 export * from "./calendar";
 export * from "./revolut";
+export * from "./services";

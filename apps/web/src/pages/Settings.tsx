@@ -4,7 +4,7 @@ import {
   normalisePhone, normaliseIban, normaliseBic, validIban, validBic,
   DEFAULT_BOOKING_CONFIRMATION_TEMPLATE, DEFAULT_PAYMENT_REQUEST_TEMPLATE, MESSAGE_PLACEHOLDERS,
   DEFAULT_INVOICE_ACCENT, InvoiceAccent, IrishVatNumber,
-  percentToBasisPoints, RevolutLink,
+  percentToBasisPoints, RevolutLink, Service, Services,
 } from "@sorted/core";
 import { BackButton, Button, Card, Field, Icon, PageHeader } from "../components";
 import { useAction, useData, useSession, useStore } from "../lib/store";
@@ -13,15 +13,17 @@ import { prepareInvoiceLogo } from "../lib/image";
 import { CalendarSettings } from "../CalendarSettings";
 import { DriveSettings } from "../DriveSettings";
 import { vatNumberUpdate } from "../lib/settings";
+import { centsToInput, parseEuros } from "../lib/format";
 
 export function Settings({ welcome = false }: { welcome?: boolean }) {
   const { user, features } = useData();
   const { backend, resetDemo, toast } = useStore();
   const { mode, signOut } = useSession();
-  const { busy, run } = useAction();
+  const { busy, run, error, committed } = useAction();
   const navigate = useNavigate();
   const [logoBusy, setLogoBusy] = useState(false);
   const [logoError, setLogoError] = useState<string>();
+  const [services, setServices] = useState(() => (user.services ?? []).map(service => ({ id: crypto.randomUUID(), name: service.name, price: centsToInput(service.priceCents) })));
   const [form, setForm] = useState({
     businessName: user.businessName ?? "",
     name: user.name ?? "",
@@ -47,6 +49,13 @@ export function Settings({ welcome = false }: { welcome?: boolean }) {
     setForm({ ...form, [field]: event.target.value });
   };
   const validation = useValidation({
+    ...Object.fromEntries(services.flatMap(service => [
+      [`serviceName-${service.id}`, () => {
+        if (!Service.shape.name.safeParse(service.name).success) return "Enter a service name, up to 200 characters.";
+        if (services.some(other => other.id !== service.id && other.name.trim().toLowerCase() === service.name.trim().toLowerCase())) return "Use a different name for each service.";
+      }],
+      [`servicePrice-${service.id}`, () => !Service.shape.priceCents.safeParse(parseEuros(service.price)).success ? "Enter a valid price, like 35 or 35.50." : undefined],
+    ])),
     revolutLink: () => form.revolutLink.trim() && !RevolutLink.safeParse(form.revolutLink).success ? "Enter a Revolut username or revolut.me link." : undefined,
     vatRateChoice: () => form.vatRegistered && !form.vatRateChoice ? "Enter your VAT rate." : undefined,
     vatCustomPercent: () => form.vatRegistered && form.vatRateChoice === "custom" && percentToBasisPoints(form.vatCustomPercent, 3000) === null ? "Enter a rate from 0 to 30%, with up to two decimal places." : undefined,
@@ -63,7 +72,7 @@ export function Settings({ welcome = false }: { welcome?: boolean }) {
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (logoBusy || logoError) return;
+    if (busy || committed || logoBusy || logoError) return;
     if (!validation.validate(event.currentTarget)) return;
     const phone = form.phone.trim() ? normalisePhone(form.phone) : null;
     let reviewLink: string | null = form.reviewLink.trim() || null;
@@ -80,6 +89,7 @@ export function Settings({ welcome = false }: { welcome?: boolean }) {
           revolutLink: form.revolutLink.trim() ? RevolutLink.parse(form.revolutLink) : null,
           bic: form.bic.trim() ? normaliseBic(form.bic) : null,
           ...(!welcome ? {
+            services: Services.parse(services.map(service => ({ name: service.name, priceCents: parseEuros(service.price) }))),
             bookingConfirmationTemplate: form.bookingConfirmationTemplate === DEFAULT_BOOKING_CONFIRMATION_TEMPLATE ? null : form.bookingConfirmationTemplate,
             paymentRequestTemplate: form.paymentRequestTemplate === DEFAULT_PAYMENT_REQUEST_TEMPLATE ? null : form.paymentRequestTemplate,
             invoiceLogo: form.invoiceLogo,
@@ -102,6 +112,8 @@ export function Settings({ welcome = false }: { welcome?: boolean }) {
       {!welcome && <BackButton to="/" />}
       <PageHeader eyebrow={welcome ? "Welcome to Sorted" : "Settings"} title="Your business" />
       <p className="page-intro">The details clients see in messages from you.</p>
+      {error && <p className="sheet-copy" role="alert">{error}</p>}
+      {committed && error && <Button kind="soft" onClick={() => window.location.reload()}>Reload</Button>}
       <form onSubmit={submit} noValidate>
         <Card className="form-card settings-card">
           <Field label="Business name" {...validation.field("businessName")}>
@@ -136,6 +148,25 @@ export function Settings({ welcome = false }: { welcome?: boolean }) {
             <div className="locked-field">EUR · Euro <span>Fixed during beta</span></div>
           </Field>}
         </Card>
+        {!welcome && <section className="settings-section" aria-labelledby="your-services">
+          <p className="eyebrow" id="your-services">Your services</p>
+          <p className="sheet-copy">Save up to 30 services and prices for quicker bookings. Changes are saved with Save settings.</p>
+          <Card className="form-card">
+            {services.length === 0 && <p className="sheet-copy">No services added yet. You can still type any service when booking.</p>}
+            {services.map((service, index) => <div className="service-editor-row" role="group" aria-label={`Service ${index + 1}`} key={service.id}>
+              <Field label="Service name" {...validation.field(`serviceName-${service.id}`)}>
+                <input name={`serviceName-${service.id}`} required maxLength={200} value={service.name} placeholder="e.g. Gel nails" onChange={event => setServices(current => current.map(row => row.id === service.id ? { ...row, name: event.target.value } : row))} />
+              </Field>
+              <Field label="Price" {...validation.field(`servicePrice-${service.id}`)}>
+                <div className="money-input"><span>€</span><input name={`servicePrice-${service.id}`} required inputMode="decimal" value={service.price} placeholder="0.00" onChange={event => setServices(current => current.map(row => row.id === service.id ? { ...row, price: event.target.value } : row))} /></div>
+              </Field>
+              <Button type="button" kind="quiet" aria-label={`Remove service ${service.name || index + 1}`} onClick={() => { setServices(current => current.filter(row => row.id !== service.id)); validation.clear(); }}>Remove</Button>
+            </div>)}
+            <Button type="button" kind="soft" disabled={services.length >= 30} onClick={() => setServices(current => [...current, { id: crypto.randomUUID(), name: "", price: "" }])}>
+              <Icon name="plus" /> Add service
+            </Button>
+          </Card>
+        </section>}
         {!welcome && <section className="settings-section">
           <p className="eyebrow">VAT &amp; tax</p>
           <Card className="form-card">
@@ -208,7 +239,7 @@ export function Settings({ welcome = false }: { welcome?: boolean }) {
             <Button type="button" kind="quiet" aria-label="Reset payment request to default" onClick={() => setForm({ ...form, paymentRequestTemplate: DEFAULT_PAYMENT_REQUEST_TEMPLATE })}>Reset to default</Button>
           </Card>
         </section>}
-        <Button type="submit" disabled={busy || logoBusy}>
+        <Button type="submit" disabled={busy || committed || logoBusy}>
           <Icon name="check" /> {busy ? "Saving…" : welcome ? "Save and get started" : "Save settings"}
         </Button>
       </form>

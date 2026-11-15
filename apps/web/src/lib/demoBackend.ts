@@ -5,7 +5,7 @@
  * payment links are simulated — nothing leaves the browser.
  */
 import type { Client, Expense, MessageLogEntry, Payment, BookingDocument } from "@sorted/core";
-import { snapshotReceipt, snapshotDocument, TaxSettings, ConfirmExpenseInput, RecordPaymentInput, paymentPaidAt, irelandToday, addCalendarDays, CalendarDate, shiftDublinWeeks, RepeatInput } from "@sorted/core";
+import { snapshotReceipt, snapshotDocument, TaxSettings, ConfirmExpenseInput, RecordPaymentInput, paymentPaidAt, irelandToday, addCalendarDays, CalendarDate, shiftDublinWeeks, RepeatInput, Services } from "@sorted/core";
 import type { Backend, BookingRow, Snapshot } from "./backend";
 import { blobToDataUrl } from "./image";
 
@@ -108,7 +108,7 @@ function seed(): DemoData {
       id: "demo", email: "demo@sorted.app", name: "Shane", businessName: "Studio by Shane",
       phone: "+353871234567", reviewLink: "https://g.page/r/example/review",
       currency: "EUR", createdAt: at(-200, 9),
-      emailVerifiedAt: at(-200, 9), address: null, iban: null, bic: null, revolutLink: null,
+      emailVerifiedAt: at(-200, 9), address: null, iban: null, bic: null, revolutLink: null, services: [],
       bookingConfirmationTemplate: null, paymentRequestTemplate: null,
       invoiceLogo: null, invoiceAccent: null, invoiceFooter: null, vatNumber: null,
       vatRegistered: false, vatRateBp: null, vatPeriodMonths: 2, incomeTaxRateBp: null,
@@ -261,11 +261,17 @@ export const demoBackend: Backend = {
     const bookings: BookingRow[] = dates.map((startAt, index) => ({
       id: id(), clientId: client.id, client, service: draft.service, startAt,
       endAt: null, priceCents: draft.priceCents, depositCents: draft.depositCents,
-      status: "enquiry", location: draft.location, notes: draft.notes, gcalEventId: null,
+      status: draft.status ?? "enquiry", location: draft.location, notes: draft.notes, gcalEventId: null,
       completedAt: null, createdAt: now(),
-      followUpOn: index === 0 ? draft.followUpOn === undefined ? addCalendarDays(irelandToday(), 2) : draft.followUpOn : null, paymentRequestedAt: null,
+      followUpOn: draft.status !== "confirmed" && index === 0 ? draft.followUpOn === undefined ? addCalendarDays(irelandToday(), 2) : draft.followUpOn : null, paymentRequestedAt: null,
     }));
     d.bookings.push(...bookings);
+    if (draft.status === "confirmed" && draft.depositCents > 0) {
+      d.payments.push(...bookings.map(booking => ({
+        id: id(), bookingId: booking.id, kind: "deposit" as const, amountCents: booking.depositCents,
+        method: null, status: "pending" as const, linkUrl: null, paidAt: null, createdAt: now(), vatRateBp: null,
+      })));
+    }
     save();
     return { id: bookings[0].id, seriesCount: bookings.length };
   },
@@ -444,6 +450,7 @@ export const demoBackend: Backend = {
 
   async updateUser(changes) {
     TaxSettings.parse({ ...data().user, ...changes });
+    if (changes.services !== undefined) changes = { ...changes, services: Services.parse(changes.services) };
     Object.assign(data().user, changes);
     save();
   },
