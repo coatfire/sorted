@@ -23,6 +23,8 @@ export const env = {
   /** Where the PWA lives — used to build login links. */
   appUrl: () =>
     (process.env.APP_URL || "http://localhost:5173").replace(/\/$/, ""),
+  /** Public address of the API when it isn't served from APP_URL. */
+  apiUrl: () => (process.env.API_URL || env.appUrl()).replace(/\/$/, ""),
   /** Comma-separated allowed CORS origins. Unset = allow all (dev). */
   corsOrigins: () =>
     process.env.CORS_ORIGIN?.split(",").map((o) => o.trim()).filter(Boolean),

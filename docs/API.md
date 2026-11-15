@@ -79,6 +79,20 @@ follow-up date first. Rescheduling uses PATCH with `follow_up_on`.
 | POST   | /bookings/:id/complete  | confirmed→completed. Emits `booking.completed`. Creates balance payment row |
 | POST   | /bookings/:id/cancel    | emits `booking.cancelled` |
 
+## Calendar
+
+| Method | Path | Notes |
+|--------|------|-------|
+| GET | /calendar | Authenticated. Lazily creates a secret 32-byte base64url token. Returns `{ confirmed: { https, webcal, google }, enquiries: { https, webcal, google } }`. Google URLs use the encoded webcal URL as `cid`. |
+| POST | /calendar/reset | Authenticated. Rotates the token and returns new URLs in the same shape. Old links immediately return 404. No body required. |
+| GET | /calendar/:token/confirmed.ics | Public bearer-link feed: confirmed + completed bookings belonging to the token owner. |
+| GET | /calendar/:token/enquiries.ics | Public bearer-link feed: enquiries belonging to the token owner. |
+
+Feeds include bookings starting from 180 days ago onward; cancelled bookings never appear. Unknown tokens/feed names return 404. Successful feeds use `Content-Type: text/calendar; charset=utf-8`; all calendar responses use `Cache-Control: no-store`. Tokens are secret: anyone with a link can read client names, phones, prices and locations in that feed. They are excluded from user payloads and calendar routes are excluded from request URL logging. Reset links if one is shared unintentionally.
+
+Calendar names are “Sorted – Confirmed” and “Sorted – Enquiries”. Refresh hints request 15 minutes, but calendar providers control actual refresh timing. Events have stable booking UIDs, UTC dates, explicit end times or a one-hour default, and a booking link based on `APP_URL`.
+Enquiry event descriptions include `Follow up: YYYY-MM-DD` when a follow-up date is set; the line is omitted otherwise.
+
 ## Payments
 | Method | Path                     | Notes |
 |--------|--------------------------|-------|

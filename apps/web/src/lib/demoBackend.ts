@@ -202,6 +202,8 @@ const voidPending = (bookingId: string) => {
 const csvCell = (value: unknown) => `"${String(value ?? "").replaceAll('"', '""')}"`;
 
 export const demoBackend: Backend = {
+  async calendar() { throw new Error("Available when you sign in"); },
+  async resetCalendar() { throw new Error("Available when you sign in"); },
   async document(bookingId, kind, paymentId) {
     const d = data();
     const booking = mustFind(d.bookings, bookingId, "Booking");

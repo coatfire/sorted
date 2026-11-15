@@ -12,12 +12,13 @@ import { expenseRoutes } from "./handlers/expenses";
 import { reportRoutes } from "./handlers/reports";
 import { webhookRoutes } from "./handlers/webhooks";
 import { internalRoutes } from "./handlers/internal";
+import { calendarRoutes } from "./handlers/calendar";
 
 export type AppEnv = { Variables: { userId: string } };
 
 export const app = new Hono<AppEnv>();
 
-if (!process.env.VITEST) app.use(logger());
+if (!process.env.VITEST) app.use((c, next) => c.req.path.startsWith("/api/calendar") ? next() : logger()(c, next));
 app.use("/api/*", cors({ origin: env.corsOrigins() ?? "*" }));
 
 app.get("/api/health", (c) =>
@@ -33,6 +34,7 @@ app.get("/api/health", (c) =>
 // Public
 app.route("/api/auth", authRoutes);
 app.route("/api/webhooks", webhookRoutes);
+app.route("/api/calendar", calendarRoutes);
 
 // Authenticated
 app.use("/api/clients/*", requireAuth);

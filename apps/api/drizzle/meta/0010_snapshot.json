@@ -1,6 +1,6 @@
 {
   "id": "4c0cce12-903b-4960-b45d-99f82a86a91c",
-  "prevId": "6df5e658-4d74-4bc8-9a01-844f0211e6a4",
+  "prevId": "b12f5a10-0479-4be0-a55b-9a19fa9670a3",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -1006,6 +1006,12 @@
       "name": "users",
       "schema": "",
       "columns": {
+        "calendar_token": {
+          "name": "calendar_token",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
         "vat_registered": {
           "name": "vat_registered",
           "type": "boolean",
@@ -1161,6 +1167,13 @@
       "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
+        "users_calendar_token_unique": {
+          "name": "users_calendar_token_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "calendar_token"
+          ]
+        },
         "users_email_unique": {
           "name": "users_email_unique",
           "nullsNotDistinct": false,

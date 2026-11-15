@@ -66,6 +66,7 @@ export const messageStatus = pgEnum("message_status", [
 ]);
 
 export const users = pgTable("users", {
+  calendarToken: text("calendar_token").unique(),
   vatRegistered: boolean("vat_registered").notNull().default(false),
   vatRateBp: integer("vat_rate_bp"),
   vatPeriodMonths: integer("vat_period_months").notNull().default(2),
