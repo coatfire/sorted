@@ -1,3 +1,5 @@
+import type { Payment } from "./types";
+
 export const MESSAGE_PLACEHOLDERS = [
   "client", "business", "date", "time", "service", "price", "deposit", "balance", "iban", "bic", "pay_link",
 ] as const;
@@ -26,6 +28,16 @@ export interface BookingMessageDetails {
   iban: string | null;
   bic: string | null;
   payLink: string | null;
+}
+
+export function bookingMessagePayLink(
+  payments: ReadonlyArray<Pick<Payment, "status" | "kind" | "amountCents" | "linkUrl">>,
+  kind: "confirmation" | "payment_request",
+  balanceCents: number,
+): string | null {
+  return payments.find((payment) => payment.status === "pending" && payment.linkUrl && (
+    kind === "confirmation" ? payment.kind === "deposit" : payment.amountCents === balanceCents
+  ))?.linkUrl ?? null;
 }
 
 export function renderBookingMessage(template: string, details: BookingMessageDetails): string {

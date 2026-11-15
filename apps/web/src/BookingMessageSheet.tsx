@@ -1,5 +1,5 @@
 import {
-  DEFAULT_BOOKING_CONFIRMATION_TEMPLATE, DEFAULT_PAYMENT_REQUEST_TEMPLATE, renderBookingMessage,
+  DEFAULT_BOOKING_CONFIRMATION_TEMPLATE, DEFAULT_PAYMENT_REQUEST_TEMPLATE, renderBookingMessage, bookingMessagePayLink,
 } from "@sorted/core";
 import { Button, Sheet } from "./components";
 import type { BookingRow } from "./lib/backend";
@@ -15,6 +15,7 @@ export function BookingMessageSheet({ booking, kind, onClose }: {
   const client = booking.client;
   const theirs = payments.filter((payment) => payment.bookingId === booking.id && payment.status !== "cancelled");
   const paid = theirs.filter((payment) => payment.status === "paid").reduce((sum, payment) => sum + payment.amountCents, 0);
+  const balanceCents = Math.max(0, booking.priceCents - paid);
   const confirmation = kind === "confirmation";
   const template = confirmation
     ? user.bookingConfirmationTemplate ?? DEFAULT_BOOKING_CONFIRMATION_TEMPLATE
@@ -27,10 +28,10 @@ export function BookingMessageSheet({ booking, kind, onClose }: {
     service: booking.service,
     priceCents: booking.priceCents,
     depositCents: booking.depositCents,
-    balanceCents: Math.max(0, booking.priceCents - paid),
+    balanceCents,
     iban: user.iban,
     bic: user.bic,
-    payLink: features.paymentLinks ? theirs.find((payment) => payment.status === "pending" && payment.linkUrl)?.linkUrl ?? null : null,
+    payLink: features.paymentLinks ? bookingMessagePayLink(theirs, kind, balanceCents) : null,
   });
   const subject = `${confirmation ? "Booking confirmation" : "Payment request"} — ${booking.service}`;
   const email = client.email ? `mailto:${encodeURIComponent(client.email).replace(/%40/g, "@")}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(message)}` : null;

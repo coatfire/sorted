@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   DEFAULT_BOOKING_CONFIRMATION_TEMPLATE, DEFAULT_PAYMENT_REQUEST_TEMPLATE, MESSAGE_PLACEHOLDERS,
-  renderBookingMessage, UpdateUserInput, type BookingMessageDetails,
+  renderBookingMessage, bookingMessagePayLink, UpdateUserInput, type BookingMessageDetails,
 } from "@sorted/core";
 
 const details: BookingMessageDetails = {
@@ -11,6 +11,28 @@ const details: BookingMessageDetails = {
 };
 
 describe("booking message templates", () => {
+  const deposit = { status: "pending", kind: "deposit", amountCents: 10000, linkUrl: "https://example.com/deposit" } as const;
+  const balance = { status: "pending", kind: "balance", amountCents: 25050, linkUrl: "https://example.com/balance" } as const;
+
+  it("only includes a payment request link for the exact unpaid balance", () => {
+    expect(bookingMessagePayLink([deposit], "payment_request", 35050)).toBeNull();
+    expect(bookingMessagePayLink([deposit, balance], "payment_request", 25050)).toBe(balance.linkUrl);
+    expect(bookingMessagePayLink([deposit, balance], "payment_request", 35050)).toBeNull();
+    expect(bookingMessagePayLink([{ ...balance, kind: "full", amountCents: 35050 }], "payment_request", 35050)).toBe(balance.linkUrl);
+    expect(bookingMessagePayLink([deposit], "payment_request", 10000)).toBe(deposit.linkUrl);
+  });
+
+  it("only includes pending deposit links for confirmations and skips unavailable links", () => {
+    expect(bookingMessagePayLink([balance, deposit], "confirmation", 35050)).toBe(deposit.linkUrl);
+    expect(bookingMessagePayLink([balance], "confirmation", 25050)).toBeNull();
+    for (const kind of ["confirmation", "payment_request"] as const) {
+      expect(bookingMessagePayLink([], kind, 10000)).toBeNull();
+      expect(bookingMessagePayLink([{ ...deposit, linkUrl: null }], kind, 10000)).toBeNull();
+      expect(bookingMessagePayLink([{ ...deposit, status: "paid" }], kind, 10000)).toBeNull();
+      expect(bookingMessagePayLink([{ ...deposit, status: "cancelled" }], kind, 10000)).toBeNull();
+    }
+  });
+
   it("renders every placeholder from cents without recursively interpreting client content", () => {
     expect(renderBookingMessage(MESSAGE_PLACEHOLDERS.map((key) => `{${key}}`).join("|"), details))
       .toBe("Sarah & Jane|Studio by Shane|15 November|10:00|Wedding hair|€350.50|€100.00|€250.50|IE29AIBK93115212345678|AIBKIE2D|");
