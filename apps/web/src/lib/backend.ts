@@ -93,7 +93,7 @@ export interface Backend {
   receiptUrl(expense: Pick<Expense, "id" | "receiptKey">): Promise<string | null>;
   updateClient(id: string, patch: { name: string; phone: string | null; email: string | null }): Promise<void>;
   deleteClient(id: string): Promise<void>;
-  updateUser(patch: {
+  updateUser(patch: Partial<{
     name: string | null;
     businessName: string | null;
     phone: string | null;
@@ -113,6 +113,6 @@ export interface Backend {
     vatRateBp?: number | null;
     vatPeriodMonths?: number;
     incomeTaxRateBp?: number | null;
-  }): Promise<void>;
+  }>): Promise<void>;
   exportCsv(year: number): Promise<Blob>;
 }

@@ -31,6 +31,7 @@ email/password remains available without the integration.
 `/login/google` shows **Signing you in…**, removes the exchange code from browser
 history and swaps it once for a session through the backend. Existing profiles
 go to Today; new/incomplete profiles go to the same profile step as email signup.
+Only a missing business name makes a profile incomplete; personal name is optional.
 Failures return to Login with **Couldn't sign in with Google. Try again or use
 your email.** No Google SDK, account picker or provider tokens run in the app.
 
@@ -347,6 +348,7 @@ Order: heading → Owed hero → Due now → Coming up → This year → collaps
 - All actions/disclosures retain 44px targets and reduced-motion support.
 
 ### 5. Expenses — `/expenses` (M5)
+- Heading copy: **Keep your expenses in one place.**
 - Top: full-width **📷 Snap receipt** button (opens
   `<input type="file" accept="image/*" capture="environment">`).
 - Upload → goes straight to **Confirm screen** (`/expenses/:id`): receipt
@@ -359,24 +361,64 @@ Order: heading → Owed hero → Due now → Coming up → This year → collaps
 - **Never auto-confirm OCR** — the confirm tap is what makes it a tax record.
 
 ### 6. Settings — `/settings` (M3/M7/M8)
-**Your services** lets traders add, edit or remove up to 30 name/price pairs.
-Show names, euro prices and a compact remove icon on one row. Remove icons
-have a minimum 44px tap target and an accessible "Remove <name>" label. Show
-**Add service**. Names must be unique case-insensitively; prices are integer
-cents after parsing. Show inline validation. Empty lists are allowed. Changes
-use **Save settings**, not immediate auto-save; catalogue edits never change
-existing bookings or issued documents.
+Calm sections, saving as you go. No Save settings button.
 
-Business name · your mobile · Google review link (M7) · calendar
-subscriptions (Confirmed / Enquiries) · currency (locked EUR for now,
-visible) · logout.
-First-run onboarding = this same screen presented as 3 quick cards after
-first login, skippable.
+- **Your details:** business name (required), optional personal name, mobile,
+  address and review link; fixed EUR currency. If personal name is missing,
+  use the business name in greetings and other trader-name contexts.
+- **Getting paid:** optional Revolut.me link, IBAN and BIC. Validate and normalise
+  only the edited field; blank clears it. These appear in drafts/invoices.
+- **Your services:** up to 30 inline name/price/remove rows with 44px remove icons
+  labelled Remove <name>. Completed rows and removals save automatically; partial
+  new rows are not saved, and invalid edits retain the previous valid row.
+  Names are unique case-insensitively; euro prices are stored as integer cents.
+  Catalogue changes never change existing bookings or issued documents.
+- **VAT & tax:** registered flag, conditional VAT rate/period/number, income-tax rate.
+- **Invoices & receipts:** logo, six labelled ≥44px accent swatches including
+  Forest green (#14532D), a Custom native colour picker and optional footer.
+  No raw hex text input. Presets remain readable on white documents.
+- **Customise messages:** native disclosure, collapsed by default. Confirmation
+  and payment-request textareas grow with their text. Friendly detail chips
+  (Client name, Business name, Date, Time, Service, Amount, Bank details,
+  Revolut link, etc.) insert tokens at the cursor, replacing selected text.
+  Show Example preview using the existing renderer and sample booking/client,
+  not raw braces. Keep Reset to default. These are drafts the trader sends.
+- Text debounces, blur flushes, selections save on change. Per-section
+  **Saving… / Saved / error** feedback; invalid values stay local with inline
+  errors. Requests contain only changed fields, not a full settings snapshot.
+  A serial queue preserves in-flight ordering and retries failed fields without
+  overwriting newer edits. After a committed save cannot refresh, stop further
+  writes and offer Reload; do not pretend the save failed before commit.
+  The controller owns that guard independently of retained field patches.
+  Reload releases it only after fetching fresh data successfully, resumes
+  queued edits, then reloads the screen. Other workflows cannot release it.
+- **Messages & payments:** WhatsApp says **Opens a draft in your WhatsApp — you
+  press send**, with no connection-status badge. Disabled card links say
+  **Coming later**.
+- Then Confirmed/Enquiries calendar subscriptions, Google Drive copy, Account/logout.
+  Demo retains reset/leave actions; Drive remains hidden in demo.
+
+**First-run welcome — `/welcome`:** one short form: required Business name,
+optional Your name, and optional **What do you offer?** with at most three
+service name/price rows saved to the shared catalogue. No phone, address or
+payment details here. **Save and get started** opens Today; retain the committed
+save/Reload guard. Only a missing business name triggers onboarding, not a
+missing personal name. No migration or new profile fields are needed.
+
+**Payment details when needed:** before a payment-request draft, or a confirmation
+draft with an unpaid deposit, if neither IBAN nor Revolut link is set, show
+**How should clients pay you?** first. Offer Revolut.me and IBAN with optional BIC.
+**Save and continue** validates, normalises and updates Settings through the
+backend, then opens the draft. **Not now** opens the draft without saving.
+Either payment method bypasses the prompt. Never claim a draft has been sent.
 
 ### 7. Login — `/login` (M1)
-Email field → "Send me a login link" → check-your-email state. Token in URL
-(`?token=`) auto-verifies and redirects to Today. No passwords anywhere, and
-say so: "No password. We email you a link."
+Email/password login, optional Continue with Google, Create account and Forgot
+password. Signup asks for email, password (at least eight characters) and password
+confirmation, then shows Check your email. Verification/reset links expire after
+15 minutes. After verification or Google sign-in, profiles with a business name
+go to Today; others go to Welcome. Password reset asks for a new password.
+Google sign-in remains independently feature-gated as described above.
 
 ---
 
@@ -423,27 +465,26 @@ kit; resist adding more.
   affect future documents, not issued ones. Legacy unsnapshotted documents
   keep existing behaviour.
 
-## Google Drive backup (Settings)
+## Google Drive copy (Settings)
 
-- Show a **Back up to Google Drive** card with one button only for signed-in
-  users when `features.googleDrive` is true. Hidden in demo and when disabled.
-- Explain that issued invoices, receipts, quotes, expense photos and yearly CSVs
-  go into a Sorted folder in their Google Drive. It runs only when tapped,
-  never automatically. Google consent requests access only to app-created files.
-- Preload Google Identity Services and the lazy backup module when the enabled,
-  signed-in card mounts. Prepare the token client before enabling the button;
-  show **Getting ready…** while loading. Request the token synchronously on tap
-  to preserve the browser's user gesture. Do not open a popup or run a backup on
-  mount, and load nothing in demo or when disabled. Preparation failure offers
-  **Try again** with the normal failure wording.
-  Keep the button disabled during a run, and announce **Backing up 12 of 40…**.
-- Show **Last backed up: today** / **Last backed up: N days ago** only after a
-  completed backup (remembered across visits). Success: **Backup finished**.
-- On popup closure, denied consent, network or upload failure:
-  **Backup didn't finish. Nothing was lost — try again.** Keep the previous
-  timestamp unchanged. Empty account: **No files to back up yet.**
-- Keep existing PDF/photo copies; refresh all yearly CSVs in place on every run.
-  Retrying a partial backup skips files already uploaded. Button target ≥44px.
+- Title and button: **Save a copy to Google Drive**. Only signed-in users with
+  `features.googleDrive`; hidden in demo and when disabled.
+- Explain that issued invoices, receipts, quotes, expense photos and yearly
+  money files go in a Sorted folder in their Drive, only when chosen, never
+  automatically. Google consent requests access only to app-created files.
+- Preload the identity script and lazy module, show Getting ready… until ready,
+  and request the token synchronously on the user's click. Preparation failure
+  offers Try again. No popup/token request on mount.
+- While running: **Saving your copy… / Saving X of Y…**. Announce progress.
+  **Last copy saved: today / N days ago** updates only after full completion.
+  Success: **Copy saved to Google Drive**; empty: **No files to save yet.**
+- Errors stay inline, including runtime errors, with a reason and **Nothing was
+  lost**: Google window closed/blocked (allow pop-ups), access not granted,
+  network/offline (check connection), or a generic retry fallback. Drive API
+  disabled/`accessNotConfigured` 403 says **Google Drive isn't switched on for
+  Sorted yet**. Never display raw Google error bodies/tokens.
+- Preserve previous completion timestamps on failure, skip already-uploaded
+  PDF/photo files on retry and refresh yearly CSVs in place. Targets ≥44px.
 
 ## Accessibility & PWA floor (M8 checklist)
 

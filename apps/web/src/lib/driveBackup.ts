@@ -1,12 +1,13 @@
 import { backupFiles, planDriveBackup } from "@sorted/core";
 import type { Backend } from "./backend";
+import { DriveError } from "./driveErrors";
 
 const scope = "https://www.googleapis.com/auth/drive.file";
 interface TokenResponse { access_token?: string; error?: string; scope?: string }
 interface GoogleIdentity {
   accounts: { oauth2: { initTokenClient(options: {
     client_id: string; scope: string; include_granted_scopes: false;
-    callback: (response: TokenResponse) => void; error_callback: () => void;
+    callback: (response: TokenResponse) => void; error_callback: (error?: { type?: string }) => void;
   }): { requestAccessToken(): void } } };
 }
 const google = () => (window as Window & { google?: GoogleIdentity }).google;
@@ -18,9 +19,9 @@ function loadIdentity() {
     const script = document.createElement("script");
     script.src = "https://accounts.google.com/gsi/client";
     script.async = true;
-    const timeout = window.setTimeout(() => { script.remove(); reject(new Error("Google unavailable")); }, 20000);
+    const timeout = window.setTimeout(() => { script.remove(); reject(new DriveError("network")); }, 20000);
     script.onload = () => { clearTimeout(timeout); resolve(); };
-    script.onerror = () => { clearTimeout(timeout); script.remove(); reject(new Error("Google unavailable")); };
+    script.onerror = () => { clearTimeout(timeout); script.remove(); reject(new DriveError("network")); };
     document.head.append(script);
   }).catch((error: unknown) => { scriptLoading = undefined; throw error; });
 }
@@ -28,16 +29,16 @@ function loadIdentity() {
 export async function prepareDriveBackup(clientId: string) {
   await loadIdentity();
   const identity = google();
-  if (!identity) throw new Error("Google unavailable");
+  if (!identity) throw new DriveError("failed");
   let pending: { resolve: (token: string) => void; reject: (error: Error) => void } | undefined;
   const client = identity.accounts.oauth2.initTokenClient({
       client_id: clientId, scope, include_granted_scopes: false,
       callback: (response) => {
-        if (response.error || !response.access_token || !response.scope?.split(" ").includes(scope)) pending?.reject(new Error("Google permission unavailable"));
+        if (response.error || !response.access_token || !response.scope?.split(" ").includes(scope)) pending?.reject(new DriveError("permission"));
         else pending?.resolve(response.access_token);
         pending = undefined;
       },
-      error_callback: () => { pending?.reject(new Error("Google sign-in closed")); pending = undefined; },
+      error_callback: error => { pending?.reject(new DriveError(error?.type === "popup_failed_to_open" ? "popup_blocked" : "popup_closed")); pending = undefined; },
   });
   return () => new Promise<string>((resolve, reject) => {
     pending = { resolve, reject };
@@ -52,7 +53,11 @@ export async function backUpToDrive(tokenResponse: Promise<string>, backend: Bac
   try {
     const request = async (url: string, init: RequestInit = {}) => {
       const response = await fetch(`https://www.googleapis.com/${url}`, { ...init, headers: { ...init.headers, Authorization: `Bearer ${token}` } });
-      if (!response.ok) throw new Error("Drive request failed");
+      if (!response.ok) {
+        const reason = await response.text();
+        if (response.status === 403 && /accessNotConfigured|SERVICE_DISABLED|(?:Drive API|drive.googleapis.com).*(?:disabled|not.*enabled|not.*used)/i.test(reason)) throw new DriveError("not_configured");
+        throw new DriveError(response.status === 401 || (response.status === 403 && /insufficientPermissions|PERMISSION_DENIED|access_denied/i.test(reason)) ? "permission" : "failed");
+      }
       return response;
     };
     const literal = (value: string) => `'${value.replace(/\\/g, "\\\\").replace(/'/g, "\\'")}'`;

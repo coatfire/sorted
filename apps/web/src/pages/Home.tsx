@@ -42,7 +42,7 @@ export function Home() {
   const needsAttention = followUps.length > 0 || wrapUp.length > 0 || dueNow.length > 0;
   const hour = Number(dublinDateTime(now).time.slice(0, 2));
   const greeting = hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
-  const who = user.name ? firstName(user.name) : null;
+  const who = user.name?.trim() ? firstName(user.name) : user.businessName;
   const nextState = next ? bookingStage(next, payments, now) : null;
   const depositDue = next && nextState ? Math.max(0, next.depositCents - (next.priceCents - nextState.owedCents)) : 0;
   const paymentPhrase = nextState ? nextState.owedCents === 0 ? "Paid in full" : depositDue > 0 ? `${euros(depositDue)} deposit due` : `${euros(nextState.owedCents)} still to pay` : "";

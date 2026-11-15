@@ -2,6 +2,7 @@ import type { Booking, Client, Expense, Health, MessageLogEntry, Payment, User, 
 import { api, apiBlob, apiUrl, patch, post } from "./api";
 import type { Backend, ExpenseDraft } from "./backend";
 import { blobToDataUrl } from "./image";
+import { settingsAutosaveRegistry } from "./settingsAutosaveSession";
 
 const expenseBody = (draft: ExpenseDraft) => ({
   merchant: draft.merchant,
@@ -128,7 +129,7 @@ export const apiBackend: Backend = {
   }),
 
   async updateUser(changes) {
-    await patch("/auth/me", {
+    const user = await patch<User>("/auth/me", {
       name: changes.name,
       business_name: changes.businessName,
       phone: changes.phone,
@@ -149,6 +150,7 @@ export const apiBackend: Backend = {
       vat_period_months: changes.vatPeriodMonths,
       income_tax_rate_bp: changes.incomeTaxRateBp,
     });
+    settingsAutosaveRegistry.notifySaved(apiBackend, user.id, changes);
   },
 
   exportCsv: (year) => apiBlob(`/reports/export?year=${year}`),

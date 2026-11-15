@@ -5,6 +5,7 @@ import { Button, Field, Icon } from "../components";
 import { ApiError, isNetworkError } from "../lib/api";
 import { useSession, useStore } from "../lib/store";
 import { useValidation } from "../lib/useValidation";
+import { needsWelcome } from "../lib/setup";
 
 export function authError(error: unknown) {
   return error instanceof ApiError ? error.message : isNetworkError(error)
@@ -34,7 +35,7 @@ export function Login() {
     try {
       const { jwt, user } = await backend.login(email, password);
       signIn(jwt);
-      navigate(!user.name || !user.businessName ? "/welcome" : "/", { replace: true });
+      navigate(needsWelcome(user) ? "/welcome" : "/", { replace: true });
     } catch (caught) {
       setError(authError(caught));
     } finally {

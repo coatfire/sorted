@@ -128,7 +128,7 @@ export function Expenses() {
     <div className="page">
       <PageHeader
         eyebrow="Expenses"
-        title="Keep every write-off."
+        title="Keep your expenses in one place."
         action={<span className="year-total"><small>{year} so far</small><MoneyText cents={yearTotal} /></span>}
       />
 

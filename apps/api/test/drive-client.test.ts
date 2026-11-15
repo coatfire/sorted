@@ -4,6 +4,7 @@ import { backUpToDrive, prepareDriveBackup } from "../../web/src/lib/driveBackup
 import type { Backend } from "../../web/src/lib/backend";
 import type { Snapshot } from "../../web/src/lib/backend";
 import { patchSnapshotUser } from "../../web/src/lib/snapshot";
+import { driveErrorMessage } from "../../web/src/lib/driveErrors";
 
 afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); });
 
@@ -43,6 +44,15 @@ function fixture({ failUpload = false, closePopup = false, empty = false } = {})
 }
 
 describe("browser-driven Drive backup", () => {
+  it("maps a real Drive accessNotConfigured 403 to the service explanation without marking a copy saved", async () => {
+    const f = fixture();
+    f.fetchMock.mockResolvedValue(Response.json({ error: { errors: [{ reason: "accessNotConfigured" }] } }, { status: 403 }));
+    const request = await prepareDriveBackup("test-client");
+    let error: unknown;
+    try { await backUpToDrive(request(), f.backend, vi.fn()); } catch (caught) { error = caught; }
+    expect(driveErrorMessage(error)).toBe("Google Drive isn't switched on for Sorted yet. Please try again later. Nothing was lost.");
+    expect(f.backedUp).not.toHaveBeenCalled();
+  });
   it("patches the shared snapshot from the completion response without a reload", async () => {
     const f = fixture();
     const current = { user: { id: "user-1", driveBackedUpAt: null }, bookings: [] } as unknown as Snapshot;
