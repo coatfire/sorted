@@ -389,6 +389,9 @@ Calm sections, saving as you go. No Save settings button.
   A serial queue preserves in-flight ordering and retries failed fields without
   overwriting newer edits. After a committed save cannot refresh, stop further
   writes and offer Reload; do not pretend the save failed before commit.
+  The controller owns that guard independently of retained field patches.
+  Reload releases it only after fetching fresh data successfully, resumes
+  queued edits, then reloads the screen. Other workflows cannot release it.
 - **Messages & payments:** WhatsApp says **Opens a draft in your WhatsApp — you
   press send**, with no connection-status badge. Disabled card links say
   **Coming later**.

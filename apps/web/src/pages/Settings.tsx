@@ -65,7 +65,7 @@ function BusinessSettings() {
     <BackButton to="/" />
     <PageHeader eyebrow="Settings" title="Your business" />
     <p className="page-intro">Make it yours. Changes save as you go.</p>
-    {blocked && <Button kind="soft" onClick={() => window.location.reload()}>Reload</Button>}
+    {blocked && <Button kind="soft" onClick={async () => { if (await saver.reload()) window.location.reload(); }}>Reload</Button>}
     <fieldset className="settings-fields" disabled={blocked}>
       <section className="settings-section"><h2>Your details</h2><Card className="form-card">
         <Field label="Business name" error={errors.businessName}><input {...input("businessName", "profile")} required maxLength={200} placeholder="e.g. Studio by Shane" /></Field>

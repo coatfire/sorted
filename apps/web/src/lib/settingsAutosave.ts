@@ -12,7 +12,7 @@ export function createSettingsAutosave(save: (patch: UserChanges) => Promise<voi
   const queued = new Map<UserChanges, string>();
   const fieldVersions = new Map<string, Map<string, number>>();
   let queue = Promise.resolve();
-  let blocked = false;
+  let committedSection: string | undefined;
   const reload = "Saved, but the screen couldn't update. Reload before making more changes.";
   function flush(section: string) {
     clearTimeout(timers.get(section)); timers.delete(section);
@@ -24,7 +24,15 @@ export function createSettingsAutosave(save: (patch: UserChanges) => Promise<voi
     const sentVersions = new Map(fieldVersions.get(section));
     queued.set(changes, section);
     queue = queue.then(async () => {
-      if (blocked) { report(section, { phase: "error", message: reload, committed: true }); return; }
+      if (committedSection !== undefined) {
+        const deferred = pending.get(section) ?? new Map<string, UserChanges>();
+        for (const [key, value] of Object.entries(changes)) {
+          if (fieldVersions.get(section)?.get(key) === sentVersions.get(key)) deferred.set(key, { [key]: value });
+        }
+        pending.set(section, deferred);
+        if (section !== committedSection) report(section, { phase: "error", message: "These changes haven't been saved yet. Reload to try again." });
+        return;
+      }
       const patch = { ...failed.get(section), ...changes };
       if (!Object.keys(patch).length) return;
       try {
@@ -39,14 +47,18 @@ export function createSettingsAutosave(save: (patch: UserChanges) => Promise<voi
       }
       failed.delete(section);
       try { await refresh(); }
-      catch { blocked = true; report(section, { phase: "error", message: reload, committed: true }); return; }
+      catch { committedSection = section; report(section, { phase: "error", message: reload, committed: true }); return; }
       if (versions.get(section) === version) report(section, { phase: invalid.get(section)?.size ? "invalid" : "saved" });
     }).finally(() => { queued.delete(changes); });
     return queue;
   }
+  function flushAll() {
+    for (const section of new Set([...pending.keys(), ...failed.keys()])) void flush(section);
+    return queue.then(() => committedSection === undefined && !failed.size);
+  }
   return {
     change(section: string, field: string, patch: UserChanges | null, immediate = false) {
-      if (blocked) return;
+      if (committedSection !== undefined) return;
       versions.set(section, (versions.get(section) ?? 0) + 1);
       const fields = pending.get(section) ?? new Map<string, UserChanges>();
       const keys = new Set([field, ...Object.keys(patch ?? {})]);
@@ -87,11 +99,20 @@ export function createSettingsAutosave(save: (patch: UserChanges) => Promise<voi
         if (!changes || !Object.keys(changes).length) {
           failed.delete(section);
           const saving = pending.get(section)?.size || [...queued].some(([patch, queuedSection]) => queuedSection === section && Object.keys(patch).length);
-          report(section, { phase: saving ? "saving" : invalid.get(section)?.size ? "invalid" : "saved" });
+          if (section !== committedSection) report(section, { phase: saving ? "saving" : invalid.get(section)?.size ? "invalid" : "saved" });
         }
       }
     },
     getChanges(): UserChanges { return Object.assign({}, ...failed.values(), ...queued.keys(), ...[...pending.values()].flatMap(fields => [...fields.values()])); },
-    flushAll() { for (const section of new Set([...pending.keys(), ...failed.keys()])) void flush(section); return queue.then(() => !blocked && !failed.size); },
+    isBlocked: () => committedSection !== undefined,
+    async reload() {
+      if (committedSection === undefined) return true;
+      try { await refresh(); } catch { return false; }
+      const section = committedSection;
+      committedSection = undefined;
+      if (section !== undefined) report(section, { phase: invalid.get(section)?.size ? "invalid" : "saved" });
+      return flushAll();
+    },
+    flushAll,
   };
 }

@@ -14,5 +14,5 @@ export function useSettingsAutosave() {
   }, () => refresh(true), message => toast(message, "error"));
   const [states, setStates] = useState(session.getStates);
   useEffect(() => watchSettingsAutosave(session, setStates, window, document), [session]);
-  return { saver: session.saver, restoredChanges: session.saver.getChanges(), states, blocked: Object.values(states).some(state => state.committed) };
+  return { saver: session.saver, restoredChanges: session.saver.getChanges(), states, blocked: session.saver.isBlocked() };
 }
