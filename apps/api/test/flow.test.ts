@@ -340,6 +340,54 @@ describe("client deletion", () => {
     expect(csv).not.toContain("Private client");
   });
 
+  it("deactivates only deleted pending links, after the client deletion commits", async () => {
+    const { call, userId, client, booking, payment } = await fixture();
+    vi.spyOn(env, "stripeKey").mockReturnValue("sk_test_placeholder");
+    await db.update(schema.payments).set({ stripePaymentLinkId: "plink_delete_1" }).where(and(
+      eq(schema.payments.id, payment.id), eq(schema.payments.userId, userId),
+    ));
+    await db.insert(schema.payments).values([
+      { userId, bookingId: booking.id, kind: "balance", amountCents: 12000, stripePaymentLinkId: "plink_delete_2" },
+      { userId, bookingId: booking.id, kind: "balance", amountCents: 12000, stripePaymentLinkId: "plink_cancelled", status: "cancelled" },
+      { userId, bookingId: booking.id, kind: "balance", amountCents: 12000 },
+    ]);
+    let committed = false;
+    const transaction: typeof db.transaction = db.transaction.bind(db);
+    vi.spyOn(db, "transaction").mockImplementationOnce(async (callback, config) => {
+      const result = await transaction(callback, config);
+      committed = true;
+      return result;
+    });
+    const committedAtDeactivation: boolean[] = [];
+    stripe.updateLink.mockImplementation(async () => {
+      committedAtDeactivation.push(committed);
+      return {};
+    });
+    const response = await call(`/clients/${client.id}`, "DELETE", { confirm: true });
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ outcome: "deleted" });
+    expect(stripe.updateLink).toHaveBeenCalledTimes(2);
+    expect(stripe.updateLink).toHaveBeenCalledWith("plink_delete_1", { active: false });
+    expect(stripe.updateLink).toHaveBeenCalledWith("plink_delete_2", { active: false });
+    expect(committedAtDeactivation).toEqual([true, true]);
+    expect((await call(`/clients/${client.id}`)).status).toBe(404);
+  });
+
+  it("does not deactivate retained pending links when anonymising a paid client", async () => {
+    const { call, userId, client, booking } = await fixture(true);
+    vi.spyOn(env, "stripeKey").mockReturnValue("sk_test_placeholder");
+    const [pending] = await db.insert(schema.payments).values({
+      userId, bookingId: booking.id, kind: "balance", amountCents: 12000, stripePaymentLinkId: "plink_retained",
+    }).returning();
+    const response = await call(`/clients/${client.id}`, "DELETE", { confirm: true });
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ outcome: "anonymised" });
+    expect(stripe.updateLink).not.toHaveBeenCalled();
+    expect(await db.select().from(schema.payments).where(and(
+      eq(schema.payments.id, pending.id), eq(schema.payments.userId, userId),
+    ))).toEqual([pending]);
+  });
+
   it("requires explicit confirmation, including for an empty client", async () => {
     const call = await login(`empty-delete-${crypto.randomUUID()}@example.com`);
     const client = await json<{ id: string }>(await call("/clients", "POST", { name: "Empty client" }));
@@ -371,7 +419,11 @@ describe("client deletion", () => {
   });
 
   it.each([false, true])("rolls back all writes if the transaction fails (paid=%s)", async (paid) => {
-    const { call, userId, client } = await fixture(paid);
+    const { call, userId, client, payment } = await fixture(paid);
+    vi.spyOn(env, "stripeKey").mockReturnValue("sk_test_placeholder");
+    await db.update(schema.payments).set({ stripePaymentLinkId: "plink_rollback" }).where(and(
+      eq(schema.payments.id, payment.id), eq(schema.payments.userId, userId),
+    ));
     const before = await json<unknown>(await call(`/clients/${client.id}`));
     const transaction: typeof db.transaction = db.transaction.bind(db);
     vi.spyOn(db, "transaction").mockImplementationOnce((callback, config) => transaction(async (tx) => {
@@ -380,6 +432,7 @@ describe("client deletion", () => {
     }, config));
     vi.spyOn(console, "error").mockImplementation(() => {});
     expect((await call(`/clients/${client.id}`, "DELETE", { confirm: true })).status).toBe(500);
+    expect(stripe.updateLink).not.toHaveBeenCalled();
     expect(await json<unknown>(await call(`/clients/${client.id}`))).toEqual(before);
     expect(await db.select().from(schema.messageLog).where(eq(schema.messageLog.userId, userId))).toHaveLength(3);
   });

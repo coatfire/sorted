@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { and, desc, eq, ilike, inArray, or, sql } from "drizzle-orm";
 import { CreateClientInput, UpdateClientInput } from "@sorted/core";
 import { db, schema } from "../db";
+import { deactivatePaymentLink } from "../lib/stripe";
 import type { AppEnv } from "../app";
 
 export const clientRoutes = new Hono<AppEnv>();
@@ -97,7 +98,7 @@ clientRoutes.delete("/:id", async (c) => {
   }
   const userId = c.get("userId");
   const id = c.req.param("id");
-  return db.transaction(async (tx) => {
+  const result = await db.transaction(async (tx) => {
     const clientScope = and(eq(schema.clients.id, id), eq(schema.clients.userId, userId));
     const [client] = await tx.select().from(schema.clients).where(clientScope).for("update");
     if (!client) return c.json({ error: "Client not found" }, 404);
@@ -119,9 +120,17 @@ clientRoutes.delete("/:id", async (c) => {
       await tx.update(schema.bookings).set({ notes: null, location: null }).where(bookingScope);
       return c.json({ outcome: "anonymised" });
     }
-    await tx.delete(schema.payments).where(paymentScope);
+    const deletedPayments = await tx.delete(schema.payments).where(paymentScope).returning();
+    const linkIds = deletedPayments.flatMap((payment) =>
+      payment.status === "pending" && payment.stripePaymentLinkId ? [payment.stripePaymentLinkId] : [],
+    );
     await tx.delete(schema.bookings).where(bookingScope);
     await tx.delete(schema.clients).where(clientScope);
-    return c.json({ outcome: "deleted" });
+    return { linkIds };
   });
+  if (result instanceof Response) return result;
+  for (const linkId of result.linkIds) {
+    await deactivatePaymentLink(linkId);
+  }
+  return c.json({ outcome: "deleted" });
 });
