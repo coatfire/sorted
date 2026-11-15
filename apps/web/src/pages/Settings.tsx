@@ -1,6 +1,9 @@
 import { useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
-import { normalisePhone, normaliseIban, normaliseBic, validIban, validBic } from "@sorted/core";
+import {
+  normalisePhone, normaliseIban, normaliseBic, validIban, validBic,
+  DEFAULT_BOOKING_CONFIRMATION_TEMPLATE, DEFAULT_PAYMENT_REQUEST_TEMPLATE, MESSAGE_PLACEHOLDERS,
+} from "@sorted/core";
 import { BackButton, Button, Card, Field, Icon, PageHeader } from "../components";
 import { useAction, useData, useSession, useStore } from "../lib/store";
 import { useValidation } from "../lib/useValidation";
@@ -19,6 +22,8 @@ export function Settings({ welcome = false }: { welcome?: boolean }) {
     address: user.address ?? "",
     iban: user.iban ?? "",
     bic: user.bic ?? "",
+    bookingConfirmationTemplate: user.bookingConfirmationTemplate ?? DEFAULT_BOOKING_CONFIRMATION_TEMPLATE,
+    paymentRequestTemplate: user.paymentRequestTemplate ?? DEFAULT_PAYMENT_REQUEST_TEMPLATE,
   });
   const set = (field: keyof typeof form) => (event: { target: { value: string } }) => {
     setForm({ ...form, [field]: event.target.value });
@@ -48,6 +53,10 @@ export function Settings({ welcome = false }: { welcome?: boolean }) {
           address: form.address.trim() || null,
           iban: form.iban.trim() ? normaliseIban(form.iban) : null,
           bic: form.bic.trim() ? normaliseBic(form.bic) : null,
+          ...(!welcome ? {
+            bookingConfirmationTemplate: form.bookingConfirmationTemplate === DEFAULT_BOOKING_CONFIRMATION_TEMPLATE ? null : form.bookingConfirmationTemplate,
+            paymentRequestTemplate: form.paymentRequestTemplate === DEFAULT_PAYMENT_REQUEST_TEMPLATE ? null : form.paymentRequestTemplate,
+          } : {}),
         }),
       "Settings saved",
     );
@@ -90,6 +99,20 @@ export function Settings({ welcome = false }: { welcome?: boolean }) {
             <div className="locked-field">EUR · Euro <span>Fixed during beta</span></div>
           </Field>}
         </Card>
+        {!welcome && <section className="settings-section">
+          <p className="eyebrow">Message templates</p>
+          <p className="sheet-copy">For drafts you send yourself by WhatsApp or email.</p>
+          <Card className="form-card">
+            <Field label="Booking confirmation" helper={MESSAGE_PLACEHOLDERS.map((key) => `{${key}}`).join(" ")}>
+              <textarea name="bookingConfirmationTemplate" rows={7} maxLength={4000} value={form.bookingConfirmationTemplate} onChange={set("bookingConfirmationTemplate")} />
+            </Field>
+            <Button type="button" kind="quiet" aria-label="Reset booking confirmation to default" onClick={() => setForm({ ...form, bookingConfirmationTemplate: DEFAULT_BOOKING_CONFIRMATION_TEMPLATE })}>Reset to default</Button>
+            <Field label="Payment request" helper={MESSAGE_PLACEHOLDERS.map((key) => `{${key}}`).join(" ")}>
+              <textarea name="paymentRequestTemplate" rows={7} maxLength={4000} value={form.paymentRequestTemplate} onChange={set("paymentRequestTemplate")} />
+            </Field>
+            <Button type="button" kind="quiet" aria-label="Reset payment request to default" onClick={() => setForm({ ...form, paymentRequestTemplate: DEFAULT_PAYMENT_REQUEST_TEMPLATE })}>Reset to default</Button>
+          </Card>
+        </section>}
         <Button type="submit" disabled={busy}>
           <Icon name="check" /> {busy ? "Saving…" : welcome ? "Save and get started" : "Save settings"}
         </Button>

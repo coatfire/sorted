@@ -38,6 +38,22 @@ async function session(response: Response) {
 afterEach(() => vi.restoreAllMocks());
 
 describe("password auth", () => {
+  it("saves user-scoped message templates, preserves omitted values and resets to null", async () => {
+    const first = await session(await post("verify", { token: await token(await signup(email())) }));
+    const second = await session(await post("verify", { token: await token(await signup(email())) }));
+    const patch = (body: object) => app.request("/api/auth/me", {
+      method: "PATCH", headers: { Authorization: `Bearer ${first.jwt}` }, body: JSON.stringify(body),
+    });
+    const saved = await patch({ booking_confirmation_template: "Hi {client}", payment_request_template: "Pay {balance}" });
+    expect(saved.status).toBe(200);
+    expect(await saved.json()).toMatchObject({ bookingConfirmationTemplate: "Hi {client}", paymentRequestTemplate: "Pay {balance}" });
+    const other = await app.request("/api/auth/me", { headers: { Authorization: `Bearer ${second.jwt}` } });
+    expect(await other.json()).toMatchObject({ bookingConfirmationTemplate: null, paymentRequestTemplate: null });
+    expect((await patch({ payment_request_template: "x".repeat(4001) })).status).toBe(400);
+    const reset = await patch({ booking_confirmation_template: null });
+    expect(await reset.json()).toMatchObject({ bookingConfirmationTemplate: null, paymentRequestTemplate: "Pay {balance}" });
+  });
+
   it("signs up, applies the password only on verification, then logs in without leaking hashes", async () => {
     const address = email();
     const value = await token(await signup(address));

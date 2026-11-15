@@ -3,18 +3,20 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import type { MessageLogEntry } from "@sorted/core";
 import { BackButton, Button, Card, EmptyState, Icon, MoneyText, Sheet, StatusChip } from "../components";
 import { PaymentActions } from "../PaymentActions";
+import { BookingMessageSheet } from "../BookingMessageSheet";
 import {
-  confirmCopy, firstName, kindLabel, longDay, messageLabel, methodLabel, stamp, time, whatsappLink,
+  confirmCopy, firstName, kindLabel, longDay, messageLabel, methodLabel, stamp, time,
 } from "../lib/format";
 import { useAction, useData, useStore } from "../lib/store";
 
 export function BookingDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { bookings, payments, features, user } = useData();
+  const { bookings, payments, features } = useData();
   const { backend } = useStore();
   const { busy, run } = useAction();
   const [confirmCancel, setConfirmCancel] = useState(false);
+  const [message, setMessage] = useState<"confirmation" | "payment_request" | null>(null);
   const [messages, setMessages] = useState<MessageLogEntry[] | null>(null);
   const booking = bookings.find((item) => item.id === id);
 
@@ -50,13 +52,6 @@ export function BookingDetail() {
     .reduce((sum, payment) => sum + payment.amountCents, 0);
   const open = booking.status === "enquiry" || booking.status === "confirmed";
   const confirm = confirmCopy(client, features.automation);
-  const hello =
-    `Hi ${firstName(client.name)}, ` +
-    (booking.status === "enquiry"
-      ? `about your ${booking.service} on ${longDay(booking.startAt)} at ${time(booking.startAt)}`
-      : `you're booked in for ${booking.service} on ${longDay(booking.startAt)} at ${time(booking.startAt)}` +
-        (booking.location ? ` (${booking.location})` : "")) +
-    (user.businessName ? ` — ${user.businessName}` : "");
 
   return (
     <div className="page detail-page">
@@ -89,19 +84,14 @@ export function BookingDetail() {
             <strong>{client.name}</strong>
             <span>{client.phone || "No mobile added — tap to add one"}</span>
           </Link>
-          {client.phone && (
-            <a
-              className="chip-link"
-              href={whatsappLink(client.phone, hello)}
-              target="_blank"
-              rel="noreferrer"
-              aria-label={`Message ${client.name} on WhatsApp`}
-            >
-              <Icon name="message" size={16} /> WhatsApp
-            </a>
-          )}
         </div>
       </Card>
+
+      {booking.status !== "cancelled" && (
+        <Button kind="soft" onClick={() => setMessage("confirmation")}>
+          <Icon name="message" /> Send confirmation
+        </Button>
+      )}
 
       {booking.notes && (
         <Card className="notes-card">
@@ -179,6 +169,11 @@ export function BookingDetail() {
             </p>
           )}
         </Card>
+        {booking.status !== "cancelled" && booking.priceCents > paid && (
+          <Button kind="soft" onClick={() => setMessage("payment_request")}>
+            <Icon name="message" /> Request payment
+          </Button>
+        )}
       </section>
 
       <section className="detail-section">
@@ -203,7 +198,7 @@ export function BookingDetail() {
           ) : (
             <EmptyState icon="message" title="No messages sent" small>
               {!features.automation
-                ? "Automatic WhatsApp messages aren’t connected yet. Use the WhatsApp button above to message from your own phone."
+                ? "Automatic messages aren’t connected yet. Use Send confirmation or Request payment to open a draft. Manual sends aren’t tracked here."
                 : !client.phone
                   ? `Add a mobile for ${firstName(client.name)} and Sorted will send confirmations and reminders.`
                   : "Confirmations, reminders and payment requests will show here as they’re sent."}
@@ -230,6 +225,7 @@ export function BookingDetail() {
           <Button kind="quiet" onClick={() => setConfirmCancel(false)}>Keep it</Button>
         </Sheet>
       )}
+      {message && <BookingMessageSheet booking={booking} kind={message} onClose={() => setMessage(null)} />}
     </div>
   );
 }

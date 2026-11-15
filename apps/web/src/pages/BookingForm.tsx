@@ -1,6 +1,6 @@
 import { useMemo, useState, type FormEvent } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { normalisePhone, type Client } from "@sorted/core";
+import { normalisePhone, CreateClientInput, type Client } from "@sorted/core";
 import { BackButton, Button, Card, EmptyState, Field, Icon, MoneyText, PageHeader } from "../components";
 import type { BookingRow } from "../lib/backend";
 import { centsToInput, confirmCopy, longDay, parseEuros, time, toDateInput, toTimeInput } from "../lib/format";
@@ -29,6 +29,7 @@ export function BookingForm() {
     return {
       clientName: "",
       clientPhone: "",
+      clientEmail: "",
       service: editing?.service ?? "",
       date: start ? toDateInput(start) : tomorrow(),
       time: start ? toTimeInput(start) : "10:00",
@@ -41,6 +42,8 @@ export function BookingForm() {
   const [showDeposit, setShowDeposit] = useState(Boolean(editing?.depositCents));
   const [showMore, setShowMore] = useState(Boolean(editing?.location || editing?.notes));
   const validation = useValidation({
+    clientEmail: () => !client && form.clientEmail.trim() && !CreateClientInput.shape.email.safeParse(form.clientEmail.trim()).success
+      ? "Enter a valid email address." : undefined,
     clientPhone: () => form.clientPhone.trim() && !normalisePhone(form.clientPhone)
       ? "That mobile number doesn’t look right. Try it like 087 123 4567." : undefined,
     price: () => {
@@ -124,7 +127,7 @@ export function BookingForm() {
     const ok = await run(async () => {
       const created = await backend.createBooking({
         ...details,
-        ...(client ? { clientId: client.id } : { client: { name: form.clientName.trim(), phone } }),
+        ...(client ? { clientId: client.id } : { client: { name: form.clientName.trim(), phone, email: form.clientEmail.trim() || undefined } }),
       });
       createdId = created.id;
     });
@@ -184,7 +187,7 @@ export function BookingForm() {
                     ))}
                   </div>
                 )}
-                <Field label="Mobile (optional)" helper="Add a mobile so Sorted can send confirmations for you." {...validation.field("clientPhone")}>
+                <Field label="Mobile (optional)" helper="For WhatsApp drafts you send yourself." {...validation.field("clientPhone")}>
                   <input
                     type="tel"
                     inputMode="tel"
@@ -193,6 +196,9 @@ export function BookingForm() {
                     placeholder="087 123 4567"
                     autoComplete="off"
                   />
+                </Field>
+                <Field label="Email (optional)" {...validation.field("clientEmail")}>
+                  <input name="clientEmail" type="email" autoComplete="email" value={form.clientEmail} onChange={(event) => update("clientEmail", event.target.value)} />
                 </Field>
               </>
             )}
