@@ -1,4 +1,8 @@
 import { Link } from "react-router-dom";
+import { useState } from "react";
+import { calendarDaysBetween, irelandToday } from "@sorted/core";
+import { BookingMessageSheet } from "../BookingMessageSheet";
+import type { BookingRow } from "../lib/backend";
 import { Button, Card, EmptyState, Icon, MoneyText, PageHeader } from "../components";
 import { PaymentActions } from "../PaymentActions";
 import { TaxEstimateCard } from "../TaxEstimateCard";
@@ -13,6 +17,7 @@ export function Money() {
   const { bookings, payments, expenses } = useData();
   const { backend } = useStore();
   const { busy, run } = useAction();
+  const [reminder, setReminder] = useState<{ booking: BookingRow; amount: number } | null>(null);
   const year = new Date().getFullYear();
   const thisMonth = new Date().getMonth();
 
@@ -73,6 +78,11 @@ export function Money() {
                     </div>
                     <MoneyText cents={payment.amountCents} />
                   </Link>
+                  <p className="field-helper">{booking.paymentRequestedAt ? (() => {
+                    const days = Math.max(0, calendarDaysBetween(irelandToday(new Date(booking.paymentRequestedAt)), irelandToday()));
+                    return days === 0 ? "Asked today" : `Asked ${days} ${days === 1 ? "day" : "days"} ago`;
+                  })() : "Not asked yet"}</p>
+                  <Button onClick={() => setReminder({ booking, amount: payment.amountCents })}>Send reminder</Button>
                   <PaymentActions payment={payment} booking={booking} />
                 </Card>
               );
@@ -86,6 +96,7 @@ export function Money() {
       </section>
 
       <TaxEstimateCard />
+      {reminder && <BookingMessageSheet booking={reminder.booking} kind="payment_request" initialAmountCents={reminder.amount} onClose={() => setReminder(null)} />}
       <section className="list-section">
         <div className="section-heading">
           <div><p className="eyebrow">This year</p><h2>{year} at a glance</h2></div>

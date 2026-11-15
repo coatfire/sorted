@@ -5,7 +5,7 @@
  * payment links are simulated — nothing leaves the browser.
  */
 import type { Client, Expense, MessageLogEntry, Payment, BookingDocument } from "@sorted/core";
-import { snapshotReceipt, TaxSettings, ConfirmExpenseInput, RecordPaymentInput, paymentPaidAt } from "@sorted/core";
+import { snapshotReceipt, TaxSettings, ConfirmExpenseInput, RecordPaymentInput, paymentPaidAt, irelandToday, addCalendarDays, CalendarDate } from "@sorted/core";
 import type { Backend, BookingRow, Snapshot } from "./backend";
 import { blobToDataUrl } from "./image";
 
@@ -44,6 +44,7 @@ function seed(): DemoData {
   ): BookingRow => ({
     id: id(), clientId: c.id, client: c, service, startAt, endAt: null, priceCents,
     depositCents, status, location: null, notes: null, gcalEventId: null,
+    followUpOn: status === "enquiry" ? addCalendarDays(irelandToday(), -2) : null, paymentRequestedAt: null,
     completedAt: status === "completed" ? startAt : null, createdAt: at(-45, 9), ...extra,
   });
   const b = {
@@ -231,10 +232,12 @@ export const demoBackend: Backend = {
   resetPassword: async () => ({ jwt: "demo", user: data().user }),
   async load() {
     const { messages: _m, receipts: _r, documents: _d, ...snapshot } = data();
+    snapshot.bookings.forEach((booking) => { booking.followUpOn ??= null; booking.paymentRequestedAt ??= null; });
     return structuredClone(snapshot);
   },
 
   async createBooking(draft) {
+    if (draft.followUpOn != null) CalendarDate.parse(draft.followUpOn);
     const d = data();
     let client: Client;
     if (draft.clientId) client = mustFind(d.clients, draft.clientId, "Client");
@@ -250,6 +253,7 @@ export const demoBackend: Backend = {
       endAt: null, priceCents: draft.priceCents, depositCents: draft.depositCents,
       status: "enquiry", location: draft.location, notes: draft.notes, gcalEventId: null,
       completedAt: null, createdAt: now(),
+      followUpOn: draft.followUpOn === undefined ? addCalendarDays(irelandToday(), 2) : draft.followUpOn, paymentRequestedAt: null,
     };
     d.bookings.push(booking);
     save();
@@ -257,7 +261,11 @@ export const demoBackend: Backend = {
   },
 
   async updateBooking(bookingId, draft) {
-    Object.assign(mustFind(data().bookings, bookingId, "Booking"), draft);
+    if (draft.followUpOn != null) CalendarDate.parse(draft.followUpOn);
+    const booking = mustFind(data().bookings, bookingId, "Booking");
+    if (booking.status === "completed" || booking.status === "cancelled") throw new Error(`A ${booking.status} booking can't be edited`);
+    if (draft.followUpOn != null && booking.status !== "enquiry") throw new Error("Only enquiries can have a follow-up date");
+    Object.assign(booking, draft);
     save();
   },
 
@@ -265,6 +273,7 @@ export const demoBackend: Backend = {
     const d = data();
     const booking = mustFind(d.bookings, bookingId, "Booking");
     booking.status = "confirmed";
+    booking.followUpOn = null;
     if (booking.depositCents > 0) {
       d.payments.push({
         id: id(), bookingId, kind: "deposit", amountCents: booking.depositCents,
@@ -294,6 +303,7 @@ export const demoBackend: Backend = {
 
   async cancelBooking(bookingId) {
     mustFind(data().bookings, bookingId, "Booking").status = "cancelled";
+    mustFind(data().bookings, bookingId, "Booking").followUpOn = null;
     voidPending(bookingId);
     save();
   },
@@ -302,6 +312,18 @@ export const demoBackend: Backend = {
     return data()
       .messages.filter((m) => m.bookingId === bookingId)
       .sort((a, b) => b.sentAt.localeCompare(a.sentAt));
+  },
+
+  async followUp(bookingId, date) {
+    const booking = mustFind(data().bookings, bookingId, "Booking");
+    if (booking.status !== "enquiry") throw new Error("Only enquiries can have a follow-up date");
+    booking.followUpOn = date === null ? null : CalendarDate.parse(date);
+    save();
+  },
+
+  async paymentRequested(bookingId) {
+    mustFind(data().bookings, bookingId, "Booking").paymentRequestedAt = now();
+    save();
   },
 
   async paymentLink(paymentId) {

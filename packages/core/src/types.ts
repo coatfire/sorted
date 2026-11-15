@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { CalendarDate } from "./dates";
 import { InvoiceLogo, InvoiceAccent, IrishVatNumber } from "./documents";
 import { VatRateBp, IncomeTaxRateBp, VatPeriodMonths } from "./tax";
 import { normaliseIban, normaliseBic, validIban, validBic } from "./bank";
@@ -99,6 +100,7 @@ export const CreateBookingInput = z
     client: CreateClientInput.optional(),
     service: z.string().min(1).max(200),
     start_at: z.coerce.date(),
+    follow_up_on: CalendarDate.nullable().optional(),
     end_at: z.coerce.date().optional(),
     price_cents: z.number().int().nonnegative(),
     deposit_cents: z.number().int().nonnegative().default(0),
@@ -114,6 +116,7 @@ export const CreateBookingInput = z
 export type CreateBookingInput = z.infer<typeof CreateBookingInput>;
 
 export const UpdateBookingInput = z.object({
+  follow_up_on: CalendarDate.nullable().optional(),
   service: z.string().min(1).max(200).optional(),
   start_at: z.coerce.date().optional(),
   end_at: z.coerce.date().nullable().optional(),
@@ -236,6 +239,8 @@ export interface Client {
 }
 
 export interface Booking {
+  followUpOn: string | null;
+  paymentRequestedAt: string | null;
   id: string;
   clientId: string;
   service: string;

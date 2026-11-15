@@ -1,6 +1,6 @@
 import type { Booking, Client } from "./types";
 
-export type CalendarBooking = Pick<Booking, "id" | "status" | "startAt" | "endAt" | "service" | "location" | "priceCents"> & {
+export type CalendarBooking = Pick<Booking, "id" | "status" | "startAt" | "endAt" | "service" | "location" | "priceCents" | "followUpOn"> & {
   client: Pick<Client, "name" | "phone">;
 };
 
@@ -34,7 +34,7 @@ export function calendarEvent(booking: CalendarBooking, appUrl: string) {
     uid: `${booking.id}@sorted`,
     title: booking.status === "enquiry" ? `? ${booking.client.name} · ${booking.service} (follow up)` : `✓ ${booking.client.name} · ${booking.service}`,
     start: utc(start), end: utc(end),
-    description: [booking.client.phone, new Intl.NumberFormat("en-IE", { style: "currency", currency: "EUR" }).format(booking.priceCents / 100), `${appUrl.replace(/\/$/, "")}/bookings/${booking.id}`].filter(Boolean).join("\n"),
+    description: [booking.client.phone, new Intl.NumberFormat("en-IE", { style: "currency", currency: "EUR" }).format(booking.priceCents / 100), booking.status === "enquiry" && booking.followUpOn ? `Follow up: ${booking.followUpOn}` : null, `${appUrl.replace(/\/$/, "")}/bookings/${booking.id}`].filter(Boolean).join("\n"),
     location: booking.location ?? "",
     status: booking.status === "enquiry" ? "TENTATIVE" : "CONFIRMED",
   };

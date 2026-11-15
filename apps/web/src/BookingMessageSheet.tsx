@@ -6,20 +6,24 @@ import { Button, Field, Sheet } from "./components";
 import type { BookingRow } from "./lib/backend";
 import { centsToInput, parseEuros, longDay, time, whatsappLink } from "./lib/format";
 import { useValidation } from "./lib/useValidation";
-import { useData } from "./lib/store";
+import { useAction, useData, useStore } from "./lib/store";
 
-export function BookingMessageSheet({ booking, kind, onClose }: {
+export function BookingMessageSheet({ booking, kind, onClose, initialAmountCents }: {
   booking: BookingRow;
   kind: "confirmation" | "payment_request";
   onClose: () => void;
+  initialAmountCents?: number;
 }) {
   const { user, payments, features } = useData();
+  const { backend } = useStore();
+  const { run } = useAction();
+  const openedDraft = () => { if (kind === "payment_request") void run(() => backend.paymentRequested(booking.id)); };
   const client = booking.client;
   const theirs = payments.filter((payment) => payment.bookingId === booking.id && payment.status !== "cancelled");
   const paid = theirs.filter((payment) => payment.status === "paid").reduce((sum, payment) => sum + payment.amountCents, 0);
   const balanceCents = Math.max(0, booking.priceCents - paid);
   const confirmation = kind === "confirmation";
-  const [amount, setAmount] = useState(centsToInput(balanceCents));
+  const [amount, setAmount] = useState(centsToInput(initialAmountCents ?? balanceCents));
   const requested = parseEuros(amount);
   const validAmount = confirmation || (requested !== null && requested > 0 && requested <= balanceCents);
   const validation = useValidation({ amount: () => validAmount ? undefined : "Enter an amount from €0.01 up to the balance due." });
@@ -50,7 +54,7 @@ export function BookingMessageSheet({ booking, kind, onClose }: {
       </Field>}
       <p className="sheet-copy message-preview">{message || "Your template is empty. Add a message in Settings."}</p>
       {client.phone && validAmount ? (
-        <a className="button button-primary" href={whatsappLink(client.phone, message)} target="_blank" rel="noreferrer">WhatsApp</a>
+        <a className="button button-primary" href={whatsappLink(client.phone, message)} onClick={openedDraft} target="_blank" rel="noreferrer">WhatsApp</a>
       ) : (
         <>
           <Button disabled aria-describedby="confirmation-no-phone">WhatsApp</Button>
@@ -58,7 +62,7 @@ export function BookingMessageSheet({ booking, kind, onClose }: {
         </>
       )}
       {email && validAmount ? (
-        <a className="button button-soft" href={email}>Email</a>
+        <a className="button button-soft" href={email} onClick={openedDraft}>Email</a>
       ) : (
         <>
           <Button kind="soft" disabled aria-describedby="confirmation-no-email">Email</Button>

@@ -45,6 +45,7 @@ export const apiBackend: Backend = {
       client: draft.client,
       service: draft.service,
       start_at: draft.startAt,
+      follow_up_on: draft.followUpOn,
       price_cents: draft.priceCents,
       deposit_cents: draft.depositCents,
       location: draft.location ?? undefined,
@@ -55,6 +56,7 @@ export const apiBackend: Backend = {
     await patch(`/bookings/${id}`, {
       service: draft.service,
       start_at: draft.startAt,
+      follow_up_on: draft.followUpOn,
       price_cents: draft.priceCents,
       deposit_cents: draft.depositCents,
       location: draft.location,
@@ -65,6 +67,8 @@ export const apiBackend: Backend = {
   confirmBooking: (id) => post(`/bookings/${id}/confirm`),
   completeBooking: (id) => post(`/bookings/${id}/complete`),
   cancelBooking: (id) => post(`/bookings/${id}/cancel`),
+  followUp: (id, date) => patch(`/bookings/${id}`, { follow_up_on: date }),
+  paymentRequested: (id) => post(`/bookings/${id}/payment-requested`),
 
   async messages(bookingId) {
     const detail = await api<{ messages: MessageLogEntry[] }>(`/bookings/${bookingId}`);

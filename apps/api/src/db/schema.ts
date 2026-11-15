@@ -9,6 +9,7 @@ import {
   uniqueIndex,
   pgEnum,
   boolean,
+  date,
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import type { ReceiptSnapshot } from "@sorted/core";
@@ -142,6 +143,8 @@ export const bookings = pgTable(
       .notNull()
       .references(() => clients.id),
     service: text("service").notNull(),
+    followUpOn: date("follow_up_on"),
+    paymentRequestedAt: timestamp("payment_requested_at", { withTimezone: true }),
     startAt: timestamp("start_at", { withTimezone: true }).notNull(),
     endAt: timestamp("end_at", { withTimezone: true }),
     priceCents: integer("price_cents").notNull(),

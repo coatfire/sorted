@@ -4,6 +4,7 @@ import { Card, EmptyState, Icon, MoneyText, StatusChip } from "../components";
 import type { BookingRow as Booking } from "../lib/backend";
 import { dayLabel, daysBetween, firstName, dayMonth, longDay, startOfDay, time } from "../lib/format";
 import { useData } from "../lib/store";
+import { FollowUps } from "../FollowUp";
 
 export function BookingRow({ booking, lead }: { booking: Booking; lead?: string }) {
   return (
@@ -81,6 +82,7 @@ export function Home() {
         </Link>
       </header>
 
+      <FollowUps />
       {!user.businessName && (
         <Link className="card nudge-card" to="/settings">
           <span className="empty-icon"><Icon name="sparkles" /></span>

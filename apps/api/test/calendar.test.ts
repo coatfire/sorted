@@ -6,7 +6,7 @@ import { issueJwt } from "../src/lib/auth";
 
 const booking: CalendarBooking = {
   id: "booking-1", status: "confirmed", startAt: "2026-07-01T10:00:00+01:00", endAt: null,
-  service: "Hair", location: "Dublin", priceCents: 12300, client: { name: "Aoife", phone: "+353861234567" },
+  service: "Hair", location: "Dublin", priceCents: 12300, client: { name: "Aoife", phone: "+353861234567" }, followUpOn: null,
 };
 const appUrl = "https://sorted.example";
 const now = new Date("2026-01-01T12:34:56Z");
@@ -48,6 +48,13 @@ describe("calendar files", () => {
     expect(url.searchParams.get("details")).toContain(`${appUrl}/bookings/booking-1`);
     expect(url.searchParams.get("location")).toBe("A & B, Dublin");
   });
+  it("adds the follow-up date only for enquiries with a date set", () => {
+    const enquiry = { ...booking, status: "enquiry" as const, followUpOn: "2026-07-02" };
+    expect(unfold(buildCalendar({ bookings: [enquiry], name: "Sorted", appUrl, now })))
+      .toContain("\\nFollow up: 2026-07-02\\nhttps://sorted.example/bookings/booking-1");
+    expect(calendarEvent({ ...enquiry, followUpOn: null }, appUrl).description).not.toContain("Follow up:");
+    expect(calendarEvent({ ...enquiry, status: "confirmed" }, appUrl).description).not.toContain("Follow up:");
+  });
 });
 
 process.env.APP_URL = "https://sorted.example";
@@ -57,9 +64,9 @@ async function account() {
   const [client] = await db.insert(schema.clients).values({ userId: user.id, name: `Client ${user.id}`, phone: "+353861234567" }).returning();
   const jwt = await issueJwt(user.id, user.sessionVersion);
   const request = (path = "/calendar", method = "GET") => app.request(`https://api.sorted.example/api${path}`, { method, headers: { Authorization: `Bearer ${jwt}` } });
-  const add = async (status: "enquiry" | "confirmed" | "completed" | "cancelled", days = 1) => (await db.insert(schema.bookings).values({
+  const add = async (status: "enquiry" | "confirmed" | "completed" | "cancelled", days = 1, followUpOn: string | null = null) => (await db.insert(schema.bookings).values({
     userId: user.id, clientId: client.id, service: `Service ${status}`, status,
-    startAt: new Date(Date.now() + days * 86400000), priceCents: 12300, location: "Dublin",
+    startAt: new Date(Date.now() + days * 86400000), priceCents: 12300, location: "Dublin", followUpOn,
   }).returning())[0];
   return { user, client, request, add };
 }
@@ -112,5 +119,15 @@ describe("calendar subscriptions", () => {
       expect((await app.request(old[kind].https)).status).toBe(404);
       expect((await app.request(links[kind].https)).status).toBe(200);
     }
+  });
+  it("includes follow-up dates in enquiry feeds and omits the line when unset", async () => {
+    const f = await account();
+    const dated = await f.add("enquiry", 1, "2026-12-01"), undated = await f.add("enquiry");
+    const links = await (await f.request()).json() as CalendarLinks;
+    const response = await app.request(links.enquiries.https);
+    expect(response.status).toBe(200);
+    const events = unfold(await response.text()).split("BEGIN:VEVENT");
+    expect(events.find((event) => event.includes(`UID:${dated.id}@sorted`))).toContain("\\nFollow up: 2026-12-01\\n");
+    expect(events.find((event) => event.includes(`UID:${undated.id}@sorted`))).not.toContain("Follow up:");
   });
 });

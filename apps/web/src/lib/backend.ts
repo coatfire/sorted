@@ -32,6 +32,7 @@ export interface BookingDraft {
   client?: { name: string; phone?: string; email?: string };
   service: string;
   startAt: string;
+  followUpOn?: string | null;
   priceCents: number;
   depositCents: number;
   location: string | null;
@@ -67,6 +68,8 @@ export interface Backend {
   confirmBooking(id: string): Promise<void>;
   completeBooking(id: string): Promise<void>;
   cancelBooking(id: string): Promise<void>;
+  followUp(id: string, date: string | null): Promise<void>;
+  paymentRequested(id: string): Promise<void>;
   messages(bookingId: string): Promise<MessageLogEntry[]>;
   document(bookingId: string, kind: DocumentKind, paymentId?: string): Promise<BookingDocument>;
   /** Creates (or returns the existing) payment link URL. */

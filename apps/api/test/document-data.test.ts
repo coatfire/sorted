@@ -15,7 +15,7 @@ const user: User = {
 const client: Client = { id: "client", name: "Áine O’Brien", email: "aine@example.com", phone: "+353861234567", notes: null, createdAt: user.createdAt };
 const booking: Booking = {
   id: "booking", clientId: client.id, service: "Bridal makeup", startAt: "2026-07-01T23:30:00Z", endAt: null,
-  priceCents: 12050, depositCents: 2000, status: "confirmed", location: null, notes: null, gcalEventId: null, completedAt: null, createdAt: user.createdAt,
+  priceCents: 12050, depositCents: 2000, status: "confirmed", location: null, notes: null, gcalEventId: null, completedAt: null, createdAt: user.createdAt, followUpOn: null, paymentRequestedAt: null,
 };
 const document: BookingDocument = { id: "document", bookingId: booking.id, kind: "invoice", number: 1, issuedAt: "2026-07-02T12:00:00Z", paymentId: null, receiptSnapshot: null, vatRateBp: null };
 const paid: Payment = { id: "paid", bookingId: booking.id, kind: "deposit", status: "paid", amountCents: 2000, paidAt: "2026-07-01T12:00:00Z", method: "bank_transfer", linkUrl: null, createdAt: user.createdAt, vatRateBp: null };

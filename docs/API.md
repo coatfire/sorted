@@ -53,6 +53,22 @@ regardless of account existence; development links are never returned in product
 | DELETE | /clients/:id  | requires `{ "confirm": true }` (otherwise 400); 409 for enquiry/confirmed bookings. Deletes clients without paid payments; otherwise anonymises personal data and retains bookings/payments for tax records. Returns `{ "outcome": "deleted" }` or `{ "outcome": "anonymised" }`. Receipts are unchanged. |
 
 ## Bookings
+
+Bookings include `followUpOn` (nullable YYYY-MM-DD) and `paymentRequestedAt`
+(nullable UTC timestamp). Create/PATCH accept `follow_up_on`: a valid calendar
+date, or null to remove the follow-up. Omitted on creation defaults to two days
+after today in Europe/Dublin; omitted on PATCH preserves it. Only enquiries
+may be assigned a follow-up date. Confirming or cancelling clears it.
+
+`POST /bookings/:id/payment-requested` (authenticated, no body) records the
+current time in `paymentRequestedAt` and returns the booking. Missing or foreign
+bookings return 404. It emits no event and creates no message-log entry: opening
+a draft is not proof the user sent it. All payment-request draft actions call
+this endpoint, including reminders from Money.
+
+Today selects enquiries with `followUpOn <= today` in Europe/Dublin, oldest
+follow-up date first. Rescheduling uses PATCH with `follow_up_on`.
+
 | Method | Path                    | Notes |
 |--------|-------------------------|-------|
 | GET    | /bookings               | `?from=&to=&status=` |
@@ -75,6 +91,7 @@ regardless of account existence; development links are never returned in product
 Feeds include bookings starting from 180 days ago onward; cancelled bookings never appear. Unknown tokens/feed names return 404. Successful feeds use `Content-Type: text/calendar; charset=utf-8`; all calendar responses use `Cache-Control: no-store`. Tokens are secret: anyone with a link can read client names, phones, prices and locations in that feed. They are excluded from user payloads and calendar routes are excluded from request URL logging. Reset links if one is shared unintentionally.
 
 Calendar names are “Sorted – Confirmed” and “Sorted – Enquiries”. Refresh hints request 15 minutes, but calendar providers control actual refresh timing. Events have stable booking UIDs, UTC dates, explicit end times or a one-hour default, and a booking link based on `APP_URL`.
+Enquiry event descriptions include `Follow up: YYYY-MM-DD` when a follow-up date is set; the line is omitted otherwise.
 
 ## Payments
 | Method | Path                     | Notes |
