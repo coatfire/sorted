@@ -5,7 +5,7 @@
  * payment links are simulated — nothing leaves the browser.
  */
 import type { Client, Expense, MessageLogEntry, Payment, BookingDocument } from "@sorted/core";
-import { snapshotReceipt, TaxSettings, ConfirmExpenseInput } from "@sorted/core";
+import { snapshotReceipt, TaxSettings, ConfirmExpenseInput, RecordPaymentInput, paymentPaidAt } from "@sorted/core";
 import type { Backend, BookingRow, Snapshot } from "./backend";
 import { blobToDataUrl } from "./image";
 
@@ -319,6 +319,26 @@ export const demoBackend: Backend = {
     if (payment.status !== "pending") throw new Error("Payment is not pending");
     Object.assign(payment, {
       status: "paid", method, paidAt: now(), vatRateBp: data().user.vatRegistered ? data().user.vatRateBp : 0,
+    });
+    save();
+  },
+
+  async recordPayment(bookingId, input) {
+    const parsed = RecordPaymentInput.parse(input);
+    const d = data();
+    const booking = mustFind(d.bookings, bookingId, "Booking");
+    if (booking.status !== "confirmed" && booking.status !== "completed") throw new Error("Payments can only be recorded for confirmed or completed bookings.");
+    const outstanding = booking.priceCents - paidFor(bookingId);
+    if (parsed.amount_cents > outstanding) throw new Error(`That's more than the ${new Intl.NumberFormat("en-IE", { style: "currency", currency: "EUR" }).format(Math.max(0, outstanding) / 100)} still owed.`);
+    d.payments.push({
+      id: id(), bookingId, kind: "custom", status: "paid", method: parsed.method, amountCents: parsed.amount_cents,
+      paidAt: paymentPaidAt(parsed.paid_on).toISOString(), createdAt: now(), linkUrl: null, vatRateBp: d.user.vatRegistered ? d.user.vatRateBp : 0,
+    });
+    voidPending(bookingId);
+    const remainder = outstanding - parsed.amount_cents;
+    if (booking.status === "completed" && remainder > 0) d.payments.push({
+      id: id(), bookingId, kind: "balance", status: "pending", method: null, amountCents: remainder,
+      paidAt: null, createdAt: now(), linkUrl: null, vatRateBp: null,
     });
     save();
   },

@@ -69,6 +69,11 @@ regardless of account existence; development links are never returned in product
 | GET    | /payments                | `?status=pending` = the "who owes me" view |
 | POST   | /payments/:id/link       | creates Stripe Payment Link (503 if Stripe isn't configured), stores url, emits `payment.link_created` (n8n WhatsApps it) |
 | POST   | /payments/:id/mark-paid  | manual: body `{method}` (cash/bank_transfer). Emits `payment.paid` |
+| POST   | /bookings/:id/payments   | Record any instalment: `{ amount_cents: positive integer, method: "cash" | "bank_transfer" | "revolut", paid_on?: "YYYY-MM-DD" }`. Returns 201 `{ payment, booking }` in camelCase; payment kind is `custom`, status `paid`, VAT rate frozen. Emits `payment.paid`. |
+
+Recording a payment requires a confirmed or completed booking (409 otherwise), owned by the caller (404 otherwise). The transaction locks the booking, rejects amounts above price minus paid payments (400 with the amount still owed), cancels all pending rows and deactivates their Stripe links after commit. A completed booking with money still owed gets one fresh pending balance row; confirmed bookings have no pending rows until completion. Fully paid bookings have none. Existing pending-row mark-paid remains available.
+
+`paid_on` defaults to today in Europe/Dublin and cannot be in the future or an invalid calendar date (400). Today uses the current instant; past dates use noon Europe/Dublin, including daylight-saving time. Each custom payment can be selected for its own stable receipt through the existing document endpoint.
 
 ## Expenses
 | Method | Path                    | Notes |

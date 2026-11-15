@@ -75,6 +75,7 @@ export const apiBackend: Backend = {
   },
 
   markPaid: (paymentId, method) => post(`/payments/${paymentId}/mark-paid`, { method }),
+  recordPayment: (bookingId, input) => post(`/bookings/${bookingId}/payments`, input),
 
   async createExpense(draft) {
     let receiptKey: string | undefined;

@@ -4,6 +4,7 @@ import { assembleBookingDocument, type DocumentKind, type MessageLogEntry } from
 import { BackButton, Button, Card, EmptyState, Icon, MoneyText, Sheet, StatusChip } from "../components";
 import { PaymentActions } from "../PaymentActions";
 import { BookingMessageSheet } from "../BookingMessageSheet";
+import { RecordPaymentSheet } from "../RecordPaymentSheet";
 import {
   confirmCopy, firstName, kindLabel, longDay, messageLabel, methodLabel, stamp, time,
 } from "../lib/format";
@@ -17,6 +18,7 @@ export function BookingDetail() {
   const { backend, toast } = useStore();
   const [documentBusy, setDocumentBusy] = useState(false);
   const [chooseReceipt, setChooseReceipt] = useState(false);
+  const [recordPayment, setRecordPayment] = useState(false);
   const { busy, run } = useAction();
   const [confirmCancel, setConfirmCancel] = useState(false);
   const [message, setMessage] = useState<"confirmation" | "payment_request" | null>(null);
@@ -203,6 +205,10 @@ export function BookingDetail() {
             </p>
           )}
         </Card>
+        {paid >= booking.priceCents && <p className="sheet-copy"><strong>Paid in full</strong></p>}
+        {(booking.status === "confirmed" || booking.status === "completed") && paid < booking.priceCents && (
+          <Button kind="soft" onClick={() => setRecordPayment(true)}>Record payment</Button>
+        )}
         {booking.status !== "cancelled" && booking.priceCents > paid && (
           <Button kind="soft" onClick={() => setMessage("payment_request")}>
             <Icon name="message" /> Request payment
@@ -260,6 +266,7 @@ export function BookingDetail() {
         </Sheet>
       )}
       {message && <BookingMessageSheet booking={booking} kind={message} onClose={() => setMessage(null)} />}
+      {recordPayment && <RecordPaymentSheet bookingId={booking.id} outstanding={Math.max(0, booking.priceCents - paid)} onClose={() => setRecordPayment(false)} />}
       {chooseReceipt && <Sheet title="Choose a payment" onClose={() => setChooseReceipt(false)}>
         <p className="sheet-copy">Each payment has its own receipt number.</p>
         {paidPayments.map((payment) => <Button key={payment.id} kind="quiet" onClick={() => {
