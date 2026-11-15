@@ -1,6 +1,6 @@
 import { useMemo, useState, type FormEvent } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { normalisePhone, CreateClientInput, type Client } from "@sorted/core";
+import { normalisePhone, CreateClientInput, CalendarDate, irelandToday, addCalendarDays, type Client } from "@sorted/core";
 import { BackButton, Button, Card, EmptyState, Field, Icon, MoneyText, PageHeader } from "../components";
 import type { BookingRow } from "../lib/backend";
 import { centsToInput, confirmCopy, longDay, parseEuros, time, toDateInput, toTimeInput } from "../lib/format";
@@ -37,11 +37,13 @@ export function BookingForm() {
       deposit: editing?.depositCents ? centsToInput(editing.depositCents) : "",
       location: editing?.location ?? "",
       notes: editing?.notes ?? "",
+      followUpOn: editing ? editing.followUpOn ?? "" : addCalendarDays(irelandToday(), 2),
     };
   });
   const [showDeposit, setShowDeposit] = useState(Boolean(editing?.depositCents));
   const [showMore, setShowMore] = useState(Boolean(editing?.location || editing?.notes));
   const validation = useValidation({
+    followUpOn: () => form.followUpOn && !CalendarDate.safeParse(form.followUpOn).success ? "Pick a valid date." : undefined,
     clientEmail: () => !client && form.clientEmail.trim() && !CreateClientInput.shape.email.safeParse(form.clientEmail.trim()).success
       ? "Enter a valid email address." : undefined,
     clientPhone: () => form.clientPhone.trim() && !normalisePhone(form.clientPhone)
@@ -115,6 +117,7 @@ export function BookingForm() {
       depositCents,
       location: form.location.trim() || null,
       notes: form.notes.trim() || null,
+      ...(!editing || editing.status === "enquiry" ? { followUpOn: form.followUpOn || null } : {}),
     };
     if (editing) {
       if (await run(() => backend.updateBooking(editing.id, details))) {
@@ -232,6 +235,9 @@ export function BookingForm() {
               <input name="time" required type="time" value={form.time} onChange={(event) => update("time", event.target.value)} />
             </Field>
           </div>
+          {(!editing || editing.status === "enquiry") && <Field label="Follow up on" helper="A reminder on Today. Leave blank for no follow-up." {...validation.field("followUpOn")}>
+            <input name="followUpOn" type="date" value={form.followUpOn} onChange={(event) => update("followUpOn", event.target.value)} />
+          </Field>}
           <Field label="Price" {...validation.field("price")}>
             <div className="money-input">
               <span>€</span>

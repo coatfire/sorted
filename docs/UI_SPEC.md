@@ -93,6 +93,19 @@ Route map:
 ### 1. Today — `/` (M1)
 The morning-coffee screen.
 
+- **Follow up** is the first section after the header, above the snapshot.
+  Show enquiries due today or earlier, oldest follow-up first; hide the section
+  when empty. Each card links to the booking and shows client, service and
+  **Due today** / **X days overdue**. Separate 44px-minimum **Message** and
+  **Later** buttons must not be nested inside the booking link.
+- Message opens an editable draft: “Hi {first name}, just following up on your
+  enquiry about {service} on {date}. Would you like me to book you in?” followed
+  by the business name. WhatsApp and Email open the trader's app; missing contact
+  details disable that action with a reason. Nothing is labelled or logged “Sent”.
+- Later opens a Sheet with **Tomorrow**, **In 3 days**, **Next week**, a date
+  picker with **Save date**, and **Remove follow-up**. Dates use Europe/Dublin.
+  A quick choice saves immediately and closes the Sheet.
+
 ```
 Sorted                                (gear)
 ┌────────────────────────────────────────┐
@@ -117,6 +130,11 @@ Sorted                                (gear)
 ### 2. Add Booking — `/bookings/new` (M1) — THE screen
 One scrollable form. No steps, no wizard. Field order matches how a vendor
 thinks: *who, what, when, how much.*
+
+Enquiry forms show **Follow up on**, defaulting to two days after today in
+Ireland. It is optional; blank removes it. Validate dates on blur. Enquiry
+detail displays the date (or **No follow-up set**) and **Change follow-up**,
+opening the same date Sheet. Confirm/cancel clears the date.
 
 1. **Client** — search-as-you-type against `GET /clients?q=`. First result row
    is always "＋ New: '<typed text>'" which expands inline: Name (pre-filled
@@ -176,6 +194,14 @@ Stacked sections:
 
 ### 4. Money — `/money` (M2, M6)
 Two stacked zones:
+
+Outstanding cards have a primary **Send reminder** button opening the existing
+payment-request Sheet with that payment's amount, still editable up to the
+unpaid balance. Show **Not asked yet**, **Asked today**, or **Asked n days ago**
+using Ireland-local days and the booking's most recent draft-opening timestamp.
+WhatsApp/Email taps in any payment-request Sheet record that time, not delivery.
+Keep the explanation that the user reviews and sends in their own app; never
+show “Sent” for a manual draft. Keep existing payment-recording actions.
 
 - **Owed to you** (M2): hero number = total outstanding (amber), then rows:
   client · service · amount · days-since-completed, each with

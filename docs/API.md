@@ -53,6 +53,22 @@ regardless of account existence; development links are never returned in product
 | DELETE | /clients/:id  | requires `{ "confirm": true }` (otherwise 400); 409 for enquiry/confirmed bookings. Deletes clients without paid payments; otherwise anonymises personal data and retains bookings/payments for tax records. Returns `{ "outcome": "deleted" }` or `{ "outcome": "anonymised" }`. Receipts are unchanged. |
 
 ## Bookings
+
+Bookings include `followUpOn` (nullable YYYY-MM-DD) and `paymentRequestedAt`
+(nullable UTC timestamp). Create/PATCH accept `follow_up_on`: a valid calendar
+date, or null to remove the follow-up. Omitted on creation defaults to two days
+after today in Europe/Dublin; omitted on PATCH preserves it. Only enquiries
+may be assigned a follow-up date. Confirming or cancelling clears it.
+
+`POST /bookings/:id/payment-requested` (authenticated, no body) records the
+current time in `paymentRequestedAt` and returns the booking. Missing or foreign
+bookings return 404. It emits no event and creates no message-log entry: opening
+a draft is not proof the user sent it. All payment-request draft actions call
+this endpoint, including reminders from Money.
+
+Today selects enquiries with `followUpOn <= today` in Europe/Dublin, oldest
+follow-up date first. Rescheduling uses PATCH with `follow_up_on`.
+
 | Method | Path                    | Notes |
 |--------|-------------------------|-------|
 | GET    | /bookings               | `?from=&to=&status=` |

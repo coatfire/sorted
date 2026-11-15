@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { FollowUpLater } from "../FollowUp";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { assembleBookingDocument, type DocumentKind, type MessageLogEntry } from "@sorted/core";
 import { BackButton, Button, Card, EmptyState, Icon, MoneyText, Sheet, StatusChip } from "../components";
@@ -19,6 +20,7 @@ export function BookingDetail() {
   const [documentBusy, setDocumentBusy] = useState(false);
   const [chooseReceipt, setChooseReceipt] = useState(false);
   const [recordPayment, setRecordPayment] = useState(false);
+  const [followUp, setFollowUp] = useState(false);
   const { busy, run } = useAction();
   const [confirmCancel, setConfirmCancel] = useState(false);
   const [message, setMessage] = useState<"confirmation" | "payment_request" | null>(null);
@@ -114,6 +116,8 @@ export function BookingDetail() {
         </div>
       </Card>
 
+      {booking.status === "enquiry" && <Card className="settings-card"><h2>Follow up on</h2><p>{booking.followUpOn ? longDay(`${booking.followUpOn}T12:00:00`) : "No follow-up set"}</p><Button kind="soft" onClick={() => setFollowUp(true)}>Change follow-up</Button></Card>}
+      {followUp && <FollowUpLater booking={booking} onClose={() => setFollowUp(false)} />}
       {booking.status !== "cancelled" && (
         <Button kind="soft" onClick={() => setMessage("confirmation")}>
           <Icon name="message" /> Send confirmation

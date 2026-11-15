@@ -19,6 +19,8 @@ import {
   snapshotReceipt,
   RecordPaymentInput,
   paymentPaidAt,
+  irelandToday,
+  addCalendarDays,
 } from "@sorted/core";
 import { db, schema } from "../db";
 import { emitBookingEvent, emitEvent } from "../lib/events";
@@ -196,6 +198,7 @@ bookingRoutes.post("/", async (c) => {
         depositCents: input.deposit_cents,
         location: input.location,
         notes: input.notes,
+        followUpOn: input.follow_up_on === undefined ? addCalendarDays(irelandToday(), 2) : input.follow_up_on,
       })
       .returning();
 
@@ -231,7 +234,7 @@ bookingRoutes.post("/:id/confirm", async (c) => {
 
     const [booking] = await tx
       .update(schema.bookings)
-      .set({ status: "confirmed" })
+      .set({ status: "confirmed", followUpOn: null })
       .where(and(eq(schema.bookings.id, id), eq(schema.bookings.userId, userId)))
       .returning();
 
@@ -323,53 +326,59 @@ bookingRoutes.patch("/:id", async (c) => {
   const parsed = UpdateBookingInput.safeParse(await c.req.json());
   if (!parsed.success) return c.json({ error: parsed.error.flatten() }, 400);
   const input = parsed.data;
-  const [current] = await db
-    .select()
-    .from(schema.bookings)
-    .where(
-      and(
-        eq(schema.bookings.id, c.req.param("id")),
-        eq(schema.bookings.userId, c.get("userId")),
-      ),
-    );
-  if (!current) return c.json({ error: "Booking not found" }, 404);
-  if (current.status === "completed" || current.status === "cancelled") {
-    return c.json(
-      { error: `A ${current.status} booking can't be edited` },
-      409,
-    );
-  }
-  // The deposit request goes out on confirm; changing it afterwards would
-  // leave the payment row and what the client was told out of step.
-  if (
-    current.status !== "enquiry" &&
-    input.deposit_cents !== undefined &&
-    input.deposit_cents !== current.depositCents
-  ) {
-    return c.json(
-      { error: "The deposit can't be changed once a booking is confirmed" },
-      409,
-    );
-  }
-  const priceCents = input.price_cents ?? current.priceCents;
-  const depositCents = input.deposit_cents ?? current.depositCents;
-  if (depositCents > priceCents) {
-    return c.json({ error: "Deposit cannot exceed price" }, 400);
-  }
-  const [booking] = await db
-    .update(schema.bookings)
-    .set({
-      service: input.service,
-      startAt: input.start_at,
-      endAt: input.end_at,
-      priceCents: input.price_cents,
-      depositCents: input.deposit_cents,
-      location: input.location,
-      notes: input.notes,
-    })
-    .where(eq(schema.bookings.id, current.id))
-    .returning();
-  return c.json(booking);
+  return db.transaction(async (tx) => {
+    const [current] = await tx
+      .select()
+      .from(schema.bookings)
+      .where(
+        and(
+          eq(schema.bookings.id, c.req.param("id")),
+          eq(schema.bookings.userId, c.get("userId")),
+        ),
+      ).for("update");
+    if (!current) return c.json({ error: "Booking not found" }, 404);
+    if (input.follow_up_on != null && current.status !== "enquiry") {
+      return c.json({ error: "Only enquiries can have a follow-up date" }, 409);
+    }
+    if (current.status === "completed" || current.status === "cancelled") {
+      return c.json(
+        { error: `A ${current.status} booking can't be edited` },
+        409,
+      );
+    }
+    // The deposit request goes out on confirm; changing it afterwards would
+    // leave the payment row and what the client was told out of step.
+    if (
+      current.status !== "enquiry" &&
+      input.deposit_cents !== undefined &&
+      input.deposit_cents !== current.depositCents
+    ) {
+      return c.json(
+        { error: "The deposit can't be changed once a booking is confirmed" },
+        409,
+      );
+    }
+    const priceCents = input.price_cents ?? current.priceCents;
+    const depositCents = input.deposit_cents ?? current.depositCents;
+    if (depositCents > priceCents) {
+      return c.json({ error: "Deposit cannot exceed price" }, 400);
+    }
+    const [booking] = await tx
+      .update(schema.bookings)
+      .set({
+        service: input.service,
+        startAt: input.start_at,
+        endAt: input.end_at,
+        priceCents: input.price_cents,
+        depositCents: input.deposit_cents,
+        location: input.location,
+        notes: input.notes,
+        followUpOn: input.follow_up_on,
+      })
+      .where(and(eq(schema.bookings.id, current.id), eq(schema.bookings.userId, c.get("userId"))))
+      .returning();
+    return c.json(booking);
+  });
 });
 
 /** POST /api/bookings/:id/complete — confirmed → completed */
@@ -489,7 +498,7 @@ bookingRoutes.post("/:id/cancel", async (c) => {
       .returning({ linkId: schema.payments.stripePaymentLinkId });
     const [cancelled] = await tx
       .update(schema.bookings)
-      .set({ status: "cancelled" })
+      .set({ status: "cancelled", followUpOn: null })
       .where(and(eq(schema.bookings.id, id), eq(schema.bookings.userId, userId)))
       .returning();
     return { cancelled, voided };
@@ -501,4 +510,13 @@ bookingRoutes.post("/:id/cancel", async (c) => {
   }
   await emitBookingEvent(userId, id, "booking.cancelled");
   return c.json(cancelled);
+});
+
+bookingRoutes.post("/:id/payment-requested", async (c) => {
+  const [booking] = await db.update(schema.bookings)
+    .set({ paymentRequestedAt: new Date() })
+    .where(and(eq(schema.bookings.id, c.req.param("id")), eq(schema.bookings.userId, c.get("userId"))))
+    .returning();
+  if (!booking) return c.json({ error: "Booking not found" }, 404);
+  return c.json(booking);
 });
