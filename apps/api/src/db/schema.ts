@@ -245,6 +245,7 @@ export const messageLog = pgTable(
 );
 
 export const invoices = pgTable("invoices", {
+  vatRateBp: integer("vat_rate_bp"),
   id: uuid("id").primaryKey().defaultRandom(),
   userId: uuid("user_id").notNull().references(() => users.id),
   // Number allocations outlive deleted unpaid bookings.

@@ -211,6 +211,7 @@ export const demoBackend: Backend = {
     const issuedAt = now();
     const document: BookingDocument = {
       id: id(), bookingId, kind, issuedAt,
+      vatRateBp: kind === "invoice" ? d.user.vatRegistered ? d.user.vatRateBp : 0 : null,
       paymentId: kind === "receipt" ? paymentId! : null,
       receiptSnapshot: kind === "receipt" ? snapshotReceipt(booking, d.payments, paymentId!, issuedAt, d.user) : null,
       number: Math.max(0, ...documents.filter((item) => item.kind === kind).map((item) => item.number)) + 1,

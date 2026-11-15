@@ -17,10 +17,19 @@ const booking: Booking = {
   id: "booking", clientId: client.id, service: "Bridal makeup", startAt: "2026-07-01T23:30:00Z", endAt: null,
   priceCents: 12050, depositCents: 2000, status: "confirmed", location: null, notes: null, gcalEventId: null, completedAt: null, createdAt: user.createdAt,
 };
-const document: BookingDocument = { id: "document", bookingId: booking.id, kind: "invoice", number: 1, issuedAt: "2026-07-02T12:00:00Z", paymentId: null, receiptSnapshot: null };
+const document: BookingDocument = { id: "document", bookingId: booking.id, kind: "invoice", number: 1, issuedAt: "2026-07-02T12:00:00Z", paymentId: null, receiptSnapshot: null, vatRateBp: null };
 const paid: Payment = { id: "paid", bookingId: booking.id, kind: "deposit", status: "paid", amountCents: 2000, paidAt: "2026-07-01T12:00:00Z", method: "bank_transfer", linkUrl: null, createdAt: user.createdAt };
 
 describe("document data", () => {
+  it("keeps issued invoice VAT independent of current settings and falls back for legacy invoices", () => {
+    const issued = { ...document, vatRateBp: 2300 };
+    const original = assembleBookingDocument({ ...user, vatRegistered: true, vatRateBp: 2300 }, booking, client, [], issued);
+    expect(assembleBookingDocument({ ...user, vatRegistered: true, vatRateBp: 900 }, booking, client, [], issued)).toEqual(original);
+    expect(assembleBookingDocument(user, booking, client, [], issued)).toEqual(original);
+    expect(assembleBookingDocument({ ...user, vatRegistered: true, vatRateBp: 900 }, booking, client, [], document).vat?.rate).toBe("9%");
+    expect(assembleBookingDocument({ ...user, vatRegistered: true, vatRateBp: 2300 }, booking, client, [], { ...document, vatRateBp: 0 }).vat)
+      .toMatchObject({ rate: "0%", amount: "€0.00", total: "€120.50" });
+  });
   it("shows inclusive VAT on invoices and freezes receipt VAT even when registration or rates change", () => {
     const registered = { ...user, vatRegistered: true, vatRateBp: 2300 };
     expect(assembleBookingDocument(registered, booking, client, [paid], document).vat)

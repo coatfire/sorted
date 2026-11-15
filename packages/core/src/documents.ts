@@ -46,6 +46,7 @@ export function snapshotReceipt(
 }
 
 export interface BookingDocument {
+  vatRateBp: number | null;
   id: string;
   bookingId: string;
   kind: DocumentKind;
@@ -67,7 +68,7 @@ export function assembleBookingDocument(user: User, booking: Booking, client: Cl
   if (receipt && (!document.paymentId || !snapshot)) throw new Error("Choose a paid payment for this receipt.");
   const paid = snapshot ? snapshot.payment.amountCents : received.reduce((sum, payment) => sum + payment.amountCents, 0);
   const bookingTotal = snapshot?.bookingTotalCents ?? booking.priceCents;
-  const vatRateBp = receipt ? snapshot?.vatRateBp ?? null : user.vatRegistered ? user.vatRateBp : null;
+  const vatRateBp = receipt ? snapshot?.vatRateBp ?? null : document.vatRateBp ?? (user.vatRegistered ? user.vatRateBp : null);
   const grossCents = receipt ? paid : bookingTotal;
   const vatCents = vatRateBp === null ? 0 : inclusiveVat(grossCents, vatRateBp);
   const money = (cents: number) => new Intl.NumberFormat("en-IE", { style: "currency", currency: "EUR" }).format(cents / 100);

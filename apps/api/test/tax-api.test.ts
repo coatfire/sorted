@@ -14,6 +14,22 @@ async function account() {
 }
 
 describe("VAT and tax persistence", () => {
+  it("captures effective VAT only when allocating a new invoice, including zero before registration", async () => {
+    const { user, request } = await account();
+    const [client] = await db.insert(schema.clients).values({ userId: user.id, name: "Invoice client" }).returning();
+    const booking = async () => (await db.insert(schema.bookings).values({ userId: user.id, clientId: client.id, service: "Makeup", startAt: new Date(), priceCents: 12300 }).returning())[0];
+    const first = await booking();
+    const body = { kind: "invoice" };
+    const before = await (await request(`/bookings/${first.id}/documents`, "POST", body)).json() as BookingDocument;
+    expect(before.vatRateBp).toBe(0);
+    await request("/auth/me", "PATCH", { vat_registered: true, vat_rate_bp: 2300 });
+    expect(await (await request(`/bookings/${first.id}/documents`, "POST", body)).json()).toEqual(before);
+    const second = await booking();
+    const registered = await (await request(`/bookings/${second.id}/documents`, "POST", body)).json() as BookingDocument;
+    expect(registered.vatRateBp).toBe(2300);
+    await request("/auth/me", "PATCH", { vat_rate_bp: 900 });
+    expect(await (await request(`/bookings/${second.id}/documents`, "POST", body)).json()).toEqual(registered);
+  });
   it("defaults safely, validates merged partial settings, supports zero/custom rates, and isolates users", async () => {
     const first = await account(); const other = await account();
     expect(await (await first.request("/auth/me")).json()).toMatchObject({ vatRegistered: false, vatRateBp: null, vatPeriodMonths: 2, incomeTaxRateBp: null });
