@@ -14,6 +14,23 @@ async function account() {
 }
 
 describe("VAT and tax persistence", () => {
+  it("preserves omitted expense VAT, validates against the resulting amount, and clears only explicit null", async () => {
+    const { request } = await account();
+    const fields = { merchant: "VAT supplies", amount_cents: 12300, expense_date: new Date().toISOString(), category: "materials" };
+    const created = await (await request("/expenses", "POST", { ...fields, vat_cents: 2300, confirmed: true })).json() as Expense;
+    const path = `/expenses/${created.id}`;
+    const preserved = await request(path, "PATCH", { ...fields, merchant: "Renamed", amount_cents: 2460 });
+    expect(preserved.status).toBe(200);
+    expect(await preserved.json()).toMatchObject({ merchant: "Renamed", amountCents: 2460, vatCents: 2300 });
+    expect((await request(path, "PATCH", { ...fields, amount_cents: 2299 })).status).toBe(400);
+    const unchanged = await (await request("/expenses")).json() as Expense[];
+    expect(unchanged.find((expense) => expense.id === created.id)).toMatchObject({ merchant: "Renamed", amountCents: 2460, vatCents: 2300 });
+    const cleared = await request(path, "PATCH", { ...fields, amount_cents: 1000, vat_cents: null });
+    expect(cleared.status).toBe(200);
+    expect(await cleared.json()).toMatchObject({ amountCents: 1000, vatCents: null });
+    const zero = await request(path, "PATCH", { ...fields, vat_cents: 0 });
+    expect(await zero.json()).toMatchObject({ vatCents: 0 });
+  });
   it("captures VAT on the first manual paid transition and never overwrites it", async () => {
     const { user, request } = await account();
     const [client] = await db.insert(schema.clients).values({ userId: user.id, name: "Paid client" }).returning();
