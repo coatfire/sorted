@@ -9,8 +9,41 @@ responses are DB rows with camelCase keys (interfaces in the same file). This
 doc lists routes and semantics; the schemas are the source of truth for fields.
 Errors are `{ "error": "message" }` (or a zod `flatten()` object for 400s).
 
-`GET /health` (no auth) → `{ ok, features: { automation, paymentLinks, googleSignIn } }` —
+`GET /health` (no auth) → `{ ok, googleClientId, features: { automation, paymentLinks, googleSignIn, googleDrive } }` —
 which integrations are configured, so the UI only offers what works.
+`googleClientId` is the public OAuth client ID, or null. Drive needs only
+`GOOGLE_CLIENT_ID`; Google sign-in still requires both ID and secret.
+
+## Google Drive backup (optional)
+
+Authenticated, tenant-scoped and disabled (404) without `GOOGLE_CLIENT_ID`:
+
+- `GET /drive/files` returns `{ userId, logo, documents, photos, years }`.
+  Documents are **already issued** invoices, receipts and quotes, assembled with
+  the shared document renderer data (logo returned once separately). It never
+  allocates numbers; previously issued quotes remain included after confirmation.
+  Photos identify the user's expenses and receipt MIME types; photo bytes still
+  use authenticated `GET /expenses/:id/receipt`. Years are all UTC years with paid
+  payments or confirmed expenses, matching `GET /reports/export?year=…`.
+- `POST /drive/backed-up` (no body) sets only the authenticated user's
+  `driveBackedUpAt`, returning `{ driveBackedUpAt }`. The browser calls this only
+  after every planned file is uploaded, updated or verified already present.
+  The server does not attest to Google's uploads; the client orchestrates them.
+
+Both endpoints send `Cache-Control: no-store`. No Google access or refresh token
+is sent to Sorted's API, stored in the database or persisted by the app. The
+browser requests only `drive.file`, with incremental scopes disabled, on an
+explicit Settings button tap. The enabled Settings card lazy-loads Google
+Identity Services and prepares its token client on mount; only a tap requests
+a token and starts the backup.
+
+Backups use an app-created `Sorted` folder marked for this Sorted user so two
+Sorted accounts sharing a Google account cannot skip each other's numbered files.
+Subfolders: `Invoices`, `Receipts`, `Quotes`, `Expense photos`. Existing document
+and photo names are skipped; yearly `sorted-YYYY.csv` files are always updated in
+place, including earlier years. Failed or cancelled runs never mark completion;
+successful partial uploads remain available to skip on retry. An empty account
+does not record a backup. Users manage/delete their backups in Google Drive.
 
 ## Auth
 

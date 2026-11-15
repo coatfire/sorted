@@ -209,6 +209,7 @@ export const ConfirmExpenseInput = z.object(expenseFields).refine(expenseVatWith
 // ISO timestamp strings). Request bodies above are snake_case.
 
 export interface User {
+  driveBackedUpAt: string | null;
   vatRegistered: boolean;
   vatRateBp: number | null;
   vatPeriodMonths: number;
@@ -296,7 +297,9 @@ export interface MessageLogEntry {
 /** GET /api/health — lets the UI be honest about what is wired up. */
 export interface Health {
   ok: true;
+  googleClientId: string | null;
   features: {
+    googleDrive: boolean;
     googleSignIn: boolean;
     /** n8n webhook configured → confirmations/reminders actually send */
     automation: boolean;

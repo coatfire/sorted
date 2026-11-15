@@ -13,6 +13,8 @@ const expenseBody = (draft: ExpenseDraft) => ({
 
 export const apiBackend: Backend = {
   health: () => api<Health>("/health"),
+  driveFiles: () => api("/drive/files"),
+  driveBackedUp: () => post("/drive/backed-up"),
   googleStart: () => window.location.assign(apiUrl("/auth/google/start")),
   googleExchange: (code) => api("/auth/google/exchange", { method: "POST", credentials: "include", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ code }) }),
   calendar: () => api<CalendarLinks>("/calendar"),

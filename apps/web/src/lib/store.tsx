@@ -12,6 +12,7 @@ import { isNetworkError, session } from "./api";
 import { apiBackend } from "./apiBackend";
 import type { Backend, Snapshot } from "./backend";
 import { demoBackend, resetDemo } from "./demoBackend";
+import { patchSnapshotUser } from "./snapshot";
 
 type Mode = "api" | "demo";
 const MODE_KEY = "sorted_mode";
@@ -36,6 +37,7 @@ interface DataValue {
   backend: Backend;
   authBackend: Pick<Backend, "signup" | "login" | "verify" | "forgot" | "resetPassword" | "health" | "googleStart" | "googleExchange">;
   refresh: () => Promise<void>;
+  patchUser: (userId: string, patch: Partial<Omit<Snapshot["user"], "id">>) => void;
   resetDemo: () => Promise<void>;
   toast: (message: string, tone?: "ok" | "error") => void;
 }
@@ -144,13 +146,22 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       backend,
       authBackend: apiBackend,
       refresh,
+      patchUser(userId, patch) {
+        setData((current) => {
+          const updated = patchSnapshotUser(current, userId, patch);
+          if (mode === "api" && updated && updated !== current) {
+            try { localStorage.setItem(CACHE_KEY, JSON.stringify(updated)); } catch { /* cache is best-effort */ }
+          }
+          return updated;
+        });
+      },
       async resetDemo() {
         resetDemo();
         await refresh();
       },
       toast: (message, tone = "ok") => setToast({ message, tone, key: Date.now() }),
     }),
-    [backend, data, loadError, refresh, stale],
+    [backend, data, loadError, refresh, stale, mode],
   );
 
   return (

@@ -89,3 +89,32 @@ offers what is actually connected.
 | Payments   | Stripe Payment Links (Revolut later) | One integration to validate the flow     |
 
 Full rationale in `docs/ARCHITECTURE.md`.
+
+## Optional Google Drive backup
+
+Set `GOOGLE_CLIENT_ID` to enable the manual Settings backup card; no client
+secret is required for Drive (Google sign-in independently needs both).
+Enable the Google Drive API in the Google Cloud project. In the **Web application**
+OAuth client, add **`https://sorted-weld.vercel.app`** as an authorised JavaScript
+origin, as previously requested. For local testing also add `http://localhost:5173`.
+Configure the consent screen/test users as required by Google's publishing status.
+The only requested Drive scope is `https://www.googleapis.com/auth/drive.file`.
+
+The enabled Settings card preloads Google Identity Services and prepares its
+token client. The button says “Getting ready…” and stays disabled until ready;
+the tap then opens Google's popup synchronously. The browser keeps its
+short-lived access token in memory only. PDFs use the existing renderer, photos
+are copied in their original format, and yearly accountant CSVs use `exportCsv`.
+Files live in app-created Sorted folders, separated per Sorted account. Existing
+PDFs/photos are skipped by name; CSVs are updated in place for every year with
+financial data. No automatic backups, server-side Google tokens or refresh tokens.
+Only a fully completed run records `drive_backed_up_at` (migration **0014**).
+An empty account or a failed/cancelled run never advances the timestamp. Users
+can remove their own backups in Drive; account deletion does not delete these copies.
+
+CSP check: the repository currently sets no Content-Security-Policy in
+`vercel.json`, the web HTML or API middleware. If a deployment adds one, allow
+`https://accounts.google.com` for GIS scripts, connections and frames (and GIS
+styles as needed), and `https://www.googleapis.com` for Drive connections. No
+Google script is loaded when the feature is disabled or in demo mode. Opening
+an enabled card prepares Google, but never opens a popup or starts a backup.

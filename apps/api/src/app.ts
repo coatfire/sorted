@@ -13,6 +13,7 @@ import { reportRoutes } from "./handlers/reports";
 import { webhookRoutes } from "./handlers/webhooks";
 import { internalRoutes } from "./handlers/internal";
 import { calendarRoutes } from "./handlers/calendar";
+import { driveRoutes } from "./handlers/drive";
 
 export type AppEnv = { Variables: { userId: string } };
 
@@ -24,7 +25,9 @@ app.use("/api/*", cors({ origin: env.corsOrigins() ?? "*" }));
 app.get("/api/health", (c) =>
   c.json<Health>({
     ok: true,
+    googleClientId: env.googleClientId() ?? null,
     features: {
+      googleDrive: Boolean(env.googleClientId()),
       googleSignIn: env.googleSignIn(),
       automation: Boolean(env.n8nWebhookUrl()),
       paymentLinks: Boolean(env.stripeKey()),
@@ -43,6 +46,8 @@ app.use("/api/bookings/*", requireAuth);
 app.use("/api/payments/*", requireAuth);
 app.use("/api/expenses/*", requireAuth);
 app.use("/api/reports/*", requireAuth);
+app.use("/api/drive/*", requireAuth);
+app.route("/api/drive", driveRoutes);
 app.route("/api/clients", clientRoutes);
 app.route("/api/bookings", bookingRoutes);
 app.route("/api/payments", paymentRoutes);

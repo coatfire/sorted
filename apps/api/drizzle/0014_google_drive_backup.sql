@@ -1,0 +1,1 @@
+ALTER TABLE "users" ADD COLUMN "drive_backed_up_at" timestamp with time zone;

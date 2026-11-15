@@ -11,6 +11,7 @@ import { useAction, useData, useSession, useStore } from "../lib/store";
 import { useValidation } from "../lib/useValidation";
 import { prepareInvoiceLogo } from "../lib/image";
 import { CalendarSettings } from "../CalendarSettings";
+import { DriveSettings } from "../DriveSettings";
 
 export function Settings({ welcome = false }: { welcome?: boolean }) {
   const { user, features } = useData();
@@ -227,6 +228,7 @@ export function Settings({ welcome = false }: { welcome?: boolean }) {
       </section>
 
       <CalendarSettings />
+      <DriveSettings />
 
       <section className="settings-section">
         <p className="eyebrow">Account</p>
