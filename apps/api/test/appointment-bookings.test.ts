@@ -61,7 +61,7 @@ describe("appointment-first creation", () => {
     const rows = await db.select().from(schema.bookings).where(eq(schema.bookings.userId, f.user.id)).orderBy(schema.bookings.startAt);
     expect(rows.map(row => row.status)).toEqual(["confirmed", "confirmed", "confirmed"]);
     expect(rows.map(row => row.followUpOn)).toEqual([null, null, null]);
-    expect(rows.map(row => row.startAt.toISOString())).toEqual(["2026-10-18T09:00:00.000Z", "2026-10-25T10:00:00.000Z", "2026-11-01T10:00:00.000Z"]);
+    expect(rows.map(row => row.startAt?.toISOString())).toEqual(["2026-10-18T09:00:00.000Z", "2026-10-25T10:00:00.000Z", "2026-11-01T10:00:00.000Z"]);
     const payments = await db.select().from(schema.payments).where(eq(schema.payments.userId, f.user.id));
     expect(payments).toHaveLength(3);
     expect(new Set(payments.map(payment => payment.bookingId))).toEqual(new Set(rows.map(row => row.id)));

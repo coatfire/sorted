@@ -78,7 +78,7 @@ export async function emitBookingEvent(
       booking: {
         id: row.booking.id,
         service: row.booking.service,
-        start_at: row.booking.startAt.toISOString(),
+        start_at: row.booking.startAt?.toISOString() ?? null,
         price_cents: row.booking.priceCents,
         deposit_cents: row.booking.depositCents,
         location: row.booking.location,

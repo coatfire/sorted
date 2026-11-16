@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { FollowUpLater } from "../FollowUp";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { assembleBookingDocument, bookingStage, type DocumentKind, type MessageLogEntry, type Payment } from "@sorted/core";
+import { assembleBookingDocument, bookingStage, missingBookingDetails, type DocumentKind, type MessageLogEntry, type Payment } from "@sorted/core";
+import { ConfirmBookingSheet } from "../ConfirmBookingSheet";
 import { BackButton, Button, Card, EmptyState, Icon, MoneyText, Sheet, StatusChip } from "../components";
 import { PaymentActions } from "../PaymentActions";
 import { BookingMessageSheet } from "../BookingMessageSheet";
@@ -30,6 +31,7 @@ export function BookingDetail() {
   const [calendar, setCalendar] = useState(false);
   const { busy, run } = useAction();
   const [confirmCancel, setConfirmCancel] = useState(false);
+  const [confirmDetails, setConfirmDetails] = useState(false);
   const [message, setMessage] = useState<"confirmation" | "payment_request" | null>(null);
   const [messages, setMessages] = useState<MessageLogEntry[] | null>(null);
   const booking = bookings.find((item) => item.id === id);
@@ -93,7 +95,7 @@ export function BookingDetail() {
   function action(action: BookingDetailAction) {
     if (!booking) return;
     switch (action) {
-      case "confirm": void run(() => backend.confirmBooking(booking.id), "Booking confirmed"); break;
+      case "confirm": if (missingBookingDetails(booking).length) setConfirmDetails(true); else void run(() => backend.confirmBooking(booking.id), "Booking confirmed"); break;
       case "complete": void run(() => backend.completeBooking(booking.id), "Marked complete"); break;
       case "invoice": case "quote": void document(action); break;
       case "receipt":
@@ -130,7 +132,7 @@ export function BookingDetail() {
           <span className="detail-icon"><Icon name="calendar" /></span>
           <div>
             <strong>{longDay(booking.startAt)}</strong>
-            <span>{time(booking.startAt)}</span>
+            <span>{booking.timeTbc ? "Time to be agreed" : time(booking.startAt)}</span>
           </div>
         </div>
         {booking.location && (
@@ -162,9 +164,9 @@ export function BookingDetail() {
       <section className="detail-section">
         <div className="section-heading compact">
           <div><p className="eyebrow">Money</p><h2>Payment</h2></div>
-          <span className="paid-summary">
+          {booking.priceCents !== null && <span className="paid-summary">
             <MoneyText cents={paid} /> of <MoneyText cents={booking.priceCents} /> paid
-          </span>
+          </span>}
         </div>
         <Card className="payment-card">
           <div className="price-total">
@@ -208,7 +210,7 @@ export function BookingDetail() {
             </p>
           )}
         </Card>
-        {owedCents === 0 && <p className="sheet-copy"><strong>Paid in full</strong></p>}
+        {owedCents === 0 && booking.priceCents !== null && booking.status !== "enquiry" && <p className="sheet-copy"><strong>Paid in full</strong></p>}
       </section>
 
       <section className="detail-section">
@@ -261,7 +263,8 @@ export function BookingDetail() {
       {message && <BookingMessageSheet booking={booking} kind={message} requestLabel="Ask for payment" onClose={() => setMessage(null)} />}
       {calendar && <BookingCalendarSheet booking={booking} onClose={() => setCalendar(false)} />}
       {recordPayment && <RecordPaymentSheet bookingId={booking.id} outstanding={owedCents} onClose={() => setRecordPayment(false)} />}
-      {correctPayment && <PaymentCorrectionSheet payment={correctPayment} maximum={booking.priceCents - paid + correctPayment.amountCents} onClose={() => setCorrectPayment(null)} />}
+      {confirmDetails && <ConfirmBookingSheet booking={booking} onClose={() => setConfirmDetails(false)} />}
+      {correctPayment && <PaymentCorrectionSheet payment={correctPayment} maximum={(booking.priceCents ?? 0) - paid + correctPayment.amountCents} onClose={() => setCorrectPayment(null)} />}
       {chooseReceipt && <Sheet title="Choose a payment" onClose={() => setChooseReceipt(false)}>
         <p className="sheet-copy">Each payment has its own receipt number.</p>
         {paidPayments.map((payment) => <Button key={payment.id} kind="quiet" onClick={() => {

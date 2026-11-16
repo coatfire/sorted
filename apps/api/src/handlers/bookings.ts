@@ -24,6 +24,8 @@ import {
   addCalendarDays,
   shiftDublinWeeks,
   MessageSentInput,
+  agreedBookingStart,
+  missingBookingDetails,
 } from "@sorted/core";
 import { db, schema } from "../db";
 import { emitBookingEvent } from "../lib/events";
@@ -69,10 +71,11 @@ bookingRoutes.post("/:id/message-sent", async (c) => {
 
 bookingRoutes.post("/:id/payment-link", async (c) => {
   const userId = c.get("userId"), bookingId = c.req.param("id");
-  if (!env.stripeKey()) return c.json({ error: "Stripe is not configured" }, 503);
   const result = await userTransaction(userId, async tx => {
     const [booking] = await tx.select().from(schema.bookings).where(and(eq(schema.bookings.id, bookingId), eq(schema.bookings.userId, userId))).for("update");
     if (!booking) return c.json({ error: "Booking not found" }, 404);
+    if (booking.priceCents === null) return c.json({ error: "Add a price first" }, 409);
+    if (!env.stripeKey()) return c.json({ error: "Stripe is not configured" }, 503);
     if (booking.status !== "confirmed" && booking.status !== "completed") return c.json({ error: "This booking cannot take payments." }, 409);
     const payments = await tx.select().from(schema.payments).where(and(eq(schema.payments.bookingId, bookingId), eq(schema.payments.userId, userId))).orderBy(schema.payments.id).for("update");
     const owedCents = Math.max(0, booking.priceCents - payments.filter(payment => payment.status === "paid").reduce((sum, payment) => sum + payment.amountCents, 0));
@@ -98,6 +101,7 @@ bookingRoutes.post("/:id/payments", async (c) => {
       eq(schema.bookings.id, bookingId), eq(schema.bookings.userId, userId),
     )).for("update");
     if (!booking) return c.json({ error: "Booking not found" }, 404);
+    if (booking.priceCents === null) return c.json({ error: "Add a price first" }, 409);
     if (booking.status !== "confirmed" && booking.status !== "completed") {
       return c.json({ error: "Payments can only be recorded for confirmed or completed bookings." }, 409);
     }
@@ -150,6 +154,7 @@ bookingRoutes.post("/:id/documents", async (c) => {
       ...(kind === "receipt" ? [eq(schema.invoices.paymentId, paymentId!)] : []),
     ));
     if (existing) return c.json(existing);
+    if (booking.priceCents === null) return c.json({ error: "Add a price first" }, 409);
     if (kind === "receipt") {
       const payment = paidPayments.find((payment) => payment.id === paymentId);
       if (!payment) return c.json({ error: "Payment not found" }, 404);
@@ -159,7 +164,7 @@ bookingRoutes.post("/:id/documents", async (c) => {
       .from(schema.invoices).where(and(eq(schema.invoices.userId, userId), eq(schema.invoices.kind, kind)));
     const issuedAt = new Date();
     const receiptSnapshot = kind === "receipt" ? snapshotReceipt(
-      { ...booking, startAt: booking.startAt.toISOString() },
+      { ...booking, startAt: booking.startAt?.toISOString() ?? null },
       paidPayments.map((payment) => ({ ...payment, paidAt: payment.paidAt?.toISOString() ?? null, createdAt: payment.createdAt.toISOString() })),
       paymentId!, issuedAt.toISOString(), taxSettings,
     ) : null;
@@ -170,7 +175,7 @@ bookingRoutes.post("/:id/documents", async (c) => {
     }).returning();
     const documentSnapshot = snapshotDocument(
       { ...taxSettings, createdAt: taxSettings.createdAt.toISOString(), emailVerifiedAt: taxSettings.emailVerifiedAt?.toISOString() ?? null, driveBackedUpAt: taxSettings.driveBackedUpAt?.toISOString() ?? null },
-      { ...booking, startAt: booking.startAt.toISOString(), endAt: booking.endAt?.toISOString() ?? null, completedAt: booking.completedAt?.toISOString() ?? null, paymentRequestedAt: booking.paymentRequestedAt?.toISOString() ?? null, createdAt: booking.createdAt.toISOString() },
+      { ...booking, startAt: booking.startAt?.toISOString() ?? null, endAt: booking.endAt?.toISOString() ?? null, completedAt: booking.completedAt?.toISOString() ?? null, paymentRequestedAt: booking.paymentRequestedAt?.toISOString() ?? null, createdAt: booking.createdAt.toISOString() },
       { ...client, createdAt: client.createdAt.toISOString() },
       paidPayments.map((payment) => ({ ...payment, paidAt: payment.paidAt?.toISOString() ?? null, createdAt: payment.createdAt.toISOString() })),
       { ...document, issuedAt: document.issuedAt.toISOString(), voidedAt: document.voidedAt?.toISOString() ?? null },
@@ -219,6 +224,7 @@ bookingRoutes.post("/", async (c) => {
     return c.json({ error: parsed.error.flatten() }, 400);
   }
   const input = parsed.data;
+  input.start_at = agreedBookingStart(input.start_at, input.time_tbc);
 
   const rows = await userTransaction(userId, async (tx) => {
     // Resolve or create the client
@@ -247,14 +253,15 @@ bookingRoutes.post("/", async (c) => {
     const rows = await tx
       .insert(schema.bookings)
       .values(Array.from({ length: count }, (_, index) => {
-        const startAt = shiftDublinWeeks(input.start_at, index * (input.repeat?.every_weeks ?? 1));
+        const startAt = input.start_at ? shiftDublinWeeks(input.start_at, index * (input.repeat?.every_weeks ?? 1)) : null;
         return {
         userId,
         clientId: clientId!,
         status: input.status,
         service: input.service,
         startAt,
-        endAt: input.end_at ? new Date(startAt.getTime() + input.end_at.getTime() - input.start_at.getTime()) : undefined,
+        timeTbc: Boolean(startAt && input.time_tbc),
+        endAt: input.end_at && startAt && input.start_at ? new Date(startAt.getTime() + input.end_at.getTime() - input.start_at.getTime()) : undefined,
         priceCents: input.price_cents,
         depositCents: input.deposit_cents,
         location: input.location,
@@ -280,6 +287,11 @@ bookingRoutes.post("/", async (c) => {
 
 /** POST /api/bookings/:id/confirm — enquiry → confirmed, emits automation */
 bookingRoutes.post("/:id/confirm", async (c) => {
+  let body: unknown;
+  try { const text = await c.req.text(); body = text ? JSON.parse(text) : {}; }
+  catch { return c.json({ error: "Invalid confirmation details" }, 400); }
+  const parsed = UpdateBookingInput.pick({ start_at: true, time_tbc: true, price_cents: true }).safeParse(body);
+  if (!parsed.success) return c.json({ error: parsed.error.flatten() }, 400);
   const userId = c.get("userId");
   const id = c.req.param("id");
 
@@ -287,6 +299,14 @@ bookingRoutes.post("/:id/confirm", async (c) => {
     const row = await lockBookingWithClient(tx, userId, id);
 
     if (!row) return c.json({ error: "Booking not found" }, 404);
+    const input = parsed.data;
+    if (row.booking.timeTbc && input.time_tbc === false && input.start_at === undefined) return c.json({ error: "Add a time" }, 422);
+    const timeTbc = input.time_tbc ?? row.booking.timeTbc;
+    const startAt = agreedBookingStart(input.start_at === undefined ? row.booking.startAt : input.start_at, timeTbc);
+    const priceCents = input.price_cents === undefined ? row.booking.priceCents : input.price_cents;
+    const missing = missingBookingDetails({ startAt, timeTbc, priceCents });
+    if (missing.length) return c.json({ error: `Add ${missing.join(", ")} before confirming this booking.` }, 422);
+    if (row.booking.depositCents > priceCents!) return c.json({ error: "Deposit cannot exceed price" }, 400);
     if (row.booking.status !== "enquiry") {
       return c.json(
         { error: `Cannot confirm a booking in status '${row.booking.status}'` },
@@ -296,7 +316,7 @@ bookingRoutes.post("/:id/confirm", async (c) => {
 
     const [booking] = await tx
       .update(schema.bookings)
-      .set({ status: "confirmed", followUpOn: null })
+      .set({ status: "confirmed", followUpOn: null, startAt, timeTbc: false, priceCents })
       .where(and(eq(schema.bookings.id, id), eq(schema.bookings.userId, userId)))
       .returning();
 
@@ -394,27 +414,33 @@ bookingRoutes.patch("/:id", async (c) => {
         409,
       );
     }
-    const priceCents = input.price_cents ?? current.priceCents;
+    const priceCents = input.price_cents === undefined ? current.priceCents : input.price_cents;
+    if (current.timeTbc && input.time_tbc === false && input.start_at === undefined) return c.json({ error: "Add a time" }, 422);
+    const timeTbc = input.time_tbc ?? current.timeTbc;
+    const startAt = agreedBookingStart(input.start_at === undefined ? current.startAt : input.start_at, timeTbc);
+    const missing = missingBookingDetails({ startAt, timeTbc, priceCents });
+    if (current.status === "confirmed" && missing.length) return c.json({ error: `Add ${missing.join(", ")} before saving this booking.` }, 422);
     const depositCents = input.deposit_cents ?? current.depositCents;
     const payments = priceCents !== current.priceCents
       ? await tx.select().from(schema.payments).where(and(eq(schema.payments.bookingId, current.id), eq(schema.payments.userId, userId))).orderBy(schema.payments.id).for("update")
       : null;
     const paidCents = payments?.filter(payment => payment.status === "paid").reduce((sum, payment) => sum + payment.amountCents, 0) ?? 0;
-    if (payments && priceCents < paidCents) {
+    if (payments && (priceCents === null ? paidCents > 0 : priceCents < paidCents)) {
       return c.json({ error: "The price can't be less than the amount already paid." }, 409);
     }
-    if (depositCents > priceCents) {
+    if (depositCents > (priceCents ?? 0)) {
       return c.json({ error: "Deposit cannot exceed price" }, 400);
     }
     const pending = payments?.filter(payment => payment.status === "pending");
-    const voided = pending && !(pending.length === 1 && pending[0].amountCents === priceCents - paidCents)
+    const voided = pending && !(pending.length === 1 && priceCents !== null && pending[0].amountCents === priceCents - paidCents)
       ? await tx.update(schema.payments).set({ status: "cancelled" }).where(and(eq(schema.payments.bookingId, current.id), eq(schema.payments.userId, userId), eq(schema.payments.status, "pending"))).returning({ linkId: schema.payments.stripePaymentLinkId })
       : [];
     const [booking] = await tx
       .update(schema.bookings)
       .set({
         service: input.service,
-        startAt: input.start_at,
+        startAt,
+        timeTbc: Boolean(startAt && timeTbc),
         endAt: input.end_at,
         priceCents: input.price_cents,
         depositCents: input.deposit_cents,
@@ -464,7 +490,9 @@ bookingRoutes.post("/:id/complete", async (c) => {
         ),
       );
     const paidCents = Number(expected?.amount ?? 0);
-    const remainder = Math.max(booking.priceCents - paidCents, 0);
+    const missing = missingBookingDetails(booking);
+    if (missing.length) return c.json({ error: `Add ${missing.join(", ")} before completing this booking.` }, 422);
+    const remainder = Math.max(booking.priceCents! - paidCents, 0);
     const voided = await tx
       .update(schema.payments)
       .set({ status: "cancelled" })
@@ -563,10 +591,12 @@ bookingRoutes.post("/:id/cancel", async (c) => {
 });
 
 bookingRoutes.post("/:id/payment-requested", async (c) => {
-  const [booking] = await db.update(schema.bookings)
-    .set({ paymentRequestedAt: new Date() })
-    .where(and(eq(schema.bookings.id, c.req.param("id")), eq(schema.bookings.userId, c.get("userId"))))
-    .returning();
-  if (!booking) return c.json({ error: "Booking not found" }, 404);
-  return c.json(booking);
+  const userId = c.get("userId"), id = c.req.param("id");
+  return userTransaction(userId, async tx => {
+    const [booking] = await tx.select().from(schema.bookings).where(and(eq(schema.bookings.id, id), eq(schema.bookings.userId, userId))).for("update");
+    if (!booking) return c.json({ error: "Booking not found" }, 404);
+    if (booking.priceCents === null) return c.json({ error: "Add a price first" }, 409);
+    const [saved] = await tx.update(schema.bookings).set({ paymentRequestedAt: new Date() }).where(and(eq(schema.bookings.id, id), eq(schema.bookings.userId, userId))).returning();
+    return c.json(saved);
+  });
 });

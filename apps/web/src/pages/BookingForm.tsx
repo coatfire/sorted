@@ -1,6 +1,6 @@
-import { useMemo, useState, type FormEvent } from "react";
+import { useMemo, useRef, useState, type FormEvent } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
-import { normaliseClientPhone, CreateClientInput, CalendarDate, irelandToday, addCalendarDays, bookAgainStart, bookingAtDublinTime, dublinDateTime, RepeatInput, type Client } from "@sorted/core";
+import { normaliseClientPhone, CreateClientInput, CalendarDate, bookAgainStart, bookingAtDublinTime, dublinDateTime, RepeatInput, type Client } from "@sorted/core";
 import { BackButton, Button, Card, EmptyState, Field, Icon, MoneyText, PageHeader } from "../components";
 import type { BookingRow } from "../lib/backend";
 import { centsToInput, formatPhone, longDay, parseEuros, time } from "../lib/format";
@@ -8,10 +8,6 @@ import { bookingServiceChips, serviceChipPrice } from "../lib/bookingServices";
 import { BookingMessageSheet } from "../BookingMessageSheet";
 import { useAction, useData, useStore } from "../lib/store";
 import { useValidation } from "../lib/useValidation";
-
-function tomorrow() {
-  return addCalendarDays(irelandToday(), 1);
-}
 
 /** Add a booking (/bookings/new) or edit one (/bookings/:id/edit). */
 export function BookingForm() {
@@ -33,15 +29,16 @@ export function BookingForm() {
 
   const [savedId, setSavedId] = useState<string | null>(null);
   const [client, setClient] = useState<Client | null>(initial?.client ?? null);
+  const strict = useRef(false);
   const [form, setForm] = useState(() => {
-    const start = editing ? dublinDateTime(editing.startAt) : original ? dublinDateTime(bookAgainStart(original.startAt)) : null;
+    const start = initial?.startAt ? editing ? dublinDateTime(initial.startAt) : dublinDateTime(bookAgainStart(initial.startAt)) : null;
     return {
       clientName: "",
       clientPhone: "",
       clientEmail: "",
       service: initial?.service ?? "",
-      date: start ? start.date : tomorrow(),
-      time: start ? start.time : "10:00",
+      date: start?.date ?? "",
+      time: initial?.timeTbc ? "" : start?.time ?? "",
       price: initial ? centsToInput(initial.priceCents) : "",
       deposit: initial?.depositCents ? centsToInput(initial.depositCents) : "",
       location: initial?.location ?? "",
@@ -58,7 +55,7 @@ export function BookingForm() {
       ? "That mobile number doesn’t look right. Try it like 087 123 4567." : undefined,
     price: () => {
       const price = parseEuros(form.price);
-      if (price === null) return "Add the price, like 120 or 120.50.";
+      if (price === null) return strict.current || form.price.trim() ? "Add a valid price for Save booking, or leave it blank for an enquiry." : undefined;
       if (editing && editing.status !== "enquiry" && editing.depositCents > price) {
         return "The deposit can’t be more than the price.";
       }
@@ -67,11 +64,11 @@ export function BookingForm() {
       const deposit = form.deposit.trim() ? parseEuros(form.deposit) : 0;
       const price = parseEuros(form.price);
       if (deposit === null) return "The deposit should be an amount, like 50.";
+      if (price === null && deposit > 0) return "Add a price before requesting a deposit.";
       if (price !== null && deposit > price) return "The deposit can’t be more than the price.";
     },
-    date: () => !CalendarDate.safeParse(form.date).success ? "Pick a valid date." : undefined,
-    time: () => !form.time || Number.isNaN(new Date(`${form.date}T${form.time}`).getTime())
-      ? "Pick a date and time." : undefined,
+    date: () => !form.date && !strict.current && !form.time && !repeatEvery ? undefined : !CalendarDate.safeParse(form.date).success ? "Add a date for Save booking or repeats. It’s optional for an enquiry." : undefined,
+    time: () => !form.time && !strict.current ? undefined : !/^\d{2}:\d{2}$/.test(form.time) ? "Add a time for Save booking. It’s optional for an enquiry." : undefined,
   });
 
   const services = useMemo(() => bookingServiceChips(user.services ?? [], bookings), [user.services, bookings]);
@@ -101,20 +98,22 @@ export function BookingForm() {
     if (busy || committed) return;
     const submitter = (event.nativeEvent as SubmitEvent).submitter;
     const status = submitter instanceof HTMLButtonElement && submitter.value === "enquiry" ? "enquiry" : "confirmed";
+    strict.current = editing ? editing.status !== "enquiry" : status === "confirmed";
     if (!validation.validate(event.currentTarget)) return;
     const priceCents = parseEuros(form.price);
     const depositCents = form.deposit.trim() ? parseEuros(form.deposit) : 0;
-    const startAt = bookingAtDublinTime(form.date, form.time, editing?.startAt);
+    const startAt = form.date ? bookingAtDublinTime(form.date, form.time || "00:00", editing?.startAt ?? undefined) : null;
     let phone: string | undefined;
     if (!client && form.clientPhone.trim()) {
       const normalised = normaliseClientPhone(form.clientPhone);
       phone = normalised ?? undefined;
     }
-    if (priceCents === null || depositCents === null) return;
+    if (depositCents === null) return;
 
     const details = {
       service: form.service.trim(),
-      startAt: startAt.toISOString(),
+      startAt: startAt?.toISOString() ?? null,
+      timeTbc: Boolean(form.date && !form.time),
       priceCents,
       depositCents,
       location: form.location.trim() || null,
@@ -242,29 +241,28 @@ export function BookingForm() {
             </div>
           )}
           <div className="field-grid">
-            <Field label="Date" {...validation.field("date")}>
-              <input name="date" required type="date" value={form.date} onChange={(event) => update("date", event.target.value)} />
+            <Field label="Date" helper="Know the date? Add it now. You can leave it blank for an enquiry." {...validation.field("date")}>
+              <input name="date" type="date" value={form.date} onChange={(event) => update("date", event.target.value)} />
             </Field>
             <Field label="Time" {...validation.field("time")}>
-              <input name="time" required type="time" value={form.time} onChange={(event) => update("time", event.target.value)} />
+              <input name="time" type="time" value={form.time} onChange={(event) => update("time", event.target.value)} />
             </Field>
           </div>
-          {original && <div className="repeat-week-chips" role="group" aria-label="Book again in">
+          {original?.startAt && <div className="repeat-week-chips" role="group" aria-label="Book again in">
             {([1, 2, 4, 6] as const).map((value) => <button type="button" aria-pressed={weeks === value} key={value} onClick={() => {
               setWeeks(value);
-              const next = dublinDateTime(bookAgainStart(original.startAt, value));
+              const next = dublinDateTime(bookAgainStart(original.startAt!, value));
               setForm((current) => ({ ...current, date: next.date, time: next.time }));
             }}>{value} {value === 1 ? "week" : "weeks"}</button>)}
           </div>}
-          <Field label="Price" {...validation.field("price")}>
+          <Field label="Price" helper="Required for Save booking. Leave blank if an enquiry’s price is still to be agreed." {...validation.field("price")}>
             <div className="money-input">
               <span>€</span>
               <input
-                required
                 inputMode="decimal"
                 name="price" value={form.price}
                 onChange={(event) => { update("price", event.target.value); setPriceFromChip(false); }}
-                placeholder="0.00"
+                placeholder="To be agreed"
               />
             </div>
           </Field>
@@ -358,7 +356,7 @@ function Saved({ booking, count }: { booking: BookingRow; count: number }) {
       <Card className="saved-summary">
         <div>
           <Icon name="calendar" />
-          <span>{longDay(booking.startAt)}, {time(booking.startAt)}</span>
+          <span>{longDay(booking.startAt)}, {booking.timeTbc ? "Time to be agreed" : time(booking.startAt)}</span>
         </div>
         <div>
           <Icon name="wallet" />

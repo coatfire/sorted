@@ -51,7 +51,7 @@ calendarRoutes.get("/:token/:feed", async (c) => {
       inArray(schema.bookings.status, feed === "confirmed.ics" ? ["confirmed", "completed"] : ["enquiry"])))
     .orderBy(asc(schema.bookings.startAt));
   const content = buildCalendar({
-    bookings: rows.map(({ booking, client }) => ({ ...booking, client, startAt: booking.startAt.toISOString(), endAt: booking.endAt?.toISOString() ?? null })),
+    bookings: rows.map(({ booking, client }) => ({ ...booking, client, startAt: booking.startAt?.toISOString() ?? null, endAt: booking.endAt?.toISOString() ?? null })),
     name: feed === "confirmed.ics" ? "Sorted – Confirmed" : "Sorted – Enquiries", appUrl: env.appUrl(),
   });
   return c.body(content, 200, { "Content-Type": "text/calendar; charset=utf-8" });

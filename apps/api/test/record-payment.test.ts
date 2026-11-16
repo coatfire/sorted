@@ -75,7 +75,7 @@ describe("record instalment payments", () => {
     const second = await (await f.record(2500, { method: "revolut", paid_on: "2026-07-01" })).json() as { payment: Payment };
     expect(second.payment).toMatchObject({ paidAt: "2026-07-01T11:00:00.000Z", vatRateBp: 900 });
     const rows = await f.payments();
-    expect(f.booking.priceCents - rows.filter((row) => row.status === "paid").reduce((sum, row) => sum + row.amountCents, 0)).toBe(4500);
+    expect(f.booking.priceCents! - rows.filter((row) => row.status === "paid").reduce((sum, row) => sum + row.amountCents, 0)).toBe(4500);
     const repeated = await (await f.request(`/bookings/${f.booking.id}/documents`, { kind: "receipt", payment_id: payment.id })).json() as BookingDocument;
     expect(repeated).toEqual(receipt);
     const secondReceipt = await (await f.request(`/bookings/${f.booking.id}/documents`, { kind: "receipt", payment_id: second.payment.id })).json() as BookingDocument;

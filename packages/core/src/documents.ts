@@ -23,7 +23,7 @@ export const CreateDocumentInput = z.object({ kind: DocumentKind, payment_id: z.
 export interface ReceiptSnapshot {
   vatRateBp?: number | null;
   service: string;
-  bookingDate: string;
+  bookingDate: string | null;
   bookingTotalCents: number;
   balanceDueCents: number;
   payment: { date: string; amountCents: number; method: Payment["method"] };
@@ -34,6 +34,7 @@ export function snapshotReceipt(
   payments: readonly Payment[], paymentId: string, issuedAt: string,
   settings: Pick<User, "vatRegistered" | "vatRateBp"> = { vatRegistered: false, vatRateBp: null },
 ): ReceiptSnapshot {
+  if (booking.priceCents === null) throw new Error("Add a price first");
   const received = payments.filter((payment) => payment.bookingId === booking.id && payment.status === "paid"
     && new Date(payment.paidAt ?? payment.createdAt).getTime() <= new Date(issuedAt).getTime());
   const payment = received.find((item) => item.id === paymentId);
@@ -63,6 +64,7 @@ export const documentNumber = (kind: DocumentKind, number: number) =>
   `${kind === "invoice" ? "INV" : kind === "quote" ? "QTE" : "RCT"}-${String(number).padStart(4, "0")}`;
 
 function liveBookingDocument(user: User, booking: Booking, client: Client, payments: readonly Payment[], document: BookingDocument) {
+  if (booking.priceCents === null) throw new Error("Add a price first");
   if (document.bookingId !== booking.id || booking.clientId !== client.id) throw new Error("Document does not match this booking.");
   const received = payments.filter((payment) => payment.bookingId === booking.id && payment.status === "paid")
     .slice().sort((a, b) => (a.paidAt ?? a.createdAt).localeCompare(b.paidAt ?? b.createdAt));
@@ -76,9 +78,9 @@ function liveBookingDocument(user: User, booking: Booking, client: Client, payme
   const grossCents = receipt ? paid : bookingTotal;
   const vatCents = vatRateBp === null ? 0 : inclusiveVat(grossCents, vatRateBp);
   const money = (cents: number) => new Intl.NumberFormat("en-IE", { style: "currency", currency: "EUR" }).format(cents / 100);
-  const date = (iso: string) => new Intl.DateTimeFormat("en-IE", {
+  const date = (iso: string | null) => iso ? new Intl.DateTimeFormat("en-IE", {
     day: "2-digit", month: "short", year: "numeric", timeZone: "Europe/Dublin",
-  }).format(new Date(iso));
+  }).format(new Date(iso)) : "Date to be agreed";
   const methods = { cash: "Cash", bank_transfer: "Bank transfer", stripe: "Card", revolut: "Revolut" };
   return {
     kind: document.kind,

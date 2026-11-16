@@ -34,8 +34,8 @@ export interface EventClient {
 export interface EventBooking {
   id: string;
   service: string;
-  start_at: string;
-  price_cents: number;
+  start_at: string | null;
+  price_cents: number | null;
   deposit_cents: number;
   location: string | null;
   gcal_event_id: string | null;

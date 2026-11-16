@@ -542,3 +542,28 @@ Visible focus rings · chips never rely on colour alone (label text always
 present) · 44px targets · `prefers-reduced-motion` respected · Lighthouse
 PWA installable pass · offline: cached shell + "You're offline, showing
 last-loaded data" banner (read-only offline is enough for MVP).
+
+## Incomplete enquiries
+
+- Date stays prominent in Add booking: ask for it up front, but allow a blank
+  date, time and/or price for **Save as enquiry**. No date, time or zero-price
+  defaults are invented. **Save booking** requires all three; a repeat requires
+  a date. An unknown price cannot have a deposit.
+- Show **Date to be agreed**, **Time to be agreed** and **Price to be agreed**
+  consistently in details, client history, Today and messages. Date-only
+  enquiries use Ireland-local midnight for storage, never as display time.
+- **Confirm booking** opens a short sheet containing only missing fields.
+  Saving fills them and confirms atomically. Error and committed-refresh
+  handling follow other sheets. Completeness is required only for confirmed
+  and completed bookings. **Cancel enquiry** stays available even when details
+  are missing: decline it as-is, clear its follow-up and keep payment reminders
+  unchanged. No completion sheet is needed to cancel.
+- Today groups dated/time-TBC enquiries under their day, time-TBC first.
+  **No date yet** follows the dated groups. Follow-ups work for either kind.
+  Only confirmed appointments can become the next-appointment hero.
+- Disable no-price payment/quote/invoice actions with **Add a price first**
+  guidance. Unknown prices never appear as zero or increase owed/tax totals.
+- Hide Add to calendar without a date. Time-TBC enquiries export as all-day
+  events; undated enquiries are omitted from the Enquiries feed. Default
+  message drafts omit unknown-price lines and use natural agreed-later wording.
+- Keep shared sheets, 44px targets, reduced motion and demo parity.

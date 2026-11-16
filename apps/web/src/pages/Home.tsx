@@ -10,8 +10,8 @@ import { useNow } from "../lib/useNow";
 import { FollowUps } from "../FollowUp";
 
 export function BookingRow({ booking, lead }: { booking: Booking; lead?: string }) {
-  return <Link className="booking-row" to={`/bookings/${booking.id}`}>
-    <time dateTime={booking.startAt}>{lead ?? irelandTime(booking.startAt)}</time>
+  return <Link className={`booking-row${!booking.startAt || booking.timeTbc ? " is-incomplete" : ""}`} to={`/bookings/${booking.id}`}>
+    <time dateTime={booking.startAt ?? undefined}>{!booking.startAt ? "Date to be agreed" : booking.timeTbc ? `${lead ? `${lead} · ` : ""}Time to be agreed` : lead ?? irelandTime(booking.startAt)}</time>
     <div className="booking-row-main"><strong>{booking.client.name}</strong><span>{booking.service}</span></div>
     <div className="booking-row-trailing"><MoneyText cents={booking.priceCents} /><StatusChip status={booking.status} /></div>
     <Icon name="chevron" size={17} />
@@ -21,7 +21,7 @@ export function BookingRow({ booking, lead }: { booking: Booking; lead?: string 
 function GroupedRows({ bookings, now }: { bookings: Booking[]; now: Date }) {
   return <>{bookings.map((booking, index) => {
     const previous = bookings[index - 1];
-    const newDay = !previous || dublinDateTime(previous.startAt).date !== dublinDateTime(booking.startAt).date;
+    const newDay = !previous || !previous.startAt || !booking.startAt || dublinDateTime(previous.startAt).date !== dublinDateTime(booking.startAt).date;
     return <div key={booking.id}>
       {newDay && <p className="date-divider">{irelandDayLabel(booking.startAt, now)}</p>}
       <BookingRow booking={booking} />
@@ -36,7 +36,7 @@ export function Home() {
   const [showLater, setShowLater] = useState(false);
   const [showPast, setShowPast] = useState(false);
   const now = useNow();
-  const { nextAppointment: next, followUps, wrapUp, todays, upcoming, later, past } = bookingAgenda(bookings, now);
+  const { nextAppointment: next, followUps, wrapUp, todays, upcoming, later, past, undated } = bookingAgenda(bookings, now);
   const { dueNow, dueNowCents } = moneyOwed(bookings, payments, now);
   const clientsOwing = new Set(dueNow.map(item => item.booking.clientId)).size;
   const needsAttention = followUps.length > 0 || wrapUp.length > 0 || dueNow.length > 0;
@@ -44,7 +44,7 @@ export function Home() {
   const greeting = hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
   const who = user.name?.trim() ? firstName(user.name) : user.businessName;
   const nextState = next ? bookingStage(next, payments, now) : null;
-  const depositDue = next && nextState ? Math.max(0, next.depositCents - (next.priceCents - nextState.owedCents)) : 0;
+  const depositDue = next && nextState ? Math.max(0, next.depositCents - ((next.priceCents ?? 0) - nextState.owedCents)) : 0;
   const paymentPhrase = nextState ? nextState.owedCents === 0 ? "Paid in full" : depositDue > 0 ? `${euros(depositDue)} deposit due` : `${euros(nextState.owedCents)} still to pay` : "";
 
   return <div className="page">
@@ -97,5 +97,6 @@ export function Home() {
       {later.length > 0 && <><button className="disclosure" aria-expanded={showLater} onClick={() => setShowLater(!showLater)}>Later · {later.length} {later.length === 1 ? "booking" : "bookings"}<Icon name="chevron" size={15} /></button>{showLater && <Card className="list-card"><GroupedRows bookings={later} now={now} /></Card>}</>}
       {past.length > 0 && <><button className="disclosure" aria-expanded={showPast} onClick={() => setShowPast(!showPast)}>Past bookings<Icon name="chevron" size={15} /></button>{showPast && <Card className="list-card">{past.map(booking => <BookingRow key={booking.id} booking={booking} lead={irelandDayMonth(booking.startAt)} />)}</Card>}</>}
     </section>
+    {undated.length > 0 && <section className="list-section"><div className="section-heading"><h2>No date yet</h2></div><Card className="list-card">{undated.map(booking => <BookingRow key={booking.id} booking={booking} />)}</Card></section>}
   </div>;
 }

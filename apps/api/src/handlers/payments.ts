@@ -18,6 +18,7 @@ async function correctPayment(userId: string, id: string, input: EditPaymentInpu
     if (!owner) return { error: "Payment not found", status: 404 as const };
     const row = await lockBookingWithClient(tx, userId, owner.bookingId);
     if (!row) return { error: "Payment not found", status: 404 as const };
+    if (input && row.booking.priceCents === null) return { error: "Add a price first", status: 409 as const };
     const payments = await tx.select().from(schema.payments).where(and(eq(schema.payments.bookingId, row.booking.id), eq(schema.payments.userId, userId))).orderBy(schema.payments.id).for("update");
     const current = payments.find(payment => payment.id === id);
     if (!current) return { error: "Payment not found", status: 404 as const };
@@ -26,11 +27,11 @@ async function correctPayment(userId: string, id: string, input: EditPaymentInpu
     const receipts = await tx.select().from(schema.invoices).where(and(eq(schema.invoices.userId, userId), eq(schema.invoices.paymentId, id), eq(schema.invoices.kind, "receipt"))).orderBy(schema.invoices.id).for("update");
     if (input && receipts.length) return { error: "A receipt was issued for this payment. Undo it and record it again.", status: 409 as const };
     const total = payments.filter(payment => payment.status === "paid" && payment.id !== id).reduce((sum, payment) => sum + payment.amountCents, 0) + (input ? input.amount_cents ?? current.amountCents : 0);
-    if (input && total > row.booking.priceCents) return { error: "The total paid cannot exceed the booking price.", status: 409 as const };
+    if (input && total > row.booking.priceCents!) return { error: "The total paid cannot exceed the booking price.", status: 409 as const };
     const [payment] = await tx.update(schema.payments).set(input ? { amountCents: input.amount_cents, method: input.method, paidAt: input.paid_at ? new Date(input.paid_at) : undefined } : { status: "cancelled" }).where(and(eq(schema.payments.id, id), eq(schema.payments.userId, userId))).returning();
     if (!input && receipts.length) await tx.update(schema.invoices).set({ voidedAt: new Date() }).where(and(eq(schema.invoices.userId, userId), eq(schema.invoices.paymentId, id), eq(schema.invoices.kind, "receipt")));
     const pending = payments.filter(payment => payment.status === "pending");
-    const keep = pending.length === 1 && pending[0].amountCents === row.booking.priceCents - total;
+    const keep = pending.length === 1 && row.booking.priceCents !== null && pending[0].amountCents === row.booking.priceCents - total;
     const cancelled = !keep && pending.length ? await tx.update(schema.payments).set({ status: "cancelled" }).where(and(eq(schema.payments.userId, userId), eq(schema.payments.bookingId, row.booking.id), eq(schema.payments.status, "pending"))).returning({ linkId: schema.payments.stripePaymentLinkId }) : [];
     return { payment, cancelled };
   });
@@ -95,9 +96,10 @@ export async function createPaymentLink(userId: string, id: string) {
     .from(schema.payments)
     .innerJoin(schema.bookings, eq(schema.payments.bookingId, schema.bookings.id))
     .where(
-      and(eq(schema.payments.id, id), eq(schema.payments.userId, userId)),
+      and(eq(schema.payments.id, id), eq(schema.payments.userId, userId), eq(schema.bookings.userId, userId)),
     );
   if (!row) return Response.json({ error: "Payment not found" }, { status: 404 });
+  if (row.booking.priceCents === null) return Response.json({ error: "Add a price first" }, { status: 409 });
   if (row.payment.status !== "pending") {
     return Response.json({ error: "Only pending payments can have a link" }, { status: 409 });
   }
@@ -168,6 +170,9 @@ paymentRoutes.post("/:id/mark-paid", async (c) => {
       ),
     );
   if (!current) return c.json({ error: "Payment not found" }, 404);
+  const [booking] = await db.select().from(schema.bookings).where(and(eq(schema.bookings.id, current.bookingId), eq(schema.bookings.userId, userId)));
+  if (!booking) return c.json({ error: "Booking not found" }, 404);
+  if (booking.priceCents === null) return c.json({ error: "Add a price first" }, 409);
   if (current.status !== "pending") {
     return c.json({ error: "Payment is not pending" }, 409);
   }

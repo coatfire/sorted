@@ -36,10 +36,11 @@ export interface BookingDraft {
   /** …a new one created inline. */
   client?: { name: string; phone?: string; email?: string };
   service: string;
-  startAt: string;
+  startAt: string | null;
+  timeTbc?: boolean;
   followUpOn?: string | null;
   repeat?: { everyWeeks: 1 | 2 | 4; count: number };
-  priceCents: number;
+  priceCents: number | null;
   depositCents: number;
   location: string | null;
   notes: string | null;
@@ -76,7 +77,7 @@ export interface Backend {
   load(): Promise<Snapshot>;
   createBooking(draft: BookingDraft): Promise<{ id: string; seriesCount: number }>;
   updateBooking(id: string, draft: Omit<BookingDraft, "clientId" | "client" | "status">): Promise<void>;
-  confirmBooking(id: string): Promise<void>;
+  confirmBooking(id: string, details?: Partial<Pick<BookingDraft, "startAt" | "timeTbc" | "priceCents">>): Promise<void>;
   completeBooking(id: string): Promise<void>;
   cancelBooking(id: string): Promise<void>;
   followUp(id: string, date: string | null): Promise<void>;

@@ -4,11 +4,11 @@ import {
   renderBookingMessage, bookingMessagePayLink, UpdateUserInput, type BookingMessageDetails,
 } from "@sorted/core";
 
-const details: BookingMessageDetails = {
+const details = {
   client: "Sarah & Jane", business: "Studio by Shane", date: "15 November", time: "10:00",
   service: "Wedding hair", priceCents: 35050, depositCents: 10000, balanceCents: 25050,
   iban: "IE29AIBK93115212345678", bic: "AIBKIE2D", payLink: null,
-};
+} satisfies BookingMessageDetails;
 
 describe("booking message templates", () => {
   it("omits the deposit and balance breakdown when no deposit applies", () => {
