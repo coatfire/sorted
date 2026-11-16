@@ -1,8 +1,8 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { addCalendarMonths, bookingsByDay, CalendarDate, CalendarMonth, FIRST_CALENDAR_MONTH, irelandToday, LAST_CALENDAR_MONTH, monthWeeks } from "@sorted/core";
+import { addCalendarMonths, bookingsByDay, busyByDay, CalendarDate, CalendarMonth, dublinDateTime, externalCalendarLabel, FIRST_CALENDAR_MONTH, irelandToday, LAST_CALENDAR_MONTH, monthWeeks, type BusyBlock, type BusyResult } from "@sorted/core";
 import { Button, Card, EmptyState, Icon, PageHeader, Sheet } from "../components";
-import { useData } from "../lib/store";
+import { useData, useStore } from "../lib/store";
 import { useNow } from "../lib/useNow";
 import { BookingRow } from "./Home";
 
@@ -14,6 +14,28 @@ const monthName = (month: string) => formatDay({ month: "short" })(`${month}-01`
 const longDay = formatDay({ weekday: "long", day: "numeric", month: "long", year: "numeric" });
 const shortDay = formatDay({ weekday: "short", day: "numeric", month: "short" });
 const count = (total: number, noun: "booking" | "enquiry" | "job") => `${total} ${total === 1 ? noun : noun === "enquiry" ? "enquiries" : `${noun}s`}`;
+
+/** When a Busy block falls on one of the days it touches. */
+function busyTime(block: BusyBlock, day: string) {
+  if (block.allDay) return "All day";
+  const start = dublinDateTime(block.start), end = dublinDateTime(block.end);
+  if (start.date === day) return end.date === day && end.time !== start.time ? `${start.time}–${end.time}` : `From ${start.time}`;
+  return end.date === day ? `Until ${end.time}` : "All day";
+}
+
+/** Entries from the trader's own Google/Apple calendars for the days shown. Read-only. */
+function useBusy(from: string, to: string): BusyResult | null {
+  const { backend } = useStore();
+  const [loaded, setLoaded] = useState<{ range: string; result: BusyResult } | null>(null);
+  const range = `${from}/${to}`;
+  useEffect(() => {
+    let live = true;
+    // Busy blocks are an extra: when they can't be fetched the calendar still shows every booking.
+    backend.busy(from, to).then((result) => { if (live) setLoaded({ range, result }); }).catch(() => undefined);
+    return () => { live = false; };
+  }, [backend, from, to, range]);
+  return loaded?.range === range ? loaded.result : null;
+}
 
 /** Month view of every dated booking. Tap a day for its jobs, or to add one. */
 export function Calendar() {
@@ -30,6 +52,10 @@ export function Calendar() {
   const monthDays = [...byDay.keys()].filter((day) => day.startsWith(month)).sort();
   const show = (next: string, day?: string) => setParams(day ? { month: next, day } : { month: next }, { replace: true });
   const jobs = selected ? byDay.get(selected) ?? [] : [];
+  const grid = monthWeeks(month).flat();
+  const busy = useBusy(grid[0], grid[grid.length - 1]);
+  const busyDays = busyByDay(busy?.blocks ?? []);
+  const blocks = selected ? busyDays.get(selected) ?? [] : [];
 
   return <div className="page">
     <PageHeader title="Calendar" action={month !== today.slice(0, 7) || selected !== today
@@ -43,29 +69,41 @@ export function Calendar() {
       </div>
       <div className="calendar-grid" role="group" aria-label={monthTitle(month)}>
         {WEEKDAYS.map((weekday) => <span className="calendar-weekday" key={weekday} aria-hidden="true">{weekday}</span>)}
-        {monthWeeks(month).flat().map((day) => {
+        {grid.map((day) => {
           if (!day.startsWith(month)) return <span key={day} />;
           const dayJobs = byDay.get(day) ?? [];
           const enquiries = dayJobs.filter((booking) => booking.status === "enquiry").length;
           const booked = dayJobs.length - enquiries;
           const summary = [booked ? count(booked, "booking") : null, enquiries ? count(enquiries, "enquiry") : null].filter(Boolean).join(", ");
-          return <button key={day} className={`calendar-day${day === today ? " is-today" : ""}`} aria-pressed={day === selected}
-            aria-label={`${longDay(day)}${day === today ? ", today" : ""}, ${summary || "nothing booked"}`} onClick={() => show(month, day)}>
+          const dayBusy = busyDays.get(day) ?? [];
+          // A whole-day entry greys the day; a timed one only adds a grey mark, since the rest of the day is free.
+          const allDay = dayBusy.some((block) => block.allDay);
+          const busyLabel = allDay ? ", busy all day in your own calendar" : dayBusy.length ? ", busy for part of the day in your own calendar" : "";
+          return <button key={day} className={`calendar-day${day === today ? " is-today" : ""}${allDay ? " is-busy" : ""}`} aria-pressed={day === selected}
+            aria-label={`${longDay(day)}${day === today ? ", today" : ""}, ${summary || "nothing booked"}${busyLabel}`} onClick={() => show(month, day)}>
             <span>{Number(day.slice(8))}</span>
             <span className="calendar-marks" aria-hidden="true">
               {dayJobs.slice(0, 3).map((booking) => <i key={booking.id} className={booking.status === "enquiry" ? "is-enquiry" : undefined} />)}
               {dayJobs.length > 3 && <b>+</b>}
+              {dayBusy.length > 0 && !allDay && <i className="is-busy" />}
             </span>
           </button>;
         })}
       </div>
-      <p className="calendar-legend" aria-hidden="true"><span><i />Booked</span><span><i className="is-enquiry" />Enquiry</span></p>
+      <p className="calendar-legend" aria-hidden="true"><span><i />Booked</span><span><i className="is-enquiry" />Enquiry</span>{busyDays.size > 0 && <span><i className="is-busy" />Busy</span>}</p>
+      {busy?.failed.map((provider) => <p className="calendar-note" role="status" key={provider}>Couldn’t read your {externalCalendarLabel(provider)} calendar just now.</p>)}
     </Card>
 
     {selected ? <section className="list-section">
-      <div className="section-heading"><div><p className="eyebrow">{selected === today ? "Today" : jobs.length ? count(jobs.length, "job") : "Free"}</p><h2>{longDay(selected)}</h2></div></div>
-      <Card className="list-card">{jobs.length ? jobs.map((booking) => <BookingRow key={booking.id} booking={booking} />)
-        : <EmptyState icon="calendar" title="Nothing booked" small>Add a booking or an enquiry for this day.</EmptyState>}</Card>
+      <div className="section-heading"><div><p className="eyebrow">{selected === today ? "Today" : jobs.length ? count(jobs.length, "job") : blocks.length ? "Busy" : "Free"}</p><h2>{longDay(selected)}</h2></div></div>
+      <Card className="list-card">
+        {blocks.map((block) => <div className="busy-row" key={block.id}>
+          <time>{busyTime(block, selected)}</time>
+          <div><strong>{block.title}</strong><small>Busy · your {externalCalendarLabel(block.provider)} calendar</small></div>
+        </div>)}
+        {jobs.map((booking) => <BookingRow key={booking.id} booking={booking} />)}
+        {!jobs.length && !blocks.length && <EmptyState icon="calendar" title="Nothing booked" small>Add a booking or an enquiry for this day.</EmptyState>}
+      </Card>
       <Link className="button button-primary" to={`/bookings/new?date=${selected}`}><Icon name="plus" size={18} />Add booking for {shortDay(selected)}</Link>
     </section> : <section className="list-section">
       <div className="section-heading"><div><p className="eyebrow">{count(monthDays.reduce((total, day) => total + byDay.get(day)!.length, 0), "job")}</p><h2>{monthTitle(month)}</h2></div></div>

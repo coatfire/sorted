@@ -127,6 +127,14 @@ export const loginCodes = pgTable("login_codes", {
   expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
 });
 
+/** Private iCal links to the trader's own calendars. Read for Busy blocks; never written to. */
+export const externalCalendars = pgTable("external_calendars", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  url: text("url").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [uniqueIndex("external_calendars_user_url_idx").on(t.userId, t.url)]);
+
 export const clients = pgTable(
   "clients",
   {
