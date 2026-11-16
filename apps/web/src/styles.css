@@ -712,7 +712,11 @@ a.button { text-decoration: none; }
   padding-top: 0;
   background: transparent;
 }
-.keyboard-open .sticky-action, .keyboard-open .tabbar { display: none; }
+/* The faded strip above the buttons is see-through, so taps on it go to what shows through. */
+.sticky-action { pointer-events: none; }
+.sticky-action > * { pointer-events: auto; }
+.keyboard-open .sticky-action { position: static; }
+.keyboard-open .tabbar { display: none; }
 .keyboard-open .sheet-backdrop { top: var(--visible-top, 0px); bottom: auto; height: var(--visible-height, 100dvh); }
 .keyboard-open .sheet { max-height: min(88dvh, calc(var(--visible-height, 100dvh) - 16px)); }
 .service-editor-row {
@@ -1544,3 +1548,11 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 .import-batch span { color: var(--muted); font-size: 0.78rem; }
 .import-batch .button { width: auto; min-height: 44px; padding: 0 14px; }
 .client-notes { font-weight: 500; line-height: 1.5; overflow-wrap: anywhere; white-space: pre-wrap; }
+
+.button-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.button-pair .button { padding: 0 10px; }
+.document-open .document-status { font-weight: 700; }
+.document-open .document-status.is-unsent { color: var(--ink); }
+.year-stats .year-note { grid-column: 1 / -1; margin: -4px 0 0; color: var(--muted); font-size: 0.75rem; line-height: 1.5; }
+.year-stats .wide-stat { grid-column: 1 / -1; }
+.icon-button.labelled { display: inline-flex; width: auto; align-items: center; gap: 6px; padding: 0 14px; border-radius: 22px; color: var(--ink); font-size: 0.85rem; font-weight: 700; }

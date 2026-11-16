@@ -54,7 +54,7 @@ it("renders matching due-now totals, a leading appointment and secondary yearly 
   expect(money).toContain("€80.00 expected");
   expect(money.match(/class="card owed-card/g)).toHaveLength(2);
   expect(money).toContain("Balance · job was 1 day ago");
-  expect(money).toContain("Full payment · job on Mon 16 Nov");
+  expect(money).toContain("€20.00 deposit due first · job on Mon 16 Nov");
   expect(money.indexOf("2026 so far")).toBeLessThan(money.indexOf("Tax estimate (rough guide)"));
   expect(money).toContain('<details class="tax-guide"><summary>Tax estimate (rough guide)</summary>');
   expect(money).not.toContain('<details class="tax-guide" open');

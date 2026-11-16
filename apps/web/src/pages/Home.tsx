@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { bookingAgenda, bookingStage, dublinDateTime, moneyOwed } from "@sorted/core";
 import { Button, Card, EmptyState, Icon, MoneyText, StatusChip } from "../components";
 import type { BookingRow as Booking } from "../lib/backend";
-import { euros, firstName, noTime } from "../lib/format";
+import { directionsLink, euros, firstName, noTime } from "../lib/format";
 import { useAction, useData, useStore } from "../lib/store";
 import { appointmentWhen, irelandDayLabel, irelandDayMonth, irelandLongDay, irelandTime } from "../lib/today";
 import { useNow } from "../lib/useNow";
@@ -51,7 +51,7 @@ export function Home() {
   return <div className="page">
     <header className="brand-header">
       <div><p className="brand-wordmark">Sorted<span>.</span></p><p className="header-greeting">{greeting}{who ? `, ${who}` : ""}</p></div>
-      <div className="header-actions"><Link className="icon-button" to="/clients" aria-label="Clients"><Icon name="user" /></Link><Link className="icon-button" to="/settings" aria-label="Settings"><Icon name="settings" /></Link></div>
+      <div className="header-actions"><Link className="icon-button labelled" to="/clients"><Icon name="user" size={18} />Clients</Link><Link className="icon-button" to="/settings" aria-label="Settings"><Icon name="settings" /></Link></div>
     </header>
 
     <Card className="next-appointment">
@@ -63,7 +63,7 @@ export function Home() {
           <p className="appointment-payment">{paymentPhrase}</p>
           <span className="appointment-detail">View booking <Icon name="arrow" size={16} /></span>
         </Link>
-        {next.location && <a className="appointment-location" href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(next.location)}`} target="_blank" rel="noreferrer"><Icon name="map" size={18} /><span>{next.location}<small>Get directions</small></span></a>}
+        {next.location && <a className="appointment-location" href={directionsLink(next.location)} target="_blank" rel="noreferrer"><Icon name="map" size={18} /><span>{next.location}<small>Get directions</small></span></a>}
       </> : <><p className="eyebrow">Next appointment</p><EmptyState icon="calendar" title="No appointments ahead" small>Tap + to book your next appointment.</EmptyState></>}
     </Card>
 

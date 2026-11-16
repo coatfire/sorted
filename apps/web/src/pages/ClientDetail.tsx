@@ -63,7 +63,7 @@ export function ClientDetail() {
   }
   const hasPaymentHistory = payments.some((payment) => ids.has(payment.bookingId) && (payment.status === "paid" || payment.paidAt !== null));
   const hasOpenBookings = theirs.some((booking) => booking.status === "enquiry" || booking.status === "confirmed");
-  const { dueNowCents } = moneyOwed(theirs, payments, now);
+  const { dueNowCents, comingUpCents } = moneyOwed(theirs, payments, now);
   const paidToDate =
     payments
       .filter((payment) => ids.has(payment.bookingId) && payment.status === "paid")
@@ -153,7 +153,8 @@ export function ClientDetail() {
       <Card className="year-card">
         <div className="year-stats">
           <div><span>Paid to date</span><MoneyText cents={paidToDate} /></div>
-          <div><span>Owes you</span><MoneyText cents={dueNowCents} className={dueNowCents ? "due-text" : ""} /></div>
+          <div><span>Owes you now</span><MoneyText cents={dueNowCents} className={dueNowCents ? "due-text" : ""} /></div>
+          {comingUpCents > 0 && <div className="wide-stat"><span>Coming up, for future jobs</span><MoneyText cents={comingUpCents} /></div>}
         </div>
       </Card>
 
@@ -171,7 +172,8 @@ export function ClientDetail() {
                     <span className="row-icon"><Icon name="receipt" size={18} /></span>
                     <span>
                       <strong>{DOCUMENT_TITLE[document.kind]} {number}</strong>
-                      <small>{booking.service} · {dayMonth(document.issuedAt)}{document.voidedAt ? " · Void" : document.sentAt ? ` · Sent ${dayMonth(document.sentAt)}` : " · Not sent yet"}</small>
+                      <small>{booking.service} · {dayMonth(document.issuedAt)}</small>
+                      <small className={`document-status${document.voidedAt || document.sentAt ? "" : " is-unsent"}`}>{document.voidedAt ? "Void" : document.sentAt ? `Sent ${dayMonth(document.sentAt)}` : "Not sent yet"}</small>
                     </span>
                   </button>
                   {!document.voidedAt && <Button kind={document.sentAt ? "quiet" : "soft"} onClick={() => setSending(document)}>{document.sentAt ? "Send again" : "Send"}</Button>}

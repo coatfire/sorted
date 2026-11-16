@@ -74,6 +74,7 @@ export function Money() {
           <div className="year-stats">
             <div><span>Paid income</span><MoneyText cents={shown.netIncomeCents} /></div>
             <div><span>Expenses</span><MoneyText cents={shown.netExpenseCents} /></div>
+            {shown.yearPurchaseVatCents > 0 && <p className="year-note">{euros(shown.yearExpenseCents)} recorded, less {euros(shown.yearPurchaseVatCents)} VAT you can claim back.</p>}
             <div className="profit-stat">
               <span>Profit before income tax</span><MoneyText cents={shown.profitCents} />
             </div>
@@ -129,12 +130,12 @@ export function Money() {
 }
 
 function OwedCards({ items, now, onReminder, comingUp = false }: { items: OwedItem<BookingRow>[]; now: Date; onReminder: (value: { booking: BookingRow; amount: number }) => void; comingUp?: boolean }) {
-  return <div className="owed-list">{items.map(({ booking, owedCents, kind }) => {
+  return <div className="owed-list">{items.map(({ booking, owedCents, kind, depositDueCents }) => {
     const days = booking.paymentRequestedAt ? Math.max(0, calendarDaysBetween(irelandToday(new Date(booking.paymentRequestedAt)), irelandToday(now))) : null;
     return <Card className={`owed-card${comingUp ? " expected-card" : ""}`} key={`${booking.id}-${owedCents}`}>
       <Link to={`/bookings/${booking.id}`} className="owed-main">
         <span className="client-initial">{booking.client.name[0]?.toUpperCase()}</span>
-        <div><strong>{booking.client.name}</strong><span>{booking.service} · {kind} · {jobDateLabel(booking.startAt, now)}</span></div>
+        <div><strong>{booking.client.name}</strong><span>{booking.service} · {depositDueCents > 0 && depositDueCents < owedCents ? `${euros(depositDueCents)} deposit due first` : kind} · {jobDateLabel(booking.startAt, now)}</span></div>
         <MoneyText cents={owedCents} />
       </Link>
       <div className="owed-card-actions">

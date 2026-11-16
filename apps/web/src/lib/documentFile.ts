@@ -15,16 +15,23 @@ export async function buildDocumentFile(backend: Backend, user: User, booking: B
 
 export const canShareFile = (file: File) => typeof navigator.share === "function" && navigator.canShare?.({ files: [file] }) === true;
 
-/** Phone share sheet when available, otherwise a download. Resolves to what happened. */
-export async function shareOrDownload({ file, data }: DocumentFile, text?: string): Promise<"shared" | "cancelled" | "downloaded"> {
-  if (canShareFile(file)) {
-    try {
-      await navigator.share({ files: [file], title: `${data.title} ${data.number}`, ...(text ? { text } : {}) });
-      return "shared";
-    } catch (error) {
-      if (error instanceof DOMException && error.name === "AbortError") return "cancelled";
-    }
+/** Opens the phone share sheet. "failed" means the browser refused, so the caller must offer another way. */
+export async function shareFile({ file, data }: DocumentFile, text?: string): Promise<"shared" | "cancelled" | "failed"> {
+  if (!canShareFile(file)) return "failed";
+  try {
+    await navigator.share({ files: [file], title: `${data.title} ${data.number}`, ...(text ? { text } : {}) });
+    return "shared";
+  } catch (error) {
+    return error instanceof DOMException && error.name === "AbortError" ? "cancelled" : "failed";
   }
-  download(file, file.name);
+}
+
+export const downloadFile = ({ file }: DocumentFile) => download(file, file.name);
+
+/** Phone share sheet when available, otherwise a download. Resolves to what happened. */
+export async function shareOrDownload(prepared: DocumentFile, text?: string): Promise<"shared" | "cancelled" | "downloaded"> {
+  const outcome = await shareFile(prepared, text);
+  if (outcome !== "failed") return outcome;
+  downloadFile(prepared);
   return "downloaded";
 }

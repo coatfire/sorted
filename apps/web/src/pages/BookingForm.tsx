@@ -51,6 +51,8 @@ export function BookingForm() {
   const [showDeposit, setShowDeposit] = useState(Boolean(initial?.depositCents));
   const [showMore, setShowMore] = useState(Boolean(initial?.location || initial?.notes));
   const validation = useValidation({
+    clientName: () => !client && !form.clientName.trim() ? "Add the client’s name." : undefined,
+    service: () => !form.service.trim() ? "Choose or enter a service." : undefined,
     repeatCount: () => repeatEvery && !RepeatInput.safeParse({ every_weeks: Number(repeatEvery), count: Number(repeatCount) }).success ? "Choose 2 to 12 bookings." : undefined,
     clientEmail: () => !client && form.clientEmail.trim() && !CreateClientInput.shape.email.safeParse(form.clientEmail.trim()).success
       ? "Enter a valid email address." : undefined,

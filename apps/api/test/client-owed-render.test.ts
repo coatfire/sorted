@@ -52,7 +52,7 @@ it("renders client due-now balances from booking prices minus paid, including un
   for (const [index, item] of cases.entries()) {
     expect(html[index]).toContain("087 123 4567");
     expect(html[index]).toContain("https://wa.me/353871234567?text=");
-    expect(html[index].split("Owes you</span>")[1].split("</div>")[0]).toContain(item.owed);
+    expect(html[index].split("Owes you now</span>")[1].split("</div>")[0]).toContain(item.owed);
     expect(html[index].split("Paid to date</span>")[1].split("</div>")[0]).toContain(item.paid);
   }
 }, 15000);

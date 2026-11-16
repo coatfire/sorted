@@ -22,6 +22,14 @@ describe("shared moneyOwed", () => {
     expect(moneyOwed([future], [payment("future", 500)], now).comingUp[0]).toMatchObject({ kind: "Deposit", owedCents: 1500 });
     expect(moneyOwed([{ ...future, priceCents: 8000 }], [payment("future", 2000)], now).comingUp[0].kind).toBe("Balance");
   });
+  it("says how much of a future job's total is a deposit still to collect", () => {
+    const future = booking("future", { startAt: "2026-07-03T09:00:00Z", priceCents: 6500 });
+    expect(moneyOwed([future], [], now).comingUp[0]).toMatchObject({ kind: "Full payment", owedCents: 6500, depositDueCents: 2000 });
+    expect(moneyOwed([future], [payment("future", 500)], now).comingUp[0]).toMatchObject({ owedCents: 6000, depositDueCents: 1500 });
+    expect(moneyOwed([future], [payment("future", 2000)], now).comingUp[0]).toMatchObject({ kind: "Balance", depositDueCents: 0 });
+    // Once the job's day has come the whole amount is owed, so the deposit is no longer called out.
+    expect(moneyOwed([booking("past", { startAt: "2026-06-30T09:00:00Z" })], [], now).dueNow[0].depositDueCents).toBe(0);
+  });
   it("handles missing pending rows, empty/free/overpaid bookings and Irish midnight", () => {
     expect(moneyOwed([], [], now)).toEqual({ dueNow: [], comingUp: [], dueNowCents: 0, comingUpCents: 0 });
     expect(moneyOwed([booking("free", { priceCents: 0 }), booking("paid")], [payment("paid", 9000)], now).dueNow).toEqual([]);
@@ -56,6 +64,12 @@ describe("Ireland-local agenda and next appointment", () => {
     expect(appointmentWhen("2026-07-02T01:30:00Z", now)).toBe("In 2 hours");
     expect(appointmentWhen("2026-07-02T23:00:00Z", now)).toBe("Tomorrow, 00:00");
     expect(appointmentWhen("2026-07-04T13:00:00Z", now)).toMatch(/Sat.*4 Jul.*14:00/);
+  });
+  it("keeps two bookings at the same time in the order they were added, whatever order they arrive in", () => {
+    const first = booking("b-first", { startAt: "2026-07-02T09:00:00Z", createdAt: "2026-06-01T10:00:00Z" });
+    const second = booking("a-second", { startAt: "2026-07-02T09:00:00Z", createdAt: "2026-06-02T10:00:00Z" });
+    expect(bookingAgenda([first, second], now).todays.map(row => row.id)).toEqual(["b-first", "a-second"]);
+    expect(bookingAgenda([second, first], now).todays.map(row => row.id)).toEqual(["b-first", "a-second"]);
   });
 });
 

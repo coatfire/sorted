@@ -14,6 +14,7 @@ import { bookingPaymentPhrase, unpaidDepositCents, type BookingDetailAction } fr
 import {
   euros, formatPhone, kindLabel, longDay, messageLabel, methodLabel, stamp, time,
   noTime,
+  directionsLink,
 } from "../lib/format";
 import { useAction, useData, useStore, useSession } from "../lib/store";
 import { buildDocumentFile, shareOrDownload } from "../lib/documentFile";
@@ -131,7 +132,7 @@ export function BookingDetail() {
         {booking.location && (
           <div className="detail-line">
             <span className="detail-icon"><Icon name="map" /></span>
-            <a className="detail-link calendar-directions" href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(booking.location)}`} target="_blank" rel="noreferrer"><strong>{booking.location}</strong><span>Get directions</span></a>
+            <a className="detail-link calendar-directions" href={directionsLink(booking.location)} target="_blank" rel="noreferrer"><strong>{booking.location}</strong><span>Get directions</span></a>
           </div>
         )}
         <div className="detail-line">

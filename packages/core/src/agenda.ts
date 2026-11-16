@@ -3,7 +3,7 @@ import type { Booking } from "./types";
 
 export function bookingAgenda<T extends Booking>(bookings: readonly T[], now = new Date()) {
   const today = dublinDateTime(now).date;
-  const byStart = bookings.filter(booking => booking.startAt !== null).sort((a, b) => dublinDateTime(a.startAt!).date.localeCompare(dublinDateTime(b.startAt!).date) || Number(Boolean(b.timeTbc)) - Number(Boolean(a.timeTbc)) || Date.parse(a.startAt!) - Date.parse(b.startAt!));
+  const byStart = bookings.filter(booking => booking.startAt !== null).sort((a, b) => dublinDateTime(a.startAt!).date.localeCompare(dublinDateTime(b.startAt!).date) || Number(Boolean(b.timeTbc)) - Number(Boolean(a.timeTbc)) || Date.parse(a.startAt!) - Date.parse(b.startAt!) || a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id));
   const offset = (booking: T) => calendarDaysBetween(today, dublinDateTime(booking.startAt!).date);
   const open = byStart.filter(booking => booking.status === "enquiry" || booking.status === "confirmed");
   return {

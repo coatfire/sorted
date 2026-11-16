@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { eq } from "drizzle-orm";
-import { busyByDay, ExternalCalendarUrl, type BusyBlock, type BusyResult, type ExternalCalendar } from "@sorted/core";
+import { busyByDay, dayTimeline, ExternalCalendarUrl, type BusyBlock, type BusyResult, type ExternalCalendar } from "@sorted/core";
 import { app } from "../src/app";
 import { db, schema } from "../src/db";
 import { issueJwt } from "../src/lib/auth";
@@ -27,6 +27,19 @@ describe("busy blocks", () => {
       "https://user:pass@calendar.google.com/x.ics", "https://169.254.169.254/latest", "https://localhost/x.ics", "https://sorted.example/api/calendar/t/confirmed.ics", "nope"]) {
       expect(ExternalCalendarUrl.safeParse(url).success, url).toBe(false);
     }
+  });
+
+  it("lists a day's bookings and Busy blocks together in time order", () => {
+    const block = (title: string, start: string, end: string, allDay = false): BusyBlock => ({ id: title, calendarId: "cal", provider: "google", title, allDay, start, end });
+    const booking = (id: string, startAt: string, timeTbc = false) => ({ id, startAt, timeTbc });
+    // November: Ireland is on GMT, so these read as written.
+    const day = dayTimeline("2026-11-16", [booking("ten", "2026-11-16T10:00:00Z"), booking("three", "2026-11-16T15:00:00Z"), booking("tbc", "2026-11-16T00:00:00Z", true)], [
+      block("Holiday", "2026-11-16", "2026-11-16", true),
+      block("Overnight", "2026-11-15T22:00:00Z", "2026-11-16T02:00:00Z"),
+      block("Dentist", "2026-11-16T10:00:00Z", "2026-11-16T11:00:00Z"),
+      block("Dinner", "2026-11-16T20:00:00Z", "2026-11-16T22:00:00Z"),
+    ]);
+    expect(day.map(entry => "booking" in entry ? entry.booking.id : entry.block.title)).toEqual(["Holiday", "Overnight", "tbc", "Dentist", "ten", "three", "Dinner"]);
   });
 
   it("places blocks on each day they touch in Ireland", () => {
