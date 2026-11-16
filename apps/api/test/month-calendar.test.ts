@@ -29,7 +29,7 @@ describe("month calendar", () => {
   });
 
   it("groups bookings by their day in Ireland, time-to-be-agreed first, without cancelled or undated ones", () => {
-    const booking = (id: string, startAt: string | null, extra: object = {}) => ({ id, status: "confirmed" as const, startAt, timeTbc: false, ...extra });
+    const booking = (id: string, startAt: string | null, extra: object = {}) => ({ id, status: "confirmed" as const, startAt, timeTbc: false, createdAt: "2028-01-01T00:00:00Z", ...extra });
     const days = bookingsByDay([
       booking("late-summer", "2028-08-11T23:30:00Z"),
       booking("afternoon", "2028-08-12T13:00:00Z"),

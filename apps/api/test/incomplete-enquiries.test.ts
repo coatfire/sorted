@@ -145,7 +145,7 @@ describe("incomplete enquiry core", () => {
   it("keeps undated enquiries after dated groups, time-TBC first, follow-ups intact and confirmed-only hero", () => {
     const timed = { ...base, id: "timed", startAt: "2027-07-10T09:00:00Z", priceCents: 7000 };
     const allDay = { ...timed, id: "all-day", timeTbc: true, startAt: "2027-07-09T23:00:00Z" };
-    const confirmed = { ...timed, id: "confirmed", status: "confirmed" as const };
+    const confirmed = { ...timed, id: "confirmed", status: "confirmed" as const, createdAt: "2027-07-02T12:00:00Z" };
     const agenda = bookingAgenda([base, timed, confirmed, allDay], new Date("2027-07-09T12:00:00Z"));
     expect(agenda.undated).toEqual([base]);
     expect(agenda.upcoming.map(booking => booking.id)).toEqual(["all-day", "timed", "confirmed"]);

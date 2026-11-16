@@ -74,3 +74,19 @@ export function busyByDay(blocks: readonly BusyBlock[], from: string, to: string
   }
   return days;
 }
+
+/**
+ * One day's bookings and Busy blocks in a single list by start time. Entries with no time on that day
+ * (all-day, carried over from the day before, or time to be confirmed) come first.
+ */
+export function dayTimeline<T extends { startAt: string | null; timeTbc?: boolean }>(day: string, bookings: readonly T[], blocks: readonly BusyBlock[]): ({ booking: T } | { block: BusyBlock })[] {
+  const blockTime = (block: BusyBlock) => {
+    if (block.allDay) return "";
+    const start = dublinDateTime(block.start);
+    return start.date === day ? start.time : "";
+  };
+  return [
+    ...blocks.map((block) => ({ at: blockTime(block), entry: { block } })),
+    ...bookings.map((booking) => ({ at: booking.timeTbc || !booking.startAt ? "" : dublinDateTime(booking.startAt).time, entry: { booking } })),
+  ].sort((a, b) => a.at.localeCompare(b.at)).map(({ entry }) => entry);
+}

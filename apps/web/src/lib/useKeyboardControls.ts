@@ -12,16 +12,20 @@ export function watchKeyboardControls() {
     document.documentElement.style.setProperty("--visible-height", `${viewport?.height ?? window.innerHeight}px`);
     document.documentElement.style.setProperty("--visible-top", `${viewport?.offsetTop ?? 0}px`);
   };
-  const focus = () => queueMicrotask(update);
+  // Leaving a field waits for the tap that caused it, so the buttons don't move under that tap.
+  let pending: ReturnType<typeof setTimeout> | undefined;
+  const blur = () => { clearTimeout(pending); pending = setTimeout(update, 0); };
+  const focus = () => queueMicrotask(() => isTextEntry(document.activeElement) ? update() : blur());
   document.addEventListener("focusin", focus);
-  document.addEventListener("focusout", focus);
+  document.addEventListener("focusout", blur);
   viewport?.addEventListener("resize", update);
   viewport?.addEventListener("scroll", update);
   window.addEventListener("resize", update);
   update();
   return () => {
     document.removeEventListener("focusin", focus);
-    document.removeEventListener("focusout", focus);
+    document.removeEventListener("focusout", blur);
+    clearTimeout(pending);
     viewport?.removeEventListener("resize", update);
     viewport?.removeEventListener("scroll", update);
     window.removeEventListener("resize", update);

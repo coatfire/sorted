@@ -26,10 +26,10 @@ export function monthWeeks(month: string): string[][] {
 }
 
 /** Dated bookings that still hold a place in the diary, by their day in Ireland. */
-export function bookingsByDay<T extends Pick<Booking, "status" | "startAt" | "timeTbc">>(bookings: readonly T[]): Map<string, T[]> {
+export function bookingsByDay<T extends Pick<Booking, "id" | "status" | "startAt" | "timeTbc" | "createdAt">>(bookings: readonly T[]): Map<string, T[]> {
   const days = new Map<string, T[]>();
   const dated = bookings.filter((booking) => booking.startAt !== null && booking.status !== "cancelled")
-    .sort((a, b) => Number(Boolean(b.timeTbc)) - Number(Boolean(a.timeTbc)) || Date.parse(a.startAt!) - Date.parse(b.startAt!));
+    .sort((a, b) => Number(Boolean(b.timeTbc)) - Number(Boolean(a.timeTbc)) || Date.parse(a.startAt!) - Date.parse(b.startAt!) || a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id));
   for (const booking of dated) {
     const day = dublinDateTime(booking.startAt!).date;
     days.set(day, [...(days.get(day) ?? []), booking]);

@@ -3,7 +3,8 @@ import { dublinDateTime } from "./dates";
 import { inclusiveVat, taxEstimate } from "./tax";
 import type { Booking, Expense, Payment, User } from "./types";
 
-export interface OwedItem<T> { booking: T; owedCents: number; kind: "Deposit" | "Balance" | "Full payment" }
+/** `depositDueCents` is the part of `owedCents` that is an unpaid deposit on a job still to come. */
+export interface OwedItem<T> { booking: T; owedCents: number; kind: "Deposit" | "Balance" | "Full payment"; depositDueCents: number }
 
 export function moneyOwed<T extends Pick<Booking, "id" | "status" | "startAt" | "priceCents" | "depositCents">>(
   bookings: readonly T[], payments: readonly Pick<Payment, "bookingId" | "status" | "amountCents">[], now = new Date(),
@@ -17,7 +18,7 @@ export function moneyOwed<T extends Pick<Booking, "id" | "status" | "startAt" | 
     const unpaidDeposit = Math.max(0, booking.depositCents - paid);
     const upcoming = stage === "upcoming" && booking.startAt !== null && dublinDateTime(booking.startAt).date > dublinDateTime(now).date;
     const kind = upcoming && owedCents === unpaidDeposit ? "Deposit" : paid === 0 ? "Full payment" : "Balance";
-    (upcoming ? comingUp : dueNow).push({ booking, owedCents, kind });
+    (upcoming ? comingUp : dueNow).push({ booking, owedCents, kind, depositDueCents: upcoming ? Math.min(unpaidDeposit, owedCents) : 0 });
   }
   return { dueNow, comingUp, dueNowCents: dueNow.reduce((sum, item) => sum + item.owedCents, 0), comingUpCents: comingUp.reduce((sum, item) => sum + item.owedCents, 0) };
 }

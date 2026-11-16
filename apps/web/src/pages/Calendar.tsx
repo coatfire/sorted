@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { addCalendarMonths, bookingsByDay, busyByDay, CalendarDate, CalendarMonth, dublinDateTime, externalCalendarLabel, FIRST_CALENDAR_MONTH, irelandToday, LAST_CALENDAR_MONTH, monthWeeks, type BusyBlock, type BusyResult } from "@sorted/core";
+import { addCalendarMonths, bookingsByDay, busyByDay, CalendarDate, dayTimeline, CalendarMonth, dublinDateTime, externalCalendarLabel, FIRST_CALENDAR_MONTH, irelandToday, LAST_CALENDAR_MONTH, monthWeeks, type BusyBlock, type BusyResult } from "@sorted/core";
 import { Button, Card, EmptyState, Icon, PageHeader, Sheet } from "../components";
 import { useData, useStore } from "../lib/store";
 import { useNow } from "../lib/useNow";
@@ -97,11 +97,10 @@ export function Calendar() {
     {selected ? <section className="list-section">
       <div className="section-heading"><div><p className="eyebrow">{selected === today ? "Today" : jobs.length ? count(jobs.length, "job") : blocks.length ? "Busy" : "Free"}</p><h2>{longDay(selected)}</h2></div></div>
       <Card className="list-card">
-        {blocks.map((block) => <div className="busy-row" key={block.id}>
-          <time>{busyTime(block, selected)}</time>
-          <div><strong>{block.title}</strong><small>Busy · your {externalCalendarLabel(block.provider)} calendar</small></div>
+        {dayTimeline(selected, jobs, blocks).map((entry) => "booking" in entry ? <BookingRow key={entry.booking.id} booking={entry.booking} /> : <div className="busy-row" key={entry.block.id}>
+          <time>{busyTime(entry.block, selected)}</time>
+          <div><strong>{entry.block.title}</strong><small>Busy · your {externalCalendarLabel(entry.block.provider)} calendar</small></div>
         </div>)}
-        {jobs.map((booking) => <BookingRow key={booking.id} booking={booking} />)}
         {!jobs.length && !blocks.length && <EmptyState icon="calendar" title="Nothing booked" small>Add a booking or an enquiry for this day.</EmptyState>}
       </Card>
       <Link className="button button-primary" to={`/bookings/new?date=${selected}`}><Icon name="plus" size={18} />Add booking for {shortDay(selected)}</Link>

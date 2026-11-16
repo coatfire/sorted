@@ -4,7 +4,7 @@ import { addCalendarDays, CreateClientInput, irelandToday, moneyOwed, UpdateClie
 import { app } from "../src/app";
 import { db, schema } from "../src/db";
 import { issueJwt } from "../src/lib/auth";
-import { messageLabel, paymentRecordedToast, whatsappLink } from "../../web/src/lib/format";
+import { directionsLink, messageLabel, paymentRecordedToast, whatsappLink } from "../../web/src/lib/format";
 import { demoBackend, resetDemo } from "../../web/src/lib/demoBackend";
 
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); });
@@ -149,4 +149,12 @@ it("demo mirrors acknowledgements, repeated follow-ups, resolving enquiries and 
   expect((await demoBackend.load()).bookings.find(booking => booking.id === created.id)?.followUpOn).toBeNull();
   await expect(demoBackend.messageSent(created.id, { ...input, acknowledgement_id: crypto.randomUUID() })).rejects.toThrow("Only enquiries");
   expect((await demoBackend.load()).bookings.filter(booking => before.bookings.some(item => item.id === booking.id))).toEqual(before.bookings);
+});
+
+it("adds Ireland to a directions link unless the address already names a country", () => {
+  const destination = (location: string) => decodeURIComponent(directionsLink(location).split("destination=")[1]);
+  expect(destination("7 West Village, Ballincollig, Cork")).toBe("7 West Village, Ballincollig, Cork, Ireland");
+  expect(destination("12 Main St, Cork, ")).toBe("12 Main St, Cork, Ireland");
+  expect(destination("12 Main St, Cork, Ireland")).toBe("12 Main St, Cork, Ireland");
+  expect(destination("3 High St, Newry, UK")).toBe("3 High St, Newry, UK");
 });

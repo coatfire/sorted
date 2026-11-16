@@ -114,6 +114,10 @@ export const messageLabel = (message: MessageLogEntry) => {
 export const whatsappLink = (phone: string, text: string) =>
   `https://wa.me/${normaliseClientPhone(phone) ?? phone.replace(/\D/g, "")}?text=${encodeURIComponent(text)}`;
 
+/** Google Maps directions. Without a country, Maps can pick a business with a similar name over the address. */
+export const directionsLink = (location: string) =>
+  `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(/ireland|\buk\b|united kingdom/i.test(location) ? location : `${location.trim().replace(/,$/, "")}, Ireland`)}`;
+
 export const paymentRecordedToast = (client: string, cents: number) => `Marked ${client} ${euros(cents)} paid`;
 
 /** Buttons say what happens — including when no message will go out. */
