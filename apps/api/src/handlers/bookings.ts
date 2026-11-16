@@ -417,7 +417,7 @@ bookingRoutes.patch("/:id", async (c) => {
     const timeTbc = input.time_tbc ?? current.timeTbc;
     const startAt = agreedBookingStart(input.start_at === undefined ? current.startAt : input.start_at, timeTbc);
     const missing = missingBookingDetails({ startAt, timeTbc, priceCents });
-    if (current.status !== "enquiry" && missing.length) return c.json({ error: `Add ${missing.join(", ")} before saving this booking.` }, 422);
+    if ((current.status === "confirmed" || current.status === "completed") && missing.length) return c.json({ error: `Add ${missing.join(", ")} before saving this booking.` }, 422);
     const depositCents = input.deposit_cents ?? current.depositCents;
     const payments = priceCents !== current.priceCents
       ? await tx.select().from(schema.payments).where(and(eq(schema.payments.bookingId, current.id), eq(schema.payments.userId, userId))).orderBy(schema.payments.id).for("update")
@@ -561,8 +561,6 @@ bookingRoutes.post("/:id/cancel", async (c) => {
         409,
       );
     }
-    const missing = missingBookingDetails(booking);
-    if (missing.length) return c.json({ error: `Add ${missing.join(", ")} before cancelling this booking.` }, 422);
     const voided = await tx
       .update(schema.payments)
       .set({ status: "cancelled" })

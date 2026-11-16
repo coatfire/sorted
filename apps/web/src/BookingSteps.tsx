@@ -25,7 +25,6 @@ export function BookingSteps({ booking, stage, owedCents, depositCents, hasPaidP
 
   function row(action: BookingDetailAction, label: string, icon: Parameters<typeof Icon>[0]["name"], disabled = false) {
     disabled ||= noPrice && ["quote", "invoice", "ask", "payment", "receipt"].includes(action);
-    disabled ||= action === "cancel" && missingBookingDetails(booking).length > 0;
     return <button type="button" className={`booking-more-action${action === "cancel" ? " is-danger" : ""}`} disabled={disabled} onClick={() => onAction(action)} aria-describedby={action === "receipt" ? receiptHelp : undefined}>
       <Icon name={icon} size={18} /><span>{label}</span>
     </button>;
@@ -92,7 +91,7 @@ export function BookingSteps({ booking, stage, owedCents, depositCents, hasPaidP
       </Card>
       {!hasPaidPayment && <p className="sheet-copy" id="receipt-unavailable">Record a payment to create a receipt.</p>}
       {noPrice && <p className="sheet-copy">Add a price first to request or record a payment, quote or invoice.</p>}
-      {missingBookingDetails(booking).length > 0 && <p className="sheet-copy">Add the missing details before confirming or cancelling this enquiry.</p>}
+      {missingBookingDetails(booking).length > 0 && <p className="sheet-copy">Add the missing details to confirm, or cancel this enquiry as it is.</p>}
     </section>
   </>;
 }

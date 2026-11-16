@@ -55,7 +55,6 @@ describe("incomplete enquiry API", () => {
     }
     expect((await other.request(`/bookings/${booking.id}/confirm`)).status).toBe(404);
     expect((await other.request(`/bookings/${booking.id}`, { price_cents: 100 }, "PATCH")).status).toBe(404);
-    expect((await f.request(`/bookings/${booking.id}/cancel`)).status).toBe(422);
     vi.stubEnv("GOOGLE_CLIENT_ID", "test-client");
     const drive = await f.request("/drive/files", {}, "GET");
     expect(drive.status).toBe(200);
@@ -77,6 +76,21 @@ describe("incomplete enquiry API", () => {
     const response = await f.request(`/bookings/${booking.id}/confirm`, { price_cents: 9000 });
     expect(response.status).toBe(200);
     expect(await response.json()).toMatchObject({ startAt: booking.startAt, priceCents: 9000, status: "confirmed" });
+  });
+  it.each([{}, { start_at: "2027-07-10T12:00:00Z", time_tbc: true }, { start_at: "2027-07-10T12:00:00Z" }])("cancels incomplete enquiries as-is and emits their cancellation: %j", async details => {
+    const f = await fixture(), other = await fixture();
+    const booking = await (await f.create({ ...details, price_cents: 8000, follow_up_on: "2027-07-09" })).json() as Booking;
+    const requested = await (await f.request(`/bookings/${booking.id}/payment-requested`)).json() as Booking;
+    expect((await f.request(`/bookings/${booking.id}`, { price_cents: null }, "PATCH")).status).toBe(200);
+    expect((await other.request(`/bookings/${booking.id}/cancel`)).status).toBe(404);
+    vi.stubEnv("N8N_WEBHOOK_URL", "https://automation.example.com");
+    const fetch = vi.fn<typeof globalThis.fetch>().mockResolvedValue(new Response("{}"));
+    vi.stubGlobal("fetch", fetch);
+    const response = await f.request(`/bookings/${booking.id}/cancel`);
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ status: "cancelled", startAt: booking.startAt, timeTbc: booking.timeTbc, priceCents: null, followUpOn: null, paymentRequestedAt: requested.paymentRequestedAt });
+    expect(fetch).toHaveBeenCalledOnce();
+    expect(JSON.parse(String(fetch.mock.calls[0][1]?.body))).toMatchObject({ event: "booking.cancelled", booking: { id: booking.id, start_at: booking.startAt, price_cents: null } });
   });
 });
 
@@ -119,6 +133,12 @@ describe("incomplete enquiry core", () => {
     resetDemo();
     const draft = { client: { name: "Client" }, service: "Bridal hair", startAt: null, priceCents: null, depositCents: 0, location: null, notes: null };
     const created = await demoBackend.createBooking(draft);
+    const declined = await demoBackend.createBooking({ ...draft, followUpOn: "2027-07-09", priceCents: 8000 });
+    await demoBackend.paymentRequested(declined.id);
+    const requested = (await demoBackend.load()).bookings.find(booking => booking.id === declined.id)!;
+    await demoBackend.updateBooking(declined.id, draft);
+    await demoBackend.cancelBooking(declined.id);
+    expect((await demoBackend.load()).bookings.find(booking => booking.id === declined.id)).toMatchObject({ status: "cancelled", startAt: null, priceCents: null, followUpOn: null, paymentRequestedAt: requested.paymentRequestedAt });
     await expect(demoBackend.confirmBooking(created.id)).rejects.toThrow(/date, time, price/);
     await expect(demoBackend.paymentRequested(created.id)).rejects.toThrow("Add a price first");
     await expect(demoBackend.document(created.id, "quote")).rejects.toThrow("Add a price first");

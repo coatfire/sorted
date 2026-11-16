@@ -554,8 +554,10 @@ last-loaded data" banner (read-only offline is enough for MVP).
   enquiries use Ireland-local midnight for storage, never as display time.
 - **Confirm booking** opens a short sheet containing only missing fields.
   Saving fills them and confirms atomically. Error and committed-refresh
-  handling follow other sheets. The same completeness invariant applies to
-  cancellation: add the missing details before cancelling an enquiry.
+  handling follow other sheets. Completeness is required only for confirmed
+  and completed bookings. **Cancel enquiry** stays available even when details
+  are missing: decline it as-is, clear its follow-up and keep payment reminders
+  unchanged. No completion sheet is needed to cancel.
 - Today groups dated/time-TBC enquiries under their day, time-TBC first.
   **No date yet** follows the dated groups. Follow-ups work for either kind.
   Only confirmed appointments can become the next-appointment hero.

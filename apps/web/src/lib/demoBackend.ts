@@ -202,7 +202,7 @@ const csvCell = (value: unknown) => `"${String(value ?? "").replaceAll('"', '""'
 
 function validateDetails(booking: Pick<BookingRow, "startAt" | "timeTbc" | "priceCents" | "depositCents" | "status">) {
   const missing = missingBookingDetails(booking);
-  if (booking.status !== "enquiry" && missing.length) throw new Error(`Add ${missing.join(", ")} before saving this booking.`);
+  if ((booking.status === "confirmed" || booking.status === "completed") && missing.length) throw new Error(`Add ${missing.join(", ")} before saving this booking.`);
   if (booking.depositCents > (booking.priceCents ?? 0)) throw new Error("Deposit cannot exceed price");
 }
 
@@ -345,7 +345,6 @@ export const demoBackend: Backend = {
   },
 
   async cancelBooking(bookingId) {
-    validateDetails({ ...mustFind(data().bookings, bookingId, "Booking"), status: "cancelled" });
     mustFind(data().bookings, bookingId, "Booking").status = "cancelled";
     mustFind(data().bookings, bookingId, "Booking").followUpOn = null;
     voidPending(bookingId);

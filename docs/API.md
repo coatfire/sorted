@@ -386,9 +386,12 @@ Enquiries may omit `start_at` and/or `price_cents` (stored as null).
 This is an all-day placeholder, not an agreed appointment time.
 An unknown price requires a zero deposit. Repeats require a date.
 
-Any status other than enquiry requires a date, an agreed time and a price.
+Only confirmed/completed bookings require a date, an agreed time and a price.
 Create rejects incomplete confirmed bookings with 400; updates/status changes
-reject incomplete non-enquiries with 422. Confirmation lists missing items.
+reject incomplete confirmed/completed bookings with 422. Confirmation lists missing items.
+An incomplete enquiry can be cancelled as-is: missing details remain unchanged,
+its follow-up is cleared, and payment reminders are left untouched. The
+`booking.cancelled` event may contain null `start_at` and `price_cents`.
 `POST /bookings/:id/confirm` optionally accepts `start_at`, `time_tbc` and
 `price_cents` to fill details and confirm atomically under the booking lock.
 All mutations remain tenant-scoped. Explicit null clears enquiry details;
