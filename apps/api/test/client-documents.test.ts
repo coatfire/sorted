@@ -96,9 +96,32 @@ describe("issued documents list", () => {
     expect((await f.sent(crypto.randomUUID())).status).toBe(404);
     expect((await f.request(`/bookings/${f.booking.id}/message-sent`, { kind: "document", channel: "email", acknowledgement_id: crypto.randomUUID() })).status).toBe(400);
   });
+  it("still returns an issued quote after its enquiry is confirmed, but issues no new one", async () => {
+    const f = await fixture();
+    const enquiry = await (await f.request("/bookings", { status: "enquiry", client_id: f.booking.clientId, service: "Wedding", price_cents: 30000, deposit_cents: 0, start_at: new Date(Date.now() + 30 * 86400000).toISOString() })).json() as Booking;
+    const quote = await (await f.request(`/bookings/${enquiry.id}/documents`, { kind: "quote" })).json() as BookingDocument;
+    expect((await f.request(`/bookings/${enquiry.id}`, { status: "confirmed" }, "PATCH")).status).toBe(200);
+    const again = await f.request(`/bookings/${enquiry.id}/documents`, { kind: "quote" });
+    expect(again.status).toBe(200);
+    expect(await again.json()).toMatchObject({ id: quote.id, number: quote.number });
+    expect((await f.request(`/bookings/${f.booking.id}/documents`, { kind: "quote" })).status).toBe(409);
+  });
 });
 
 describe("demo parity", () => {
+  it("reopens an issued quote after the enquiry is confirmed", async () => {
+    const values = new Map<string, string>();
+    vi.stubGlobal("localStorage", { getItem: (key: string) => values.get(key) ?? null, setItem: (key: string, value: string) => values.set(key, value), removeItem: (key: string) => values.delete(key) });
+    resetDemo();
+    const enquiry = (await demoBackend.load()).bookings.find(item => item.status === "enquiry" && item.priceCents !== null && item.startAt !== null && !item.timeTbc)!;
+    const quote = await demoBackend.document(enquiry.id, "quote");
+    await demoBackend.confirmBooking(enquiry.id);
+    expect((await demoBackend.load()).bookings.find(item => item.id === enquiry.id)!.status).toBe("confirmed");
+    expect((await demoBackend.document(enquiry.id, "quote")).id).toBe(quote.id);
+    const confirmed = (await demoBackend.load()).bookings.find(item => item.status === "confirmed" && item.id !== enquiry.id)!;
+    await expect(demoBackend.document(confirmed.id, "quote")).rejects.toThrow("Quotes are only available for enquiries.");
+  });
+
   it("lists issued documents and marks them sent on acknowledgement", async () => {
     const values = new Map<string, string>();
     vi.stubGlobal("localStorage", { getItem: (key: string) => values.get(key) ?? null, setItem: (key: string, value: string) => values.set(key, value), removeItem: (key: string) => values.delete(key) });

@@ -74,12 +74,16 @@ describe("quote documents", () => {
     expect((await other.request(`/${b.id}/documents`, { kind: "quote" })).status).toBe(404);
     await expect(db.insert(schema.invoices).values({ userId: f.user.id, bookingId: b.id, kind: "quote", number: 99 })).rejects.toThrow();
   });
-  it.each(["confirmed", "completed", "cancelled"] as const)("rejects quotes for %s bookings even when a quote was issued before", async (status) => {
+  it.each(["confirmed", "completed", "cancelled"] as const)("issues no new quote for %s bookings, but still returns one issued before", async (status) => {
     const f = await fixture();
-    const b = await (await f.create()).json() as Booking;
-    await f.request(`/${b.id}/documents`, { kind: "quote" });
-    await db.update(schema.bookings).set({ status }).where(and(eq(schema.bookings.id, b.id), eq(schema.bookings.userId, f.user.id)));
-    expect((await f.request(`/${b.id}/documents`, { kind: "quote" })).status).toBe(409);
+    const [issued, fresh] = await Promise.all([f.create(), f.create()].map(async (response) => (await response).json() as Promise<Booking>));
+    const quote = await (await f.request(`/${issued.id}/documents`, { kind: "quote" })).json() as { id: string };
+    await db.update(schema.bookings).set({ status }).where(eq(schema.bookings.userId, f.user.id));
+    const again = await f.request(`/${issued.id}/documents`, { kind: "quote" });
+    expect(again.status).toBe(200);
+    expect(await again.json()).toMatchObject({ id: quote.id });
+    expect((await f.request(`/${fresh.id}/documents`, { kind: "quote" })).status).toBe(409);
+    expect(await db.select().from(schema.invoices).where(eq(schema.invoices.userId, f.user.id))).toHaveLength(1);
   });
 });
 
