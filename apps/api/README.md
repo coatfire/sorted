@@ -111,6 +111,13 @@ Apply new migrations before deployments that need them. Do not run the
 initial migration against an existing, unmanaged schema without deciding
 how to baseline it first.
 
+Every table has row level security on with no policies. Supabase serves the
+`public` schema through its Data API, and without RLS its public `anon` role
+can read a table. The API is unaffected because `DATABASE_URL` connects as the
+tables' owner. A migration that creates a table must also run
+`ALTER TABLE … ENABLE ROW LEVEL SECURITY`; `test/row-level-security.test.ts`
+fails if one doesn't.
+
 Verify `/api/health` on the deployed origin, then sign up with an email and
 password and follow the verification email to `/verify` and `/welcome`.
 Existing passwordless users can set their password through `/forgot`.
