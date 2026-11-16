@@ -169,7 +169,7 @@ export function BookingDetail() {
           {bookingPayments.length ? (
             bookingPayments.map((payment) => (
               <div className="payment-row" key={payment.id}>
-                {payment.status === "paid" && payment.method !== "stripe" ? <button type="button" className="payment-edit-row" aria-label={`Edit ${euros(payment.amountCents)} payment`} onClick={() => setCorrectPayment(payment)}>
+                {payment.status === "paid" && (payment.method !== "stripe" || payment.importId) ? <button type="button" className="payment-edit-row" aria-label={`Edit ${euros(payment.amountCents)} payment`} onClick={() => setCorrectPayment(payment)}>
                   <span><strong>{kindLabel(payment.kind)}</strong><span>{[methodLabel(payment.method), payment.paidAt && stamp(payment.paidAt)].filter(Boolean).join(" · ")}</span></span>
                   <span className="payment-amount"><MoneyText cents={payment.amountCents} /><span>Edit payment</span></span>
                 </button> : <><div>

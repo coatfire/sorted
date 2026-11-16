@@ -299,6 +299,8 @@ export interface Booking {
 }
 
 export interface Payment {
+  /** Set when the payment came from a spreadsheet import rather than being taken or recorded in Sorted. */
+  importId?: string | null;
   receiptVoidedAt?: string | null;
   vatRateBp: number | null;
   id: string;

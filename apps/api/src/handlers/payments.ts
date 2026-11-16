@@ -22,7 +22,7 @@ async function correctPayment(userId: string, id: string, input: EditPaymentInpu
     const payments = await tx.select().from(schema.payments).where(and(eq(schema.payments.bookingId, row.booking.id), eq(schema.payments.userId, userId))).orderBy(schema.payments.id).for("update");
     const current = payments.find(payment => payment.id === id);
     if (!current) return { error: "Payment not found", status: 404 as const };
-    if (current.method === "stripe") return { error: "Paid by card — refund it in Stripe", status: 409 as const };
+    if (current.method === "stripe" && !current.importId) return { error: "Paid by card — refund it in Stripe", status: 409 as const };
     if (current.status !== "paid") return { error: "Only paid payments can be corrected.", status: 409 as const };
     const receipts = await tx.select().from(schema.invoices).where(and(eq(schema.invoices.userId, userId), eq(schema.invoices.paymentId, id), eq(schema.invoices.kind, "receipt"))).orderBy(schema.invoices.id).for("update");
     if (input && receipts.length) return { error: "A receipt was issued for this payment. Undo it and record it again.", status: 409 as const };
