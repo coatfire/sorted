@@ -6,6 +6,7 @@ import { env } from "./lib/env";
 import { requireAuth, requireInternalSecret } from "./lib/auth";
 import { authRoutes } from "./handlers/auth";
 import { clientRoutes } from "./handlers/clients";
+import { importRoutes } from "./handlers/imports";
 import { bookingRoutes } from "./handlers/bookings";
 import { paymentRoutes } from "./handlers/payments";
 import { expenseRoutes } from "./handlers/expenses";
@@ -44,6 +45,7 @@ app.route("/api/calendar", calendarRoutes);
 
 // Authenticated
 app.use("/api/clients/*", requireAuth);
+app.use("/api/imports/*", requireAuth);
 app.use("/api/bookings/*", requireAuth);
 app.use("/api/payments/*", requireAuth);
 app.use("/api/expenses/*", requireAuth);
@@ -53,6 +55,7 @@ app.use("/api/places/*", requireAuth);
 app.route("/api/drive", driveRoutes);
 app.route("/api/places", placeRoutes);
 app.route("/api/clients", clientRoutes);
+app.route("/api/imports", importRoutes);
 app.route("/api/bookings", bookingRoutes);
 app.route("/api/payments", paymentRoutes);
 app.route("/api/expenses", expenseRoutes);

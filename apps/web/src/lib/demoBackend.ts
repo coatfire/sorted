@@ -5,7 +5,7 @@
  * payment links are simulated — nothing leaves the browser.
  */
 import type { Client, Expense, MessageLogEntry, Payment, BookingDocument, BusyBlock } from "@sorted/core";
-import { exportCsvText, exportSections, exportXlsx, inExportRange, paidOn, PlaceSearchInput, PLACE_SUGGESTION_LIMIT, snapshotReceipt, snapshotDocument, documentNumber, TaxSettings, ConfirmExpenseInput, RecordPaymentInput, EditPaymentInput, paymentPaidAt, irelandToday, addCalendarDays, CalendarDate, shiftDublinWeeks, RepeatInput, Services, bookingStage, CreateClientInput, UpdateClientInput, MessageSentInput, CreateBookingInput, agreedBookingStart, missingBookingDetails, bookingAtDublinTime, BusyRange } from "@sorted/core";
+import { ImportClientsInput, planClientImport, exportCsvText, exportSections, exportXlsx, inExportRange, paidOn, PlaceSearchInput, PLACE_SUGGESTION_LIMIT, snapshotReceipt, snapshotDocument, documentNumber, TaxSettings, ConfirmExpenseInput, RecordPaymentInput, EditPaymentInput, paymentPaidAt, irelandToday, addCalendarDays, CalendarDate, shiftDublinWeeks, RepeatInput, Services, bookingStage, CreateClientInput, UpdateClientInput, MessageSentInput, CreateBookingInput, agreedBookingStart, missingBookingDetails, bookingAtDublinTime, BusyRange } from "@sorted/core";
 import type { Backend, BookingRow, Snapshot } from "./backend";
 import { blobToDataUrl } from "./image";
 import { settingsAutosaveRegistry } from "./settingsAutosaveSession";
@@ -16,6 +16,7 @@ interface DemoData extends Omit<Snapshot, "documents"> {
   documents: BookingDocument[];
   messages: MessageLogEntry[];
   receipts: Record<string, string>; // expense id → data URL
+  imports?: Array<{ id: string; fileName: string | null; createdAt: string; clientIds: string[] }>;
 }
 
 const id = () => crypto.randomUUID();
@@ -552,6 +553,45 @@ export const demoBackend: Backend = {
       if (booking.clientId === clientId) Object.assign(booking.client, patch);
     }
     save();
+  },
+
+  async createClient(input) {
+    const parsed = CreateClientInput.parse(input);
+    const client: Client = { id: id(), name: parsed.name, phone: parsed.phone ?? null, email: parsed.email ?? null, notes: parsed.notes ?? null, createdAt: now() };
+    data().clients.unshift(client);
+    save();
+    return { id: client.id };
+  },
+
+  async importClients(fileName, rows) {
+    const d = data();
+    const parsed = ImportClientsInput.parse({ file_name: fileName, clients: rows });
+    const plan = planClientImport(parsed.clients.map((row) => ({ ...row, email: row.email?.toLowerCase() })), d.clients);
+    const alreadyThere = plan.alreadyThere + plan.repeated;
+    if (!plan.add.length) return { importId: null, added: 0, alreadyThere };
+    const added = plan.add.map((row): Client => ({ id: id(), name: row.name, phone: row.phone ?? null, email: row.email ?? null, notes: row.notes ?? null, createdAt: now() }));
+    const batch = { id: id(), fileName: parsed.file_name ?? null, createdAt: now(), clientIds: added.map((client) => client.id) };
+    d.clients.unshift(...added);
+    d.imports = [batch, ...(d.imports ?? [])];
+    save();
+    return { importId: batch.id, added: added.length, alreadyThere };
+  },
+
+  async imports() {
+    const d = data(), here = new Set(d.clients.map((client) => client.id));
+    return (d.imports ?? []).map((batch) => ({ id: batch.id, kind: "clients" as const, fileName: batch.fileName, createdAt: batch.createdAt, clients: batch.clientIds.filter((clientId) => here.has(clientId)).length }));
+  },
+
+  async undoImport(importId) {
+    const d = data();
+    const batch = mustFind(d.imports ?? [], importId, "Import");
+    const booked = new Set(d.bookings.map((booking) => booking.clientId));
+    const mine = d.clients.filter((client) => batch.clientIds.includes(client.id));
+    const remove = new Set(mine.filter((client) => !booked.has(client.id)).map((client) => client.id));
+    d.clients = d.clients.filter((client) => !remove.has(client.id));
+    d.imports = (d.imports ?? []).filter((item) => item.id !== importId);
+    save();
+    return { removed: remove.size, kept: mine.length - remove.size };
   },
 
   async deleteClient(clientId) {

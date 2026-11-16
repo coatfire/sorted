@@ -19,6 +19,10 @@ import type { ExportFormat, ExportRange,
   BusyResult,
   PlaceSearchResult,
   ExternalCalendar,
+  ImportBatch,
+  ImportClientRow,
+  ImportClientsResult,
+  UndoImportResult,
 } from "@sorted/core";
 
 export type BookingRow = Booking & { client: Client };
@@ -111,8 +115,14 @@ export interface Backend {
   deleteExpense(id: string): Promise<void>;
   /** A URL the browser can render for this expense's receipt photo. */
   receiptUrl(expense: Pick<Expense, "id" | "receiptKey">): Promise<string | null>;
-  updateClient(id: string, patch: { name: string; phone: string | null; email: string | null }): Promise<void>;
+  updateClient(id: string, patch: { name: string; phone: string | null; email: string | null; notes?: string | null }): Promise<void>;
   deleteClient(id: string): Promise<void>;
+  createClient(input: ImportClientRow): Promise<{ id: string }>;
+  /** Adds the rows that aren't already clients, as one import that can be undone. */
+  importClients(fileName: string, rows: ImportClientRow[]): Promise<ImportClientsResult>;
+  imports(): Promise<ImportBatch[]>;
+  /** Removes an import's clients, except any who have been booked since. */
+  undoImport(id: string): Promise<UndoImportResult>;
   updateUser(patch: Partial<{
     name: string | null;
     businessName: string | null;

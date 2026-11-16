@@ -50,7 +50,7 @@ export function Home() {
   return <div className="page">
     <header className="brand-header">
       <div><p className="brand-wordmark">Sorted<span>.</span></p><p className="header-greeting">{greeting}{who ? `, ${who}` : ""}</p></div>
-      <Link className="icon-button" to="/settings" aria-label="Settings"><Icon name="settings" /></Link>
+      <div className="header-actions"><Link className="icon-button" to="/clients" aria-label="Clients"><Icon name="user" /></Link><Link className="icon-button" to="/settings" aria-label="Settings"><Icon name="settings" /></Link></div>
     </header>
 
     <Card className="next-appointment">

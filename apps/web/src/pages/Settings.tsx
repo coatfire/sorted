@@ -11,6 +11,7 @@ import { AccentPicker } from "../AccentPicker";
 import { MessageEditor } from "../MessageEditor";
 import { ServiceEditor } from "../ServiceEditor";
 import { Welcome } from "./Welcome";
+import { ImportSettings } from "./ClientImport";
 import { completeServiceDrafts, type ServiceDraft } from "../lib/setup";
 import { fieldPatch, settingsForm, type SettingsField, type SettingsForm } from "../lib/settingsFields";
 import { useSettingsAutosave } from "../lib/useSettingsAutosave";
@@ -121,6 +122,7 @@ function BusinessSettings() {
       <div className="connection-row"><span className="connection-logo whatsapp-logo">W</span><div><strong>WhatsApp messages</strong><span>Opens a draft in your WhatsApp — you press send</span></div></div>
       <div className="connection-row"><span className="connection-logo stripe-logo">€</span><div><strong>Card payment links</strong><span>{features.paymentLinks ? "Clients pay online; Sorted marks it paid" : "Coming later"}</span></div></div>
     </Card></section>
+    <ImportSettings />
     <CalendarSettings /><ExternalCalendars /><DriveSettings />
     <section className="settings-section"><h2>Account</h2>
       {mode === "demo" ? <><Button kind="quiet" onClick={async () => { if (await saver.flushAll()) { await resetDemo(); toast("Demo data reset"); } }}>Reset demo data</Button><Button kind="soft" onClick={async () => { if (await saver.flushAll()) { signOut(); navigate("/login"); } }}>Leave the demo and sign up</Button></> : <><Card className="connection-card"><div className="connection-row"><span className="connection-logo account-logo"><Icon name="user" size={18} /></span><div><strong>{user.email}</strong><span>Logged in</span></div></div></Card><Button kind="quiet" onClick={async () => { if (await saver.flushAll()) { signOut(); navigate("/login"); } }}><Icon name="logout" size={18} />Log out</Button></>}

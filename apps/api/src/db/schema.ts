@@ -138,6 +138,15 @@ export const externalCalendars = pgTable("external_calendars", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [uniqueIndex("external_calendars_user_url_idx").on(t.userId, t.url)]);
 
+/** One spreadsheet a trader imported, so the rows it added can be removed again. */
+export const imports = pgTable("imports", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  kind: text("kind").notNull(),
+  fileName: text("file_name"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [index("imports_user_idx").on(t.userId)]);
+
 export const clients = pgTable(
   "clients",
   {
@@ -149,6 +158,7 @@ export const clients = pgTable(
     phone: text("phone"), // E.164; null = no WhatsApp automation
     email: text("email"),
     notes: text("notes"),
+    importId: uuid("import_id").references(() => imports.id, { onDelete: "set null" }),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),

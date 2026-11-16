@@ -24,7 +24,7 @@ export function ClientDetail() {
   const client = clients.find((item) => item.id === id);
   const [editing, setEditing] = useState(false);
   const [deleting, setDeleting] = useState(false);
-  const [form, setForm] = useState({ name: client?.name ?? "", phone: formatPhone(client?.phone), email: client?.email ?? "" });
+  const [form, setForm] = useState({ name: client?.name ?? "", phone: formatPhone(client?.phone), email: client?.email ?? "", notes: client?.notes ?? "" });
   const validation = useValidation({
     email: () => form.email.trim() && !UpdateClientInput.shape.email.safeParse(form.email.trim()).success
       ? "Enter a valid email address." : undefined,
@@ -73,7 +73,7 @@ export function ClientDetail() {
     event.preventDefault();
     if (!validation.validate(event.currentTarget)) return;
     const phone = form.phone.trim() ? normaliseClientPhone(form.phone) : null;
-    if (await run(() => backend.updateClient(client!.id, { name: form.name.trim(), phone, email: form.email.trim() || null }), "Client saved")) {
+    if (await run(() => backend.updateClient(client!.id, { name: form.name.trim(), phone, email: form.email.trim() || null, notes: form.notes.trim() || null }), "Client saved")) {
       setEditing(false);
     }
   }
@@ -113,6 +113,9 @@ export function ClientDetail() {
             <Field label="Email (optional)" {...validation.field("email")}>
               <input name="email" type="email" autoComplete="email" value={form.email} onChange={(event) => setForm({ ...form, email: event.target.value })} />
             </Field>
+            <Field label="Notes (optional)" helper="Only you see these.">
+              <textarea name="notes" rows={3} maxLength={2000} value={form.notes} onChange={(event) => setForm({ ...form, notes: event.target.value })} />
+            </Field>
           </Card>
           <div className="action-pair">
             <Button type="button" kind="quiet" onClick={() => setEditing(false)}>Cancel</Button>
@@ -136,8 +139,11 @@ export function ClientDetail() {
           <div className="detail-line">
             <div><strong>{client.email ?? "No email added"}</strong><span>Email</span></div>
           </div>
+          {client.notes && <div className="detail-line">
+            <div><strong className="client-notes">{client.notes}</strong><span>Notes</span></div>
+          </div>}
           <div className="detail-line">
-            <button className="text-link" onClick={() => { validation.clear(); setForm({ name: client.name, phone: formatPhone(client.phone), email: client.email ?? "" }); setEditing(true); }}>
+            <button className="text-link" onClick={() => { validation.clear(); setForm({ name: client.name, phone: formatPhone(client.phone), email: client.email ?? "", notes: client.notes ?? "" }); setEditing(true); }}>
               <Icon name="edit" size={16} /> Edit client details
             </button>
           </div>
