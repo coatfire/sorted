@@ -4,8 +4,8 @@
  * someone tries here is what they get after signing up. "Messages" and
  * payment links are simulated — nothing leaves the browser.
  */
-import type { Client, Expense, MessageLogEntry, Payment, BookingDocument } from "@sorted/core";
-import { snapshotReceipt, snapshotDocument, documentNumber, TaxSettings, ConfirmExpenseInput, RecordPaymentInput, EditPaymentInput, paymentPaidAt, irelandToday, addCalendarDays, CalendarDate, shiftDublinWeeks, RepeatInput, Services, bookingStage, CreateClientInput, UpdateClientInput, MessageSentInput, CreateBookingInput, agreedBookingStart, missingBookingDetails } from "@sorted/core";
+import type { Client, Expense, MessageLogEntry, Payment, BookingDocument, BusyBlock } from "@sorted/core";
+import { snapshotReceipt, snapshotDocument, documentNumber, TaxSettings, ConfirmExpenseInput, RecordPaymentInput, EditPaymentInput, paymentPaidAt, irelandToday, addCalendarDays, CalendarDate, shiftDublinWeeks, RepeatInput, Services, bookingStage, CreateClientInput, UpdateClientInput, MessageSentInput, CreateBookingInput, agreedBookingStart, missingBookingDetails, bookingAtDublinTime, BusyRange } from "@sorted/core";
 import type { Backend, BookingRow, Snapshot } from "./backend";
 import { blobToDataUrl } from "./image";
 import { settingsAutosaveRegistry } from "./settingsAutosaveSession";
@@ -220,6 +220,21 @@ export const demoBackend: Backend = {
   async googleExchange() { throw new Error("Available when you sign in"); },
   async calendar() { throw new Error("Available when you sign in"); },
   async resetCalendar() { throw new Error("Available when you sign in"); },
+  async externalCalendars() { return [{ id: "demo-calendar", provider: "google", createdAt: new Date().toISOString() }]; },
+  async addExternalCalendar() { throw new Error("Available when you sign in"); },
+  async removeExternalCalendar() { throw new Error("Available when you sign in"); },
+  /** A sample personal calendar, so the demo shows how Busy blocks look. */
+  async busy(from, to) {
+    BusyRange.parse({ from, to });
+    const today = irelandToday();
+    const dentist = addCalendarDays(today, 2);
+    const sample = { calendarId: "demo-calendar", provider: "google" } as const;
+    const blocks: BusyBlock[] = [
+      { ...sample, id: "demo-dentist", title: "Dentist", allDay: false, start: bookingAtDublinTime(dentist, "15:00").toISOString(), end: bookingAtDublinTime(dentist, "16:00").toISOString() },
+      { ...sample, id: "demo-holiday", title: "Holiday", allDay: true, start: addCalendarDays(today, 9), end: addCalendarDays(today, 12) },
+    ];
+    return { blocks: blocks.filter((block) => (block.allDay ? block.start : dentist) <= to && (block.allDay ? block.end : dentist) >= from), failed: [] };
+  },
   async document(bookingId, kind, paymentId) {
     const d = data();
     const booking = mustFind(d.bookings, bookingId, "Booking");

@@ -16,6 +16,8 @@ import type {
   Service,
   MessageSentInput,
   IssuedDocument,
+  BusyResult,
+  ExternalCalendar,
 } from "@sorted/core";
 
 export type BookingRow = Booking & { client: Client };
@@ -72,6 +74,12 @@ export interface Backend {
   googleExchange(code: string): Promise<{ jwt: string; user: User }>;
   calendar(): Promise<CalendarLinks>;
   resetCalendar(): Promise<CalendarLinks>;
+  /** The trader's own Google/Apple calendars that Sorted reads for Busy blocks. */
+  externalCalendars(): Promise<ExternalCalendar[]>;
+  addExternalCalendar(url: string): Promise<ExternalCalendar>;
+  removeExternalCalendar(id: string): Promise<void>;
+  /** Read-only entries from those calendars between two days (inclusive). */
+  busy(from: string, to: string): Promise<BusyResult>;
   signup(email: string, password: string): Promise<{ ok: true; dev_link?: string }>;
   login(email: string, password: string): Promise<{ jwt: string; user: User }>;
   verify(token: string): Promise<{ jwt: string; user: User }>;

@@ -5,7 +5,7 @@ import { BackButton, Button, Card, Field, Icon, PageHeader } from "../components
 import { useData, useSession, useStore } from "../lib/store";
 import { prepareInvoiceLogo } from "../lib/image";
 import { centsToInput } from "../lib/format";
-import { CalendarSettings } from "../CalendarSettings";
+import { CalendarSettings, ExternalCalendars } from "../CalendarSettings";
 import { DriveSettings } from "../DriveSettings";
 import { AccentPicker } from "../AccentPicker";
 import { MessageEditor } from "../MessageEditor";
@@ -121,7 +121,7 @@ function BusinessSettings() {
       <div className="connection-row"><span className="connection-logo whatsapp-logo">W</span><div><strong>WhatsApp messages</strong><span>Opens a draft in your WhatsApp — you press send</span></div></div>
       <div className="connection-row"><span className="connection-logo stripe-logo">€</span><div><strong>Card payment links</strong><span>{features.paymentLinks ? "Clients pay online; Sorted marks it paid" : "Coming later"}</span></div></div>
     </Card></section>
-    <CalendarSettings /><DriveSettings />
+    <CalendarSettings /><ExternalCalendars /><DriveSettings />
     <section className="settings-section"><h2>Account</h2>
       {mode === "demo" ? <><Button kind="quiet" onClick={async () => { if (await saver.flushAll()) { await resetDemo(); toast("Demo data reset"); } }}>Reset demo data</Button><Button kind="soft" onClick={async () => { if (await saver.flushAll()) { signOut(); navigate("/login"); } }}>Leave the demo and sign up</Button></> : <><Card className="connection-card"><div className="connection-row"><span className="connection-logo account-logo"><Icon name="user" size={18} /></span><div><strong>{user.email}</strong><span>Logged in</span></div></div></Card><Button kind="quiet" onClick={async () => { if (await saver.flushAll()) { signOut(); navigate("/login"); } }}><Icon name="logout" size={18} />Log out</Button></>}
     </section><p className="settings-footnote">Sorted beta · Made for Irish sole traders</p>

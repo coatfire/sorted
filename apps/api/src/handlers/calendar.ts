@@ -1,10 +1,11 @@
 import { randomBytes } from "node:crypto";
 import { Hono } from "hono";
 import { and, asc, eq, gte, inArray } from "drizzle-orm";
-import { buildCalendar, type CalendarLinks } from "@sorted/core";
+import { AddExternalCalendarInput, buildCalendar, BusyRange, EXTERNAL_CALENDAR_LIMIT, externalCalendarProvider, type BusyResult, type CalendarLinks, type ExternalCalendar } from "@sorted/core";
 import { db, schema } from "../db";
 import { requireAuth } from "../lib/auth";
 import { env } from "../lib/env";
+import { busyBlocks, fetchCalendarText } from "../lib/externalCalendar";
 import type { AppEnv } from "../app";
 
 export const calendarRoutes = new Hono<AppEnv>();
@@ -36,6 +37,89 @@ calendarRoutes.get("/", requireAuth, async (c) => {
 calendarRoutes.post("/reset", requireAuth, async (c) => {
   c.header("Cache-Control", "no-store");
   return c.json(links(env.apiUrl(), await tokenFor(c.get("userId"), true)));
+});
+
+const external = (row: typeof schema.externalCalendars.$inferSelect): ExternalCalendar =>
+  ({ id: row.id, provider: externalCalendarProvider(row.url) ?? "google", createdAt: row.createdAt.toISOString() });
+
+/** Downloaded calendars, kept briefly so moving between months doesn't download them again. */
+const CACHE_MS = 5 * 60_000;
+const downloads = new Map<string, { url: string; at: number; text: string }>();
+async function calendarText(row: { id: string; url: string }) {
+  const cached = downloads.get(row.id);
+  if (cached && cached.url === row.url && Date.now() - cached.at < CACHE_MS) return cached.text;
+  const text = await fetchCalendarText(row.url);
+  if (downloads.size >= 10) downloads.clear();
+  downloads.set(row.id, { url: row.url, at: Date.now(), text });
+  return text;
+}
+
+calendarRoutes.get("/external", requireAuth, async (c) => {
+  c.header("Cache-Control", "no-store");
+  const rows = await db.select().from(schema.externalCalendars).where(eq(schema.externalCalendars.userId, c.get("userId"))).orderBy(asc(schema.externalCalendars.createdAt));
+  return c.json(rows.map(external));
+});
+
+calendarRoutes.post("/external", requireAuth, async (c) => {
+  c.header("Cache-Control", "no-store");
+  const parsed = AddExternalCalendarInput.safeParse(await c.req.json().catch(() => null));
+  if (!parsed.success) return c.json({ error: parsed.error.issues[0]?.message ?? "Paste a calendar link." }, 400);
+  const userId = c.get("userId");
+  const { url } = parsed.data;
+  const limitError = { error: `You can add up to ${EXTERNAL_CALENDAR_LIMIT} calendars. Remove one first.` };
+  const mine = await db.select().from(schema.externalCalendars).where(eq(schema.externalCalendars.userId, userId));
+  const existing = mine.find((row) => row.url === url);
+  if (existing) return c.json(external(existing));
+  if (mine.length >= EXTERNAL_CALENDAR_LIMIT) return c.json(limitError, 409);
+  let text: string;
+  try {
+    text = await fetchCalendarText(url);
+    busyBlocks(text, { from: "2000-01-01", to: "2000-01-01", calendarId: "check", provider: "google", appUrl: env.appUrl() });
+  } catch {
+    return c.json({ error: "Sorted couldn't read that link. Check you copied the whole private calendar address." }, 422);
+  }
+  // The download above can take seconds, so count again under a lock: two links added at once can't both take the last place.
+  const outcome = await db.transaction(async (tx) => {
+    await tx.select({ id: schema.users.id }).from(schema.users).where(eq(schema.users.id, userId)).for("update");
+    const now = await tx.select().from(schema.externalCalendars).where(eq(schema.externalCalendars.userId, userId));
+    const already = now.find((row) => row.url === url);
+    if (already) return { row: already, created: false };
+    if (now.length >= EXTERNAL_CALENDAR_LIMIT) return null;
+    const [row] = await tx.insert(schema.externalCalendars).values({ userId, url }).returning();
+    return { row, created: true };
+  });
+  if (!outcome) return c.json(limitError, 409);
+  const saved = outcome.row;
+  downloads.set(saved.id, { url, at: Date.now(), text });
+  return c.json(external(saved), outcome.created ? 201 : 200);
+});
+
+calendarRoutes.delete("/external/:id", requireAuth, async (c) => {
+  const id = c.req.param("id");
+  if (!/^[0-9a-f-]{36}$/i.test(id)) return c.json({ error: "Not found" }, 404);
+  const [row] = await db.delete(schema.externalCalendars).where(and(eq(schema.externalCalendars.id, id), eq(schema.externalCalendars.userId, c.get("userId")))).returning({ id: schema.externalCalendars.id });
+  if (!row) return c.json({ error: "Not found" }, 404);
+  downloads.delete(row.id);
+  return c.json({ ok: true });
+});
+
+/** Entries from the trader's outside calendars. Read-only: nothing here touches a booking. */
+calendarRoutes.get("/busy", requireAuth, async (c) => {
+  c.header("Cache-Control", "no-store");
+  const range = BusyRange.safeParse({ from: c.req.query("from"), to: c.req.query("to") });
+  if (!range.success) return c.json({ error: "Choose a valid range." }, 400);
+  const rows = await db.select().from(schema.externalCalendars).where(eq(schema.externalCalendars.userId, c.get("userId"))).orderBy(asc(schema.externalCalendars.createdAt));
+  const result: BusyResult = { blocks: [], failed: [] };
+  await Promise.all(rows.map(async (row) => {
+    const provider = externalCalendarProvider(row.url) ?? "google";
+    try {
+      result.blocks.push(...busyBlocks(await calendarText(row), { ...range.data, calendarId: row.id, provider, appUrl: env.appUrl() }));
+    } catch {
+      if (!result.failed.includes(provider)) result.failed.push(provider);
+    }
+  }));
+  result.blocks.sort((a, b) => a.start.localeCompare(b.start) || a.id.localeCompare(b.id));
+  return c.json(result);
 });
 
 calendarRoutes.get("/:token/:feed", async (c) => {

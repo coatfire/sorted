@@ -8,6 +8,8 @@
   --brand-soft: #e8f1eb;
   --sage: #d9e5dc;
   --line: #e5e6df;
+  --busy: #eeefea;
+  --busy-line: #c9cbc2;
   --paid: #23794a;
   --due: #985313;
   --due-soft: #fff2df;
@@ -421,6 +423,29 @@ h2 {
 }
 .calendar-marks i.is-enquiry, .calendar-legend i.is-enquiry { border-color: var(--due); background: none; }
 .calendar-marks b { font-size: 0.6rem; line-height: 1; }
+/* A day with an entry in the trader's own calendar. */
+.calendar-day.is-busy:not([aria-pressed="true"]) { background: var(--busy); }
+.calendar-marks i.is-busy, .calendar-legend i.is-busy { border-color: var(--busy-line); border-radius: 2px; background: var(--busy-line); }
+.calendar-day[aria-pressed="true"] .calendar-marks i.is-busy { border-color: #fff; background: none; }
+.calendar-note { margin-top: 8px; color: var(--muted); font-size: 0.78rem; text-align: center; }
+.busy-row {
+  display: grid;
+  grid-template-columns: 78px minmax(0, 1fr);
+  min-height: 60px;
+  align-items: center;
+  gap: 9px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--line);
+  background: var(--busy);
+  color: var(--muted);
+}
+.busy-row:last-child { border-bottom: 0; }
+.busy-row time { font-size: 0.79rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+.busy-row div { display: flex; min-width: 0; flex-direction: column; gap: 3px; }
+.busy-row strong { overflow: hidden; color: var(--ink); text-overflow: ellipsis; white-space: nowrap; }
+.busy-row small { font-size: 0.75rem; }
+.external-calendar { display: flex; min-height: 44px; align-items: center; justify-content: space-between; gap: 12px; }
+.external-calendar .button { width: auto; }
 .calendar-day[aria-pressed="true"] .calendar-marks i { border-color: #fff; background: #fff; }
 .calendar-day[aria-pressed="true"] .calendar-marks i.is-enquiry { background: none; }
 .calendar-legend {
