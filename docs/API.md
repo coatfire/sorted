@@ -9,7 +9,7 @@ responses are DB rows with camelCase keys (interfaces in the same file). This
 doc lists routes and semantics; the schemas are the source of truth for fields.
 Errors are `{ "error": "message" }` (or a zod `flatten()` object for 400s).
 
-`GET /health` (no auth) → `{ ok, googleClientId, features: { automation, paymentLinks, googleSignIn, googleDrive } }` —
+`GET /health` (no auth) → `{ ok, googleClientId, features: { automation, paymentLinks, googleSignIn, googleDrive, addressSearch } }` —
 which integrations are configured, so the UI only offers what works.
 `googleClientId` is the public OAuth client ID, or null. Drive needs only
 `GOOGLE_CLIENT_ID`; Google sign-in still requires both ID and secret.
@@ -299,6 +299,22 @@ Feeds include bookings starting from 180 days ago onward; cancelled bookings nev
 
 Calendar names are “Sorted – Confirmed” and “Sorted – Enquiries”. Refresh hints request 15 minutes, but calendar providers control actual refresh timing. Events have stable booking UIDs, UTC dates, explicit end times or a one-hour default, and a booking link based on `APP_URL`.
 Enquiry event descriptions include `Follow up: YYYY-MM-DD` when a follow-up date is set; the line is omitted otherwise.
+
+## Address search (optional)
+
+Off unless `GOOGLE_MAPS_API_KEY` is set; `features.addressSearch` tells the UI whether to offer it.
+The key stays on the API and is never sent to a browser.
+
+| Method | Path | Notes |
+|--------|------|-------|
+| POST | /places/search | Authenticated. Body `{ input }`, 3–200 characters after trimming. Returns `{ source: "google", suggestions: [{ text, main, secondary }] }`, at most 5, from Google's Places API (New) Autocomplete restricted to the island of Ireland. `text` is what goes into a booking's `location`. |
+
+Errors: 400 input too short or malformed, 429 after 40 searches by one user in a minute, 502 Google
+unreachable or unreadable, 503 no key configured. It is a POST with `Cache-Control: no-store` so that
+what is typed, often a client's home address, never appears in a URL or request log; failures log
+Google's status only. Nothing is stored. Results must be shown with the "Google Maps" attribution.
+The per-user limit is held in memory per instance: it stops a runaway client, and the spending
+cap belongs on the key's quota in Google Cloud.
 
 ## Payments
 ### Correcting a manually recorded payment

@@ -1433,6 +1433,36 @@ a.button { text-decoration: none; }
 .price-total span:first-child .money { font-size: inherit; font-weight: 600; }
 .year-card .year-stats:only-child .money { font-size: 1.1rem; }
 
+.place-field { display: flex; flex-direction: column; gap: 7px; scroll-margin-top: 14px; }
+.place-list {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  background: var(--surface);
+}
+.place-option {
+  display: flex;
+  min-height: 52px;
+  align-items: center;
+  gap: 11px;
+  padding: 8px 13px;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  background: none;
+  color: var(--muted);
+  text-align: left;
+  cursor: pointer;
+}
+.place-option:last-child { border-bottom: 0; }
+.place-option:active { background: var(--brand-soft); }
+.place-option svg { flex: none; }
+.place-option span { display: flex; min-width: 0; flex-direction: column; gap: 2px; }
+.place-option strong { color: var(--ink); font-size: 0.86rem; font-weight: 600; overflow-wrap: anywhere; }
+.place-option small { font-size: 0.74rem; overflow-wrap: anywhere; }
+.place-source { padding: 7px 13px; color: var(--muted); font-size: 0.72rem; text-align: right; }
+.place-source.is-google { color: #5e5e5e; font-family: Roboto, Arial, sans-serif; font-size: 0.75rem; letter-spacing: normal; }
 .visually-hidden {
   position: absolute !important;
   width: 1px !important;

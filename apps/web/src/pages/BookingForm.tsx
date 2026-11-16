@@ -6,6 +6,7 @@ import type { BookingRow } from "../lib/backend";
 import { centsToInput, formatPhone, longDay, parseEuros, time } from "../lib/format";
 import { bookingServiceChips, serviceChipPrice } from "../lib/bookingServices";
 import { BookingMessageSheet } from "../BookingMessageSheet";
+import { LocationField } from "../LocationField";
 import { useAction, useData, useStore } from "../lib/store";
 import { useValidation } from "../lib/useValidation";
 
@@ -299,13 +300,7 @@ export function BookingForm() {
             </button>
           ) : (
             <>
-              <Field label="Location">
-                <input
-                  value={form.location}
-                  onChange={(event) => update("location", event.target.value)}
-                  placeholder="Studio, venue or address"
-                />
-              </Field>
+              <LocationField value={form.location} onChange={(location) => update("location", location)} />
               <Field label="Notes">
                 <textarea
                   value={form.notes}

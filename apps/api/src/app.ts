@@ -14,6 +14,7 @@ import { webhookRoutes } from "./handlers/webhooks";
 import { internalRoutes } from "./handlers/internal";
 import { calendarRoutes } from "./handlers/calendar";
 import { driveRoutes } from "./handlers/drive";
+import { placeRoutes } from "./handlers/places";
 
 export type AppEnv = { Variables: { userId: string } };
 
@@ -31,6 +32,7 @@ app.get("/api/health", (c) =>
       googleSignIn: env.googleSignIn(),
       automation: Boolean(env.n8nWebhookUrl()),
       paymentLinks: Boolean(env.stripeKey()),
+      addressSearch: Boolean(env.googleMapsKey()),
     },
   }),
 );
@@ -47,7 +49,9 @@ app.use("/api/payments/*", requireAuth);
 app.use("/api/expenses/*", requireAuth);
 app.use("/api/reports/*", requireAuth);
 app.use("/api/drive/*", requireAuth);
+app.use("/api/places/*", requireAuth);
 app.route("/api/drive", driveRoutes);
+app.route("/api/places", placeRoutes);
 app.route("/api/clients", clientRoutes);
 app.route("/api/bookings", bookingRoutes);
 app.route("/api/payments", paymentRoutes);

@@ -344,6 +344,8 @@ export interface Health {
     automation: boolean;
     /** Stripe key configured → payment links can be created */
     paymentLinks: boolean;
+    /** Google Maps key configured → the Location field can search for addresses */
+    addressSearch: boolean;
   };
 }
 

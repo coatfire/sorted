@@ -36,5 +36,7 @@ export const env = {
   emailFrom: () => process.env.EMAIL_FROM || "Sorted <login@sorted.app>",
   googleClientId: () => process.env.GOOGLE_CLIENT_ID || undefined,
   googleClientSecret: () => process.env.GOOGLE_CLIENT_SECRET || undefined,
+  /** Server-side only: address search goes through the API so the key never reaches a browser. */
+  googleMapsKey: () => process.env.GOOGLE_MAPS_API_KEY || undefined,
   googleSignIn: () => Boolean(env.googleClientId() && env.googleClientSecret()),
 };

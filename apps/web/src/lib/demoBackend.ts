@@ -5,7 +5,7 @@
  * payment links are simulated — nothing leaves the browser.
  */
 import type { Client, Expense, MessageLogEntry, Payment, BookingDocument, BusyBlock } from "@sorted/core";
-import { snapshotReceipt, snapshotDocument, documentNumber, TaxSettings, ConfirmExpenseInput, RecordPaymentInput, EditPaymentInput, paymentPaidAt, irelandToday, addCalendarDays, CalendarDate, shiftDublinWeeks, RepeatInput, Services, bookingStage, CreateClientInput, UpdateClientInput, MessageSentInput, CreateBookingInput, agreedBookingStart, missingBookingDetails, bookingAtDublinTime, BusyRange } from "@sorted/core";
+import { PlaceSearchInput, PLACE_SUGGESTION_LIMIT, snapshotReceipt, snapshotDocument, documentNumber, TaxSettings, ConfirmExpenseInput, RecordPaymentInput, EditPaymentInput, paymentPaidAt, irelandToday, addCalendarDays, CalendarDate, shiftDublinWeeks, RepeatInput, Services, bookingStage, CreateClientInput, UpdateClientInput, MessageSentInput, CreateBookingInput, agreedBookingStart, missingBookingDetails, bookingAtDublinTime, BusyRange } from "@sorted/core";
 import type { Backend, BookingRow, Snapshot } from "./backend";
 import { blobToDataUrl } from "./image";
 import { settingsAutosaveRegistry } from "./settingsAutosaveSession";
@@ -114,7 +114,7 @@ function seed(): DemoData {
       invoiceLogo: null, invoiceAccent: null, invoiceFooter: null, vatNumber: null,
       vatRegistered: false, vatRateBp: null, vatPeriodMonths: 2, incomeTaxRateBp: null,
     },
-    features: { automation: true, paymentLinks: true, googleSignIn: false, googleDrive: false },
+    features: { automation: true, paymentLinks: true, googleSignIn: false, googleDrive: false, addressSearch: true },
     clients: [sarah, aoife, emma, ryan, niamh, laura],
     bookings: [...Object.values(b), ...history.map((h) => h.past)],
     payments: [
@@ -212,8 +212,23 @@ function pricedBooking(bookingId: string) {
   return { ...booking, priceCents: booking.priceCents };
 }
 
+const SAMPLE_PLACES = [
+  ["The Shelbourne", "27 St Stephen's Green, Dublin 2"],
+  ["The Westbury", "Balfe Street, Dublin 2"],
+  ["Powerscourt Hotel", "Enniskerry, Co. Wicklow"],
+  ["Castle Leslie Estate", "Glaslough, Co. Monaghan"],
+  ["Adare Manor", "Adare, Co. Limerick"],
+  ["Ashford Castle", "Cong, Co. Mayo"],
+  ["Hayfield Manor", "Perrott Avenue, Cork"],
+  ["Glenlo Abbey Hotel", "Bushypark, Galway"],
+  ["12 Main Street", "Naas, Co. Kildare"],
+  ["12 Main Street", "Swords, Co. Dublin"],
+  ["4 Church Road", "Malahide, Co. Dublin"],
+  ["8 Castle Street", "Dalkey, Co. Dublin"],
+] as const;
+
 export const demoBackend: Backend = {
-  async health() { return { ok: true, googleClientId: null, features: { automation: true, paymentLinks: true, googleSignIn: false, googleDrive: false } }; },
+  async health() { return { ok: true, googleClientId: null, features: { automation: true, paymentLinks: true, googleSignIn: false, googleDrive: false, addressSearch: true } }; },
   async driveFiles() { throw new Error("Available when you sign in"); },
   async driveBackedUp() { throw new Error("Available when you sign in"); },
   googleStart() { throw new Error("Available when you sign in"); },
@@ -234,6 +249,13 @@ export const demoBackend: Backend = {
       { ...sample, id: "demo-holiday", title: "Holiday", allDay: true, start: addCalendarDays(today, 9), end: addCalendarDays(today, 12) },
     ];
     return { blocks: blocks.filter((block) => (block.allDay ? block.start : dentist) <= to && (block.allDay ? block.end : dentist) >= from), failed: [] };
+  },
+  /** A short made-up list, so the demo shows how address search feels without asking Google anything. */
+  async searchPlaces(input) {
+    const wanted = PlaceSearchInput.parse({ input }).input.toLowerCase().split(/[\s,]+/).filter(Boolean);
+    const suggestions = SAMPLE_PLACES.filter(([main, secondary]) => wanted.every((word) => `${main} ${secondary}`.toLowerCase().includes(word)))
+      .slice(0, PLACE_SUGGESTION_LIMIT).map(([main, secondary]) => ({ text: `${main}, ${secondary}`, main, secondary }));
+    return { source: "sample", suggestions };
   },
   async document(bookingId, kind, paymentId) {
     const d = data();
