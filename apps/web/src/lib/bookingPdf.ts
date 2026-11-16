@@ -78,6 +78,7 @@ export async function createBookingPdf(data: BookingDocumentData): Promise<Blob>
   if (data.vat && data.business.vatNumber) text(`VAT number: ${data.business.vatNumber}`, 10);
   y -= 16;
   rule();
+  if (data.voided) text("VOID — payment undone", 24, rgb(0.7, 0.1, 0.1));
   text(`${data.title} ${data.number}`, 20, accent);
   text(`Issued: ${data.issuedDate}`, 10, muted);
   if (data.validUntil) text(`Valid until: ${data.validUntil}`, 10, muted);
@@ -111,7 +112,7 @@ export async function createBookingPdf(data: BookingDocumentData): Promise<Blob>
     text("Payments received", 12, accent);
     for (const payment of data.payments) row(`${payment.date} · ${payment.method}`, payment.amount, 10);
     y -= 12;
-    text("Paid — thank you", 14, accent);
+    if (!data.voided) text("Paid — thank you", 14, accent);
     row("Booking total", data.bookingTotal, 10);
     row("Balance remaining", data.balanceDue, 10);
   }
@@ -139,9 +140,10 @@ export async function createBookingPdf(data: BookingDocumentData): Promise<Blob>
     text(data.footer, 9, muted);
   }
   pdf.getPages().forEach((item, index, pages) => {
+    if (data.voided) item.drawText("VOID", { x: width - margin - 55, y: height - 28, size: 14, font, color: rgb(0.7, 0.1, 0.1) });
     item.drawText(`${data.number} · ${index + 1} / ${pages.length}`, { x: margin, y: 24, size: 8, font, color: muted });
   });
-  pdf.setTitle(`${data.title} ${data.number}`);
+  pdf.setTitle(`${data.voided ? "VOID " : ""}${data.title} ${data.number}`);
   pdf.setAuthor(data.business.name);
   const bytes = await pdf.save();
   const buffer = new Uint8Array(bytes.length);

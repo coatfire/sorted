@@ -13,6 +13,8 @@ export const DomainEventName = z.enum([
   "booking.cancelled",
   "payment.link_created",
   "payment.paid",
+  "payment.corrected",
+  "payment.undone",
 ]);
 export type DomainEventName = z.infer<typeof DomainEventName>;
 

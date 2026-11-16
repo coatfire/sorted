@@ -7,6 +7,18 @@ import type { BookingDocumentData } from "@sorted/core";
 
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 
+it("marks a voided receipt clearly on every PDF page without changing frozen figures", async () => {
+  const font = await readFile(new URL("../../web/src/assets/DejaVuSans.ttf", import.meta.url));
+  vi.stubGlobal("fetch", vi.fn(async () => new Response(font)));
+  const draw = vi.spyOn(PDFPage.prototype, "drawText"), data = { ...documentData("receipt"), voided: true };
+  const pdf = await PDFDocument.load(await (await createBookingPdf(data)).arrayBuffer());
+  expect(pdf.getTitle()).toBe("VOID receipt TEST-0001");
+  expect(draw.mock.calls.map(([text]) => text)).toContain("VOID — payment undone");
+  expect(draw.mock.calls.filter(([text]) => text === "VOID")).toHaveLength(pdf.getPageCount());
+  expect(draw.mock.calls.map(([text]) => text)).not.toContain("Paid — thank you");
+  expect(draw.mock.calls.map(([text]) => text)).toContain("€80.00");
+});
+
 function documentData(kind: BookingDocumentData["kind"]): BookingDocumentData {
   return {
     kind, title: kind, number: "TEST-0001", issuedDate: "15 Nov 2026", bookingDate: "14 Nov 2026",

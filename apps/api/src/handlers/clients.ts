@@ -115,7 +115,7 @@ clientRoutes.delete("/:id", async (c) => {
       eq(schema.messageLog.userId, userId),
       or(eq(schema.messageLog.clientId, id), inArray(schema.messageLog.bookingId, ids)),
     ));
-    if (payments.some((payment) => payment.status === "paid")) {
+    if (payments.some((payment) => payment.status === "paid" || payment.paidAt !== null)) {
       const anonymised = { name: "Deleted client", phone: null, email: null, notes: null };
       await tx.update(schema.clients)
         .set(anonymised).where(clientScope);

@@ -47,6 +47,7 @@ export function snapshotReceipt(
 }
 
 export interface BookingDocument {
+  voidedAt?: string | null;
   documentSnapshot?: DocumentSnapshot | null;
   vatRateBp: number | null;
   id: string;
@@ -111,7 +112,7 @@ function liveBookingDocument(user: User, booking: Booking, client: Client, payme
     })),
   };
 }
-export type BookingDocumentData = ReturnType<typeof liveBookingDocument>;
+export type BookingDocumentData = ReturnType<typeof liveBookingDocument> & { voided?: boolean };
 
 export interface DocumentSnapshot {
   version: 1;
@@ -121,7 +122,8 @@ export interface DocumentSnapshot {
 
 export function assembleBookingDocument(user: User, booking: Booking, client: Client, payments: readonly Payment[], document: BookingDocument): BookingDocumentData {
   if (document.bookingId !== booking.id || booking.clientId !== client.id) throw new Error("Document does not match this booking.");
-  return document.documentSnapshot?.data ?? liveBookingDocument(user, booking, client, payments, document);
+  const data = document.documentSnapshot?.data ?? liveBookingDocument(user, booking, client, payments, document);
+  return document.voidedAt ? { ...data, voided: true } : data;
 }
 
 export function snapshotDocument(user: User, booking: Booking, client: Client, payments: readonly Payment[], document: BookingDocument): DocumentSnapshot {

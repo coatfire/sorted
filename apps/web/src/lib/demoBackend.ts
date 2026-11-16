@@ -5,7 +5,7 @@
  * payment links are simulated — nothing leaves the browser.
  */
 import type { Client, Expense, MessageLogEntry, Payment, BookingDocument } from "@sorted/core";
-import { snapshotReceipt, snapshotDocument, TaxSettings, ConfirmExpenseInput, RecordPaymentInput, paymentPaidAt, irelandToday, addCalendarDays, CalendarDate, shiftDublinWeeks, RepeatInput, Services, bookingStage } from "@sorted/core";
+import { snapshotReceipt, snapshotDocument, TaxSettings, ConfirmExpenseInput, RecordPaymentInput, EditPaymentInput, paymentPaidAt, irelandToday, addCalendarDays, CalendarDate, shiftDublinWeeks, RepeatInput, Services, bookingStage } from "@sorted/core";
 import type { Backend, BookingRow, Snapshot } from "./backend";
 import { blobToDataUrl } from "./image";
 import { settingsAutosaveRegistry } from "./settingsAutosaveSession";
@@ -215,12 +215,10 @@ export const demoBackend: Backend = {
     const d = data();
     const booking = mustFind(d.bookings, bookingId, "Booking");
     if (kind === "quote" && booking.status !== "enquiry") throw new Error("Quotes are only available for enquiries.");
-    if (kind === "receipt" && !d.payments.some((payment) => payment.id === paymentId && payment.bookingId === bookingId && payment.status === "paid")) {
-      throw new Error("Choose a paid payment for this receipt.");
-    }
     const documents = d.documents ??= [];
     const existing = documents.find((document) => document.bookingId === bookingId && document.kind === kind && (kind !== "receipt" || document.paymentId === paymentId));
     if (existing) return structuredClone(existing);
+    if (kind === "receipt" && !d.payments.some((payment) => payment.id === paymentId && payment.bookingId === bookingId && payment.status === "paid")) throw new Error("Choose a paid payment for this receipt.");
     const issuedAt = now();
     const document: BookingDocument = {
       id: id(), bookingId, kind, issuedAt,
@@ -242,7 +240,7 @@ export const demoBackend: Backend = {
   async load() {
     const { messages: _m, receipts: _r, documents: _d, ...snapshot } = data();
     snapshot.bookings.forEach((booking) => { booking.followUpOn ??= null; booking.paymentRequestedAt ??= null; });
-    return structuredClone(snapshot);
+    return structuredClone({ ...snapshot, payments: snapshot.payments.map(payment => ({ ...payment, receiptVoidedAt: data().documents.find(document => document.kind === "receipt" && document.paymentId === payment.id)?.voidedAt ?? null })) });
   },
 
   async createBooking(draft) {
@@ -406,6 +404,31 @@ export const demoBackend: Backend = {
     save();
   },
 
+  async editPayment(paymentId, input) {
+    const parsed = EditPaymentInput.parse(input), d = data();
+    const payment = mustFind(d.payments, paymentId, "Payment"), booking = mustFind(d.bookings, payment.bookingId, "Booking");
+    if (payment.method === "stripe") throw new Error("Paid by card — refund it in Stripe");
+    if (payment.status !== "paid") throw new Error("Only paid payments can be corrected.");
+    if (d.documents.some(document => document.kind === "receipt" && document.paymentId === paymentId)) throw new Error("A receipt was issued for this payment. Undo it and record it again.");
+    const total = paidFor(booking.id) - payment.amountCents + (parsed.amount_cents ?? payment.amountCents);
+    if (total > booking.priceCents) throw new Error("The total paid cannot exceed the booking price.");
+    Object.assign(payment, { amountCents: parsed.amount_cents ?? payment.amountCents, method: parsed.method ?? payment.method, paidAt: parsed.paid_at ?? payment.paidAt });
+    const pending = d.payments.filter(item => item.bookingId === booking.id && item.status === "pending");
+    if (pending.length !== 1 || pending[0].amountCents !== booking.priceCents - total) voidPending(booking.id);
+    save();
+  },
+
+  async undoPayment(paymentId) {
+    const d = data(), payment = mustFind(d.payments, paymentId, "Payment");
+    if (payment.method === "stripe") throw new Error("Paid by card — refund it in Stripe");
+    if (payment.status !== "paid") throw new Error("Only paid payments can be corrected.");
+    payment.status = "cancelled";
+    for (const document of d.documents) if (document.kind === "receipt" && document.paymentId === paymentId) document.voidedAt = now();
+    const booking = mustFind(d.bookings, payment.bookingId, "Booking"), pending = d.payments.filter(item => item.bookingId === booking.id && item.status === "pending");
+    if (pending.length !== 1 || pending[0].amountCents !== booking.priceCents - paidFor(booking.id)) voidPending(booking.id);
+    save();
+  },
+
   async createExpense(draft) {
     ConfirmExpenseInput.parse({ merchant: draft.merchant, amount_cents: draft.amountCents, vat_cents: draft.vatCents, category: draft.category, expense_date: draft.expenseDate });
     const d = data();
@@ -455,7 +478,7 @@ export const demoBackend: Backend = {
     }
     const ids = new Set(bookings.map((booking) => booking.id));
     d.messages = d.messages.filter((message) => !message.bookingId || !ids.has(message.bookingId));
-    if (d.payments.some((payment) => ids.has(payment.bookingId) && payment.status === "paid")) {
+    if (d.payments.some((payment) => ids.has(payment.bookingId) && (payment.status === "paid" || payment.paidAt !== null))) {
       const anonymous = { name: "Deleted client", phone: null, email: null, notes: null };
       Object.assign(client, anonymous);
       for (const booking of bookings) {

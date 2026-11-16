@@ -73,13 +73,13 @@ export async function backUpToDrive(tokenResponse: Promise<string>, backend: Bac
     };
     const backup = await backend.driveFiles();
     const files = backupFiles(backup);
-    if (!files.length) return { driveBackedUpAt: null };
     const folderType = "application/vnd.google-apps.folder";
     const createFolder = async (name: string, parent?: string) => {
       const response = await request("drive/v3/files?fields=id", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name, mimeType: folderType, ...(parent ? { parents: [parent] } : { appProperties: { sortedUser: backup.userId } }) }) });
       return (await response.json() as { id: string }).id;
     };
     const roots = await list(`name = 'Sorted' and mimeType = '${folderType}' and appProperties has { key='sortedUser' and value=${literal(backup.userId)} }`);
+    if (!roots.length && !files.length) return { driveBackedUpAt: null };
     const root = roots[0]?.id ?? await createFolder("Sorted");
     const rootFiles = await list(`${literal(root)} in parents`);
     const folders = new Map(rootFiles.filter((file) => file.mimeType === folderType).map((file) => [file.name, file.id]));
@@ -89,6 +89,7 @@ export async function backUpToDrive(tokenResponse: Promise<string>, backend: Bac
       if (id) for (const file of await list(`${literal(id)} in parents`)) if (file.mimeType !== folderType) existing.push({ path: `${name}/${file.name}`, id: file.id });
     }
     const plan = planDriveBackup(files, existing);
+    if (!plan.length) return { driveBackedUpAt: null };
     let done = 0;
     progress(done, plan.length);
     for (const file of plan) {

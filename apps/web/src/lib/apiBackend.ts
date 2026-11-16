@@ -32,7 +32,7 @@ export const apiBackend: Backend = {
       api<Health>("/health"),
       api<Client[]>("/clients"),
       api<Array<{ booking: Booking; client: Client }>>("/bookings"),
-      api<Array<{ payment: Payment }>>("/payments"),
+      api<Array<{ payment: Payment; receiptVoidedAt: string | null }>>("/payments"),
       api<Expense[]>("/expenses"),
     ]);
     return {
@@ -40,7 +40,7 @@ export const apiBackend: Backend = {
       features: health.features,
       clients,
       bookings: bookings.map(({ booking, client }) => ({ ...booking, client })),
-      payments: payments.map(({ payment }) => payment),
+      payments: payments.map(({ payment, receiptVoidedAt }) => ({ ...payment, receiptVoidedAt })),
       expenses,
     };
   },
@@ -95,6 +95,8 @@ export const apiBackend: Backend = {
 
   markPaid: (paymentId, method) => post(`/payments/${paymentId}/mark-paid`, { method }),
   recordPayment: (bookingId, input) => post(`/bookings/${bookingId}/payments`, input),
+  editPayment: (paymentId, input) => patch(`/payments/${paymentId}`, input),
+  undoPayment: paymentId => post(`/payments/${paymentId}/undo`),
 
   async createExpense(draft) {
     let receiptKey: string | undefined;

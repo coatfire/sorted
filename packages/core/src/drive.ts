@@ -9,6 +9,7 @@ export interface DriveBackup {
 }
 
 export interface BackupFile {
+  replace?: boolean;
   path: string;
   kind: "document" | "photo" | "csv";
   index: number;
@@ -17,7 +18,7 @@ export interface BackupFile {
 export function backupFiles(backup: DriveBackup): BackupFile[] {
   const folders = { invoice: "Invoices", receipt: "Receipts", quote: "Quotes" };
   return [
-    ...backup.documents.map((document, index) => ({ path: `${folders[document.kind]}/${document.number}.pdf`, kind: "document" as const, index })),
+    ...backup.documents.map((document, index) => ({ path: `${folders[document.kind]}/${document.number}.pdf`, kind: "document" as const, index, ...(document.voided ? { replace: true } : {}) })),
     ...backup.photos.map((photo, index) => {
       const merchant = (photo.merchant ?? "receipt").replace(/[^\p{L}\p{N} _-]/gu, "").trim().slice(0, 80) || "receipt";
       const extension = photo.contentType === "image/png" ? "png" : photo.contentType === "image/webp" ? "webp" : "jpg";
@@ -29,8 +30,13 @@ export function backupFiles(backup: DriveBackup): BackupFile[] {
 
 export function planDriveBackup(files: readonly BackupFile[], existing: readonly { path: string; id: string }[]) {
   const ids = new Map(existing.map((file) => [file.path, file.id]));
-  return files.map((file) => {
+  const current = new Set(files.map(file => file.path));
+  const historicalCsvs = [...ids.keys()].flatMap(path => {
+    const match = /^sorted-([1-9]\d{3})\.csv$/.exec(path);
+    return match && !current.has(path) ? [{ path, kind: "csv" as const, index: Number(match[1]) }] : [];
+  });
+  return [...files, ...historicalCsvs].map((file) => {
     const id = ids.get(file.path);
-    return { ...file, id, action: id ? file.kind === "csv" ? "update" as const : "skip" as const : "create" as const };
+    return { ...file, id, action: id ? file.kind === "csv" || file.replace ? "update" as const : "skip" as const : "create" as const };
   });
 }

@@ -29,14 +29,14 @@ driveRoutes.get("/files", async (c) => {
   const safeUser = { ...publicUser(user), createdAt: user.createdAt.toISOString(), emailVerifiedAt: user.emailVerifiedAt?.toISOString() ?? null, driveBackedUpAt: user.driveBackedUpAt?.toISOString() ?? null };
   const paid = payments.map((payment) => ({ ...payment, paidAt: payment.paidAt?.toISOString() ?? null, createdAt: payment.createdAt.toISOString() }));
   const years = new Set<number>();
-  for (const payment of payments) if (payment.status === "paid" && payment.paidAt) years.add(payment.paidAt.getUTCFullYear());
+  for (const payment of payments) if (payment.paidAt) years.add(payment.paidAt.getUTCFullYear());
   for (const expense of expenses) if (expense.status === "confirmed" && expense.expenseDate) years.add(expense.expenseDate.getUTCFullYear());
   return c.json<DriveBackup>({ userId, logo: user.invoiceLogo, years: [...years].sort(), photos: photos.map((photo) => ({ ...photo, date: photo.date.toISOString().slice(0, 10) })), documents: documents.map(({ document, booking, client }) => {
     const data = assembleBookingDocument(
       safeUser,
       { ...booking, startAt: booking.startAt.toISOString(), endAt: booking.endAt?.toISOString() ?? null, completedAt: booking.completedAt?.toISOString() ?? null, paymentRequestedAt: booking.paymentRequestedAt?.toISOString() ?? null, createdAt: booking.createdAt.toISOString() },
       { ...client, createdAt: client.createdAt.toISOString() }, paid,
-      { ...document, issuedAt: document.issuedAt.toISOString() },
+      { ...document, issuedAt: document.issuedAt.toISOString(), voidedAt: document.voidedAt?.toISOString() ?? null },
     );
     return data;
   }) });

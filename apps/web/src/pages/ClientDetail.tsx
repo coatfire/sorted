@@ -1,13 +1,15 @@
 import { useState, type FormEvent } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { normalisePhone, UpdateClientInput } from "@sorted/core";
+import { moneyOwed, normalisePhone, UpdateClientInput } from "@sorted/core";
 import { BackButton, Button, Card, EmptyState, Field, Icon, MoneyText, Sheet } from "../components";
 import { dayMonth, whatsappLink } from "../lib/format";
 import { useAction, useData, useStore } from "../lib/store";
 import { BookingRow } from "./Home";
 import { useValidation } from "../lib/useValidation";
+import { useNow } from "../lib/useNow";
 
 export function ClientDetail() {
+  const now = useNow();
   const { id } = useParams();
   const { clients, bookings, payments } = useData();
   const { backend } = useStore();
@@ -37,11 +39,12 @@ export function ClientDetail() {
     .filter((booking) => booking.clientId === client.id)
     .sort((a, b) => b.startAt.localeCompare(a.startAt));
   const ids = new Set(theirs.map((booking) => booking.id));
-  const hasPaid = payments.some((payment) => ids.has(payment.bookingId) && payment.status === "paid");
+  const hasPaymentHistory = payments.some((payment) => ids.has(payment.bookingId) && (payment.status === "paid" || payment.paidAt !== null));
   const hasOpenBookings = theirs.some((booking) => booking.status === "enquiry" || booking.status === "confirmed");
-  const sum = (status: "paid" | "pending") =>
+  const { dueNowCents } = moneyOwed(theirs, payments, now);
+  const paidToDate =
     payments
-      .filter((payment) => ids.has(payment.bookingId) && payment.status === status)
+      .filter((payment) => ids.has(payment.bookingId) && payment.status === "paid")
       .reduce((total, payment) => total + payment.amountCents, 0);
 
   async function save(event: FormEvent<HTMLFormElement>) {
@@ -54,7 +57,7 @@ export function ClientDetail() {
   }
 
   async function remove() {
-    if (await run(() => backend.deleteClient(client!.id), hasPaid ? "Client anonymised" : "Client deleted")) {
+    if (await run(() => backend.deleteClient(client!.id), hasPaymentHistory ? "Client anonymised" : "Client deleted")) {
       navigate("/", { replace: true });
     }
   }
@@ -121,8 +124,8 @@ export function ClientDetail() {
 
       <Card className="year-card">
         <div className="year-stats">
-          <div><span>Paid to date</span><MoneyText cents={sum("paid")} /></div>
-          <div><span>Owes you</span><MoneyText cents={sum("pending")} className={sum("pending") ? "due-text" : ""} /></div>
+          <div><span>Paid to date</span><MoneyText cents={paidToDate} /></div>
+          <div><span>Owes you</span><MoneyText cents={dueNowCents} className={dueNowCents ? "due-text" : ""} /></div>
         </div>
       </Card>
 
@@ -148,14 +151,14 @@ export function ClientDetail() {
         <Sheet title="Delete client?" onClose={() => setDeleting(false)}>
           {hasOpenBookings ? (
             <p>Cancel or complete their open bookings first.</p>
-          ) : hasPaid ? (
-            <p>This client has paid payments. Their name will become “Deleted client”. Their phone, email and notes, messages, and booking notes and locations will be removed. Bookings and payments will be kept for your tax records. Receipts won’t be changed. This can’t be undone.</p>
+          ) : hasPaymentHistory ? (
+            <p>This client has payment records. Their name will become “Deleted client”. Their phone, email and notes, messages, and booking notes and locations will be removed. Bookings and payments will be kept for your tax records. Receipts won’t be changed. This can’t be undone.</p>
           ) : (
             <p>This client has no paid payments. The client, all their messages, payments and bookings will be permanently deleted. Receipts won’t be changed. This can’t be undone.</p>
           )}
           {!hasOpenBookings && (
             <Button kind="danger" disabled={busy} onClick={remove}>
-              {busy ? "Removing…" : hasPaid ? "Remove personal data" : "Delete client"}
+              {busy ? "Removing…" : hasPaymentHistory ? "Remove personal data" : "Delete client"}
             </Button>
           )}
           <Button kind="quiet" onClick={() => setDeleting(false)}>Cancel</Button>

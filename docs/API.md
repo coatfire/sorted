@@ -24,8 +24,9 @@ Authenticated, tenant-scoped and disabled (404) without `GOOGLE_CLIENT_ID`:
   (the top-level logo remains as a fallback for older clients). It never
   allocates numbers; previously issued quotes remain included after confirmation.
   Photos identify the user's expenses and receipt MIME types; photo bytes still
-  use authenticated `GET /expenses/:id/receipt`. Years are all UTC years with paid
-  payments or confirmed expenses, matching `GET /reports/export?year=…`.
+  use authenticated `GET /expenses/:id/receipt`. Years are all UTC years with a
+  dated payment (including undone rows) or confirmed expense, so old CSVs can
+  be refreshed to remove undone income through `GET /reports/export?year=…`.
 - `POST /drive/backed-up` (no body) sets only the authenticated user's
   `driveBackedUpAt`, returning `{ driveBackedUpAt }`. The browser calls this only
   after every planned file is uploaded, updated or verified already present.
@@ -41,7 +42,8 @@ a token and starts the backup.
 Backups use an app-created `Sorted` folder marked for this Sorted user so two
 Sorted accounts sharing a Google account cannot skip each other's numbered files.
 Subfolders: `Invoices`, `Receipts`, `Quotes`, `Expense photos`. Existing document
-and photo names are skipped; yearly `sorted-YYYY.csv` files are always updated in
+and photo names are skipped, except voided receipts replace their previous PDF;
+yearly `sorted-YYYY.csv` files are always updated in
 place, including earlier years. Failed or cancelled runs never mark completion;
 successful partial uploads remain available to skip on retry. An empty account
 does not record a backup. Users manage/delete their backups in Google Drive.
@@ -266,6 +268,39 @@ Calendar names are “Sorted – Confirmed” and “Sorted – Enquiries”. Re
 Enquiry event descriptions include `Follow up: YYYY-MM-DD` when a follow-up date is set; the line is omitted otherwise.
 
 ## Payments
+### Correcting a manually recorded payment
+
+`PATCH /payments/:id` accepts `{ amount_cents, method, paid_at }`: a positive
+integer amount, cash/bank_transfer/revolut, and an ISO timestamp with timezone
+no later than now. At least one field is required; omissions stay unchanged. Only paid manual rows may be
+edited. Total paid cannot exceed the booking price (409). An issued receipt
+blocks editing (409): **A receipt was issued for this payment. Undo it and record it again.**
+
+`POST /payments/:id/undo` retains the row, amount, method and paid date for audit,
+sets its existing status to `cancelled`, and marks any linked receipt with
+nullable `invoices.voided_at` (migration 0017). It never moves money or changes
+the booking status. Frozen document and receipt snapshots are unchanged; PDF
+assembly overlays **VOID**. Re-requesting that existing receipt returns it,
+including its void marker, but cannot issue a new receipt for an undone row.
+
+Both reject Stripe-paid rows with 409 **Paid by card — refund it in Stripe**.
+`method=stripe` is the paid-by-card marker; an old Stripe link ID on a manually
+settled payment is not. Unknown or other-tenant rows return 404; non-paid rows
+return 409. These operations use the shared deadlock-retrying transaction and
+users → clients → bookings → payments → invoices row-lock order. Mismatched
+pending balances are cancelled and their links deactivated after commit.
+Events are `payment.corrected` and `payment.undone`, emitted after commit.
+
+Undone rows are excluded, not negated, in income, tax and accountant CSVs.
+Client deletion keeps their audit rows through the existing anonymisation path,
+even when every previously paid row has since been undone.
+Drive refreshes CSVs even for a year whose last paid row was undone, and
+replaces previously backed-up receipt PDFs with their void-marked versions.
+The backup plan also refreshes every yearly CSV already present in this user's
+Sorted Drive folder, even when date corrections or deletions leave that year
+empty. Empty years overwrite the old CSV with a header-only export.
+`GET /payments` includes `receiptVoidedAt` beside each payment for the UI.
+
 | Method | Path                     | Notes |
 |--------|--------------------------|-------|
 | GET    | /payments                | `?status=pending` = the "who owes me" view |

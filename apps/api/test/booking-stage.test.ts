@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { bookingStage, type Booking, type Payment } from "@sorted/core";
-import { bookingPaymentPhrase, nextBookingDate, pendingDepositCents } from "../../web/src/lib/bookingDetail";
+import { bookingPaymentPhrase, nextBookingDate, unpaidDepositCents } from "../../web/src/lib/bookingDetail";
 
 const now = new Date("2026-11-15T12:00:00Z");
 const booking = { id: "booking", status: "confirmed", startAt: "2026-11-16T10:00:00Z", priceCents: 8000 } satisfies Pick<Booking, "id" | "status" | "startAt" | "priceCents">;
@@ -45,10 +45,13 @@ describe("bookingStage", () => {
 });
 
 describe("booking payment descriptions", () => {
-  it("shows only live pending deposits, capped at the remaining balance", () => {
-    const deposit = { ...payment, kind: "deposit" as const, status: "pending" as const, amountCents: 2000 };
-    expect(pendingDepositCents(booking, [deposit, { ...deposit, bookingId: "other" }, { ...deposit, status: "cancelled" }, { ...deposit, status: "paid" }, { ...deposit, kind: "balance" }], 1000)).toBe(1000);
-    expect(pendingDepositCents(booking, [], 8000)).toBe(0);
+  it("computes the unpaid agreed deposit from price minus paid, even without pending rows after undo", () => {
+    const withDeposit = { ...booking, depositCents: 2000 };
+    expect(unpaidDepositCents(withDeposit, 8000)).toBe(2000);
+    expect(unpaidDepositCents(withDeposit, 7000)).toBe(1000);
+    expect(unpaidDepositCents(withDeposit, 6000)).toBe(0);
+    expect(unpaidDepositCents(withDeposit, 0)).toBe(0);
+    expect(unpaidDepositCents({ ...withDeposit, depositCents: 10000 }, 8000)).toBe(8000);
   });
   it("separates work status from payment copy", () => {
     expect(bookingPaymentPhrase("upcoming", 8000, 2000)).toBe("€20.00 deposit due");

@@ -265,7 +265,17 @@ Money → Client messages. Lead with at most one primary page action.
   “Old links will stop working.” In demo, disable the controls and show
   “Available when you sign in”; never show fake subscription URLs.
 - **Add payment:** the Next step/More action opens the existing **Record payment**
-  Sheet with a euro-prefixed decimal amount
+  sheet. Paid manual payment rows are ≥44px buttons opening **Edit payment**
+  (amount, method and Ireland-local date). **Undo payment** requires a second
+  confirmation explaining that the amount returns to owed, any receipt is
+  marked VOID, the audit row remains, and no money is moved. Card-paid rows say
+  **Paid by card** and have no correction actions; refund those in Stripe.
+  Undone rows remain visible as **Undone**; **Voided receipt** downloads the
+  original frozen receipt with a clear VOID marker, not a newly issued receipt.
+  Issued receipts block editing: undo and record a new payment instead.
+  Actions preserve committed/refresh-error handling and offer Reload rather
+  than encouraging a duplicate write. The regular Record payment
+  sheet has a euro-prefixed decimal amount
   (defaults to all outstanding), method (Cash / Bank transfer / Revolut), and
   date (defaults to today in Ireland; no future dates). Validate on blur,
   clear errors on edit, focus the first invalid field on submit. Success:
@@ -484,7 +494,9 @@ kit; resist adding more.
   disabled/`accessNotConfigured` 403 says **Google Drive isn't switched on for
   Sorted yet**. Never display raw Google error bodies/tokens.
 - Preserve previous completion timestamps on failure, skip already-uploaded
-  PDF/photo files on retry and refresh yearly CSVs in place. Targets ≥44px.
+  PDF/photo files on retry except replace newly voided receipt PDFs, and
+  refresh yearly CSVs in place, including years with only undone payments.
+  Targets ≥44px.
 
 ## Accessibility & PWA floor (M8 checklist)
 

@@ -71,6 +71,13 @@ describe("Drive backup API", () => {
 });
 
 describe("Drive backup planning", () => {
+  it("refreshes historical root CSVs absent from current financial years, including an empty account", () => {
+    const existing = [{ path: "sorted-2024.csv", id: "old-year" }, { path: "Receipts/sorted-2023.csv", id: "nested" }, { path: "sorted-not-a-year.csv", id: "unrelated" }];
+    expect(planDriveBackup([{ path: "sorted-2026.csv", kind: "csv", index: 2026 }], existing)).toMatchObject([
+      { index: 2026, action: "create" }, { index: 2024, action: "update", id: "old-year" },
+    ]);
+    expect(planDriveBackup([], existing)).toEqual([{ path: "sorted-2024.csv", kind: "csv", index: 2024, id: "old-year", action: "update" }]);
+  });
   it("creates missing files, skips existing documents/photos and updates every existing CSV in place", () => {
     const plan = planDriveBackup([
       { path: "Invoices/INV-0001.pdf", kind: "document", index: 0 },
