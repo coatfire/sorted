@@ -23,6 +23,7 @@ describe("reading a client list", () => {
   it("splits CSV with quotes, semicolons, a BOM and Windows line endings", () => {
     expect(parseCsv('\uFEFFName,Phone\r\n"Murphy, Mary","087 ""work"""\r\nSeán,\r\n')).toEqual([["Name", "Phone"], ["Murphy, Mary", '087 "work"'], ["Seán", ""]]);
     expect(parseCsv("Name;Phone\nAoife;0871234567")).toEqual([["Name", "Phone"], ["Aoife", "0871234567"]]);
+    expect(clientSheet(parseCsv("\r\n\r\nName;Phone\r\nAoife;0871234567")).rows).toEqual([{ name: "Aoife", phone: "353871234567", email: undefined, notes: undefined }]);
     expect(parseCsv('Name\tNotes\n"two\nlines"\tx')).toEqual([["Name", "Notes"], ["two\nlines", "x"]]);
   });
 

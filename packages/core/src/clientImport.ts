@@ -36,7 +36,7 @@ export interface ClientSheet {
 /** Splits CSV text into rows. Accepts commas, semicolons or tabs, quoted cells and a leading BOM. */
 export function parseCsv(text: string): string[][] {
   const source = text.replace(/^\uFEFF/, "");
-  const first = source.split(/\r?\n/, 1)[0] ?? "";
+  const first = source.split(/\r?\n/).find((line) => line.trim()) ?? "";
   const count = (mark: string) => first.split(mark).length;
   const delimiter = [",", ";", "\t"].reduce((best, mark) => count(mark) > count(best) ? mark : best);
   const rows: string[][] = [];
