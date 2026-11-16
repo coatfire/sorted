@@ -31,7 +31,7 @@ describe("incomplete enquiry API", () => {
     expect(retrieved.status).toBe(200);
     expect(await retrieved.json()).toEqual(frozen);
     expect((await other.request(`/bookings/${booking.id}/documents`, body)).status).toBe(404);
-    const newDocument = await f.request(`/bookings/${booking.id}/documents`, { kind: kind === "quote" ? "invoice" : "quote" });
+    const newDocument = await f.request(`/bookings/${booking.id}/documents`, kind === "receipt" ? { kind, payment_id: crypto.randomUUID() } : { kind: kind === "quote" ? "invoice" : "quote" });
     expect(newDocument.status).toBe(409);
     expect(await newDocument.json()).toEqual({ error: "Add a price first" });
     expect(await db.select().from(schema.invoices).where(eq(schema.invoices.bookingId, booking.id))).toHaveLength(1);
