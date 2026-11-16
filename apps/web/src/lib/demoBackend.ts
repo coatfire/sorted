@@ -154,6 +154,7 @@ function read(): DemoData {
     if (saved) {
       const data = JSON.parse(saved) as DemoData;
       data.user = { ...data.user, ...TaxSettings.parse(data.user) };
+      data.features = { ...data.features, addressSearch: true };
       data.expenses = data.expenses.map((expense) => ({ ...expense, vatCents: expense.vatCents ?? null }));
       data.payments = data.payments.map((payment) => ({ ...payment, vatRateBp: payment.vatRateBp ?? null }));
       return data;
