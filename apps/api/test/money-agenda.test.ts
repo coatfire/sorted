@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { bookingAgenda, moneyOwed, moneyYear, type Booking, type Payment, type Expense } from "@sorted/core";
+import { bookingAgenda, lastYearEnd, moneyOwed, moneyYear, type Booking, type Payment, type Expense } from "@sorted/core";
 import { appointmentWhen, irelandDayLabel, irelandTime } from "../../web/src/lib/today";
 
 const now = new Date("2026-07-01T23:30:00Z");
@@ -71,5 +71,20 @@ describe("Money year-to-date basis", () => {
     expect(result.estimate).toMatchObject({ netIncomeCents: 11000, netExpenseCents: 2000, profitCents: 9000, incomeTaxCents: 1800 });
     expect(moneyYear([], [], settings, now).monthlyIncomeCents).toEqual(Array(12).fill(0));
     expect(() => moneyYear([], [], settings, new Date("invalid"))).toThrow();
+  });
+
+  it("shows the whole of last year when asked, and nothing from this year", () => {
+    const settings = { vatRegistered: false, vatRateBp: null, vatPeriodMonths: 2, incomeTaxRateBp: null };
+    expect(lastYearEnd(now).toISOString()).toBe("2025-12-31T23:59:59.999Z");
+    expect(lastYearEnd(new Date("2025-12-31T23:59:59Z")).toISOString()).toBe("2024-12-31T23:59:59.999Z");
+    expect(lastYearEnd(new Date("2026-01-01T00:00:00Z")).toISOString()).toBe("2025-12-31T23:59:59.999Z");
+    const payments = [
+      payment("a", 5000, { paidAt: "2025-01-01T00:00:00Z" }), payment("a", 3000, { paidAt: "2025-12-31T23:59:59Z" }),
+      payment("a", 700, { paidAt: "2024-12-31T23:59:59Z" }), payment("a", 900, { paidAt: "2026-01-01T00:00:00Z" }), payment("a", 1100),
+    ].map(row => ({ ...row, vatRateBp: null }));
+    const expenses: Expense[] = ["2024-12-31", "2025-01-01", "2025-12-31", "2026-01-01"].map((expenseDate, index) => ({ id: `e${index}`, merchant: "Supplies", amountCents: 1000, vatCents: null, status: "confirmed", expenseDate, category: "materials", receiptKey: null, createdAt: now.toISOString() }));
+    const result = moneyYear(payments, expenses, settings, lastYearEnd(now));
+    expect(result.estimate).toMatchObject({ year: 2025, netIncomeCents: 8000, netExpenseCents: 2000, profitCents: 6000 });
+    expect(result.monthlyIncomeCents).toEqual([5000, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3000]);
   });
 });

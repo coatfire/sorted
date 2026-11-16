@@ -359,6 +359,9 @@ Order: heading → Owed hero → Due now → Coming up → This year → collaps
   with a single pending full-balance row, deactivating voided links after commit.
   Never invent a payment id in the browser; demo follows the same rules.
 - **This year:** one card, Ireland-local year/month boundaries, year-to-date only.
+  Choosing **Last year** in the export choices switches the card's heading,
+  totals and chart to the whole of last year; **Other dates** changes only the
+  export and leaves the card on the year it was showing.
   Paid income after recorded VAT, confirmed expenses after reclaimable VAT, and
   profit before income tax use the tax estimate's exact YTD basis.
   Monthly paid-income bars use the same net basis and exclude future receipts.

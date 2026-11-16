@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom";
 import { useState } from "react";
-import { calendarDaysBetween, dublinDateTime, exportFileName, ExportRange, irelandToday, moneyOwed, moneyYear, yearRange, type OwedItem } from "@sorted/core";
+import { calendarDaysBetween, dublinDateTime, exportFileName, ExportRange, irelandToday, lastYearEnd, moneyOwed, moneyYear, yearRange, type OwedItem } from "@sorted/core";
 import { BookingMessageSheet } from "../BookingMessageSheet";
 import type { BookingRow } from "../lib/backend";
 import { Button, Card, EmptyState, Field, Icon, MoneyText, PageHeader } from "../components";
@@ -22,11 +22,14 @@ export function Money() {
   const [reminder, setReminder] = useState<{ booking: BookingRow; amount: number } | null>(null);
   const now = useNow();
   const { dueNow, comingUp, dueNowCents, comingUpCents } = moneyOwed(bookings, payments, now);
-  const { estimate, monthlyIncomeCents: months } = moneyYear(payments, expenses, user, now);
+  const { estimate, monthlyIncomeCents } = moneyYear(payments, expenses, user, now);
   const year = estimate.year;
-  const thisMonth = Number(dublinDateTime(now).date.slice(5, 7)) - 1;
-  const peak = Math.max(...months, 1);
   const [period, setPeriod] = useState<"this" | "last" | "custom">("this");
+  const [showLast, setShowLast] = useState(false);
+  const last = showLast ? moneyYear(payments, expenses, user, lastYearEnd(now)) : null;
+  const shown = last?.estimate ?? estimate, months = last?.monthlyIncomeCents ?? monthlyIncomeCents;
+  const thisMonth = showLast ? -1 : Number(dublinDateTime(now).date.slice(5, 7)) - 1;
+  const peak = Math.max(...months, 1);
   const [custom, setCustom] = useState<ExportRange>(() => ({ from: `${year}-01-01`, to: irelandToday(now) }));
   const chosen = ExportRange.safeParse(period === "custom" ? custom : yearRange(period === "last" ? year - 1 : year));
   const range = chosen.success ? chosen.data : null;
@@ -64,19 +67,19 @@ export function Money() {
       {reminder && <BookingMessageSheet booking={reminder.booking} kind="payment_request" initialAmountCents={reminder.amount} onClose={() => setReminder(null)} />}
       <section className="list-section">
         <div className="section-heading">
-          <div><p className="eyebrow">This year</p><h2>{year} so far</h2></div>
+          <div><p className="eyebrow">{showLast ? "Last year" : "This year"}</p><h2>{showLast ? shown.year : `${year} so far`}</h2></div>
         </div>
         <Card className="year-card">
-          <p className="year-basis">Year to date · after recorded VAT and reclaimable expense VAT</p>
+          <p className="year-basis">{showLast ? "Full year" : "Year to date"} · after recorded VAT and reclaimable expense VAT</p>
           <div className="year-stats">
-            <div><span>Paid income</span><MoneyText cents={estimate.netIncomeCents} /></div>
-            <div><span>Expenses</span><MoneyText cents={estimate.netExpenseCents} /></div>
+            <div><span>Paid income</span><MoneyText cents={shown.netIncomeCents} /></div>
+            <div><span>Expenses</span><MoneyText cents={shown.netExpenseCents} /></div>
             <div className="profit-stat">
-              <span>Profit before income tax</span><MoneyText cents={estimate.profitCents} />
+              <span>Profit before income tax</span><MoneyText cents={shown.profitCents} />
             </div>
           </div>
-          <p className="chart-title">Paid income by month · same year-to-date basis</p>
-          <div className="bar-chart" role="img" aria-label={`Paid income after recorded VAT by month, ${year}. ${months.map((amount, i) => `${MONTH_NAMES[i]} ${euros(amount)}`).join(", ")}`}>
+          <p className="chart-title">Paid income by month · same {showLast ? "full-year" : "year-to-date"} basis</p>
+          <div className="bar-chart" role="img" aria-label={`Paid income after recorded VAT by month, ${shown.year}. ${months.map((amount, i) => `${MONTH_NAMES[i]} ${euros(amount)}`).join(", ")}`}>
             {months.map((month, index) => (
               <div className="bar-column" key={index} title={`${MONTH_NAMES[index]}: ${euros(month)}`}>
                 <span
@@ -95,7 +98,7 @@ export function Money() {
             <legend>Export for your accountant</legend>
             <div className="export-choices">
               {([["this", `This year (${year})`], ["last", `Last year (${year - 1})`], ["custom", "Other dates"]] as const).map(([value, label]) => (
-                <button type="button" key={value} aria-pressed={period === value} onClick={() => setPeriod(value)}>{label}</button>
+                <button type="button" key={value} aria-pressed={period === value} onClick={() => { setPeriod(value); if (value !== "custom") setShowLast(value === "last"); }}>{label}</button>
               ))}
             </div>
             {period === "custom" && (
