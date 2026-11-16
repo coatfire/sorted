@@ -5,7 +5,7 @@
  * payment links are simulated — nothing leaves the browser.
  */
 import type { Client, Expense, MessageLogEntry, Payment, BookingDocument, BusyBlock } from "@sorted/core";
-import { inExportRange, paidOn, PlaceSearchInput, PLACE_SUGGESTION_LIMIT, snapshotReceipt, snapshotDocument, documentNumber, TaxSettings, ConfirmExpenseInput, RecordPaymentInput, EditPaymentInput, paymentPaidAt, irelandToday, addCalendarDays, CalendarDate, shiftDublinWeeks, RepeatInput, Services, bookingStage, CreateClientInput, UpdateClientInput, MessageSentInput, CreateBookingInput, agreedBookingStart, missingBookingDetails, bookingAtDublinTime, BusyRange } from "@sorted/core";
+import { toCsv, inExportRange, paidOn, PlaceSearchInput, PLACE_SUGGESTION_LIMIT, snapshotReceipt, snapshotDocument, documentNumber, TaxSettings, ConfirmExpenseInput, RecordPaymentInput, EditPaymentInput, paymentPaidAt, irelandToday, addCalendarDays, CalendarDate, shiftDublinWeeks, RepeatInput, Services, bookingStage, CreateClientInput, UpdateClientInput, MessageSentInput, CreateBookingInput, agreedBookingStart, missingBookingDetails, bookingAtDublinTime, BusyRange } from "@sorted/core";
 import type { Backend, BookingRow, Snapshot } from "./backend";
 import { blobToDataUrl } from "./image";
 import { settingsAutosaveRegistry } from "./settingsAutosaveSession";
@@ -198,8 +198,6 @@ const voidPending = (bookingId: string) => {
     if (p.bookingId === bookingId && p.status === "pending") p.status = "cancelled";
   }
 };
-
-const csvCell = (value: unknown) => `"${String(value ?? "").replaceAll('"', '""')}"`;
 
 function validateDetails(booking: Pick<BookingRow, "startAt" | "timeTbc" | "priceCents" | "depositCents" | "status">) {
   const missing = missingBookingDetails(booking);
@@ -614,8 +612,6 @@ export const demoBackend: Backend = {
           e.vatCents == null ? "" : (e.vatCents / 100).toFixed(2),
         ]),
     ];
-    return new Blob([rows.map((row) => row.map(csvCell).join(",")).join("\n")], {
-      type: "text/csv",
-    });
+    return new Blob([toCsv(rows)], { type: "text/csv;charset=utf-8" });
   },
 };
