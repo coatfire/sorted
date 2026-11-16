@@ -6,6 +6,7 @@ import { bookingStage, type BookingStatus } from "@sorted/core";
 it("renders every booking stage with at most one primary and its expected next-step action", async () => {
   const cases = [
     { status: "enquiry", paid: 0, primary: "Confirm booking", next: ["Quote", "Change follow-up"] },
+    { status: "enquiry", paid: 0, incomplete: true, primary: "Confirm booking", next: ["Quote", "Change follow-up"] },
     { status: "confirmed", paid: 2500, primary: "Add payment", next: ["Ask for payment"] },
     { status: "confirmed", paid: 8000, primary: null, next: ["Booking confirmed", "All set"] },
     { status: "confirmed", paid: 0, futureToday: true, primary: "Add payment", next: ["Booking confirmed", "Get ready for", "Ask for payment"] },
@@ -17,11 +18,11 @@ it("renders every booking stage with at most one primary and its expected next-s
     { status: "cancelled", paid: 2500, primary: null, next: ["Book again"] },
     { status: "enquiry", paid: 0, automation: true, primary: "Confirm &amp; notify Áine", next: ["Quote"] },
     { status: "completed", paid: 0, price: 0, primary: "Book again", next: ["Receipt"] },
-  ] satisfies { status: BookingStatus; paid: number; today?: boolean; futureToday?: boolean; price?: number; automation?: boolean; primary: string | null; next: string[] }[];
+  ] satisfies { status: BookingStatus; paid: number; incomplete?: boolean; today?: boolean; futureToday?: boolean; price?: number; automation?: boolean; primary: string | null; next: string[] }[];
   const props = cases.map(item => {
     const booking = {
-      id: "booking", status: item.status, service: "Gel nails", priceCents: item.price ?? 8000,
-      startAt: item.today ? "2026-11-15T10:00:00Z" : item.futureToday ? "2026-11-15T22:00:00Z" : "2026-11-18T10:00:00Z", followUpOn: "2026-11-17",
+      id: "booking", status: item.status, service: "Gel nails", priceCents: item.incomplete ? null : item.price ?? 8000,
+      startAt: item.incomplete ? null : item.today ? "2026-11-15T10:00:00Z" : item.futureToday ? "2026-11-15T22:00:00Z" : "2026-11-18T10:00:00Z", followUpOn: "2026-11-17",
       client: { name: "Áine Murphy", phone: "+353871234567" },
     };
     return { booking, ...bookingStage(booking, [{ bookingId: booking.id, amountCents: item.paid, status: "paid" }], new Date("2026-11-15T12:00:00Z")), depositCents: 2000, hasPaidPayment: item.paid > 0, automation: item.automation ?? false, busy: false, documentBusy: false };
@@ -61,8 +62,16 @@ it("renders every booking stage with at most one primary and its expected next-s
     expect(content).not.toContain("Request payment");
     if (item.status === "enquiry") {
       expect(more).not.toContain("Invoice");
-      expect(more).toContain("Ask for payment");
+      if (!item.incomplete) expect(more).toContain("Ask for payment");
       expect(next).toContain("Follow up on");
+      if (item.incomplete) {
+        const cancel = [...more.matchAll(/<button\b([^>]*)>([\s\S]*?)<\/button>/g)].find(match => match[2].includes("Cancel enquiry"));
+        expect(cancel).toBeDefined();
+        expect(cancel![1]).not.toContain("disabled");
+        expect(content).toContain("cancel this enquiry as it is");
+        expect(content).not.toContain("before confirming or cancelling");
+        expect(more).not.toContain("Add to calendar");
+      }
     }
     if (item.status === "confirmed") {
       expect(content.match(/Mark complete/g)).toHaveLength(1);

@@ -248,7 +248,7 @@ export function BookingForm() {
               <input name="time" type="time" value={form.time} onChange={(event) => update("time", event.target.value)} />
             </Field>
           </div>
-          {original && <div className="repeat-week-chips" role="group" aria-label="Book again in">
+          {original?.startAt && <div className="repeat-week-chips" role="group" aria-label="Book again in">
             {([1, 2, 4, 6] as const).map((value) => <button type="button" aria-pressed={weeks === value} key={value} onClick={() => {
               setWeeks(value);
               const next = dublinDateTime(bookAgainStart(original.startAt!, value));

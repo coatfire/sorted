@@ -81,6 +81,8 @@ describe("incomplete enquiry API", () => {
     const f = await fixture(), other = await fixture();
     const booking = await (await f.create({ ...details, price_cents: 8000, follow_up_on: "2027-07-09" })).json() as Booking;
     const requested = await (await f.request(`/bookings/${booking.id}/payment-requested`)).json() as Booking;
+    expect(requested.paymentRequestedAt).toEqual(expect.any(String));
+    expect(booking.followUpOn).not.toBeNull();
     expect((await f.request(`/bookings/${booking.id}`, { price_cents: null }, "PATCH")).status).toBe(200);
     expect((await other.request(`/bookings/${booking.id}/cancel`)).status).toBe(404);
     vi.stubEnv("N8N_WEBHOOK_URL", "https://automation.example.com");
@@ -136,6 +138,8 @@ describe("incomplete enquiry core", () => {
     const declined = await demoBackend.createBooking({ ...draft, followUpOn: "2027-07-09", priceCents: 8000 });
     await demoBackend.paymentRequested(declined.id);
     const requested = (await demoBackend.load()).bookings.find(booking => booking.id === declined.id)!;
+    expect(requested.paymentRequestedAt).toEqual(expect.any(String));
+    expect(requested.followUpOn).toBe("2027-07-09");
     await demoBackend.updateBooking(declined.id, draft);
     await demoBackend.cancelBooking(declined.id);
     expect((await demoBackend.load()).bookings.find(booking => booking.id === declined.id)).toMatchObject({ status: "cancelled", startAt: null, priceCents: null, followUpOn: null, paymentRequestedAt: requested.paymentRequestedAt });
