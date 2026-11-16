@@ -487,10 +487,11 @@ kit; resist adding more.
   alone never records Asked or history. After opening, **I sent it** explicitly
   records user-confirmed sending; payment requests also update Asked. No
   acknowledgement issues a receipt or changes income/work status.
-- App-wide: while a text control is focused or `visualViewport` shrinks for a
-  keyboard, hide sticky save footers, bottom navigation and its floating +.
+- App-wide: while a text control is focused, hide sticky save footers, bottom
+  navigation and its floating +. Resizing a desktop window without editable
+  focus must not hide controls; there is no retained height baseline.
   Sheet content remains scrollable within the visible height; static form
-  buttons remain reachable. Restore controls on blur/keyboard dismissal.
+  buttons remain reachable. Restore controls on blur.
 
 ### Revolut payment details and documents
 
