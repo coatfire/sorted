@@ -401,6 +401,8 @@ omitted PATCH fields preserve their values.
 
 Recording/requesting payment or issuing a quote/invoice without a price
 returns 409, `Add a price first`. No payment row is created for an enquiry.
+This guard only applies to issuing new documents: already-issued frozen
+quotes, invoices and receipts remain retrievable even if the price is now null.
 Undated enquiries are excluded from calendar feeds; time-TBC enquiries are
 all-day events with exclusive next-day ends. Unknown prices never contribute
 to owed, tax or CSV totals; Drive/CSV income continues to derive from paid rows.

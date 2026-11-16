@@ -145,8 +145,6 @@ bookingRoutes.post("/:id/documents", async (c) => {
     const row = await lockBookingWithClient(tx, userId, bookingId);
     if (!row) return c.json({ error: "Booking not found" }, 404);
     const { booking, client } = row;
-    if (booking.priceCents === null) return c.json({ error: "Add a price first" }, 409);
-    if (kind === "quote" && booking.status !== "enquiry") return c.json({ error: "Quotes are only available for enquiries." }, 409);
     const paidPayments = await tx.select().from(schema.payments).where(and(
       eq(schema.payments.bookingId, bookingId), eq(schema.payments.userId, userId),
     )).orderBy(schema.payments.id).for("update");
@@ -155,6 +153,8 @@ bookingRoutes.post("/:id/documents", async (c) => {
       ...(kind === "receipt" ? [eq(schema.invoices.paymentId, paymentId!)] : []),
     ));
     if (existing) return c.json(existing);
+    if (booking.priceCents === null) return c.json({ error: "Add a price first" }, 409);
+    if (kind === "quote" && booking.status !== "enquiry") return c.json({ error: "Quotes are only available for enquiries." }, 409);
     if (kind === "receipt") {
       const payment = paidPayments.find((payment) => payment.id === paymentId);
       if (!payment) return c.json({ error: "Payment not found" }, 404);

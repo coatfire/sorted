@@ -222,11 +222,12 @@ export const demoBackend: Backend = {
   async resetCalendar() { throw new Error("Available when you sign in"); },
   async document(bookingId, kind, paymentId) {
     const d = data();
-    const booking = pricedBooking(bookingId);
-    if (kind === "quote" && booking.status !== "enquiry") throw new Error("Quotes are only available for enquiries.");
+    const booking = mustFind(d.bookings, bookingId, "Booking");
     const documents = d.documents ??= [];
     const existing = documents.find((document) => document.bookingId === bookingId && document.kind === kind && (kind !== "receipt" || document.paymentId === paymentId));
     if (existing) return structuredClone(existing);
+    pricedBooking(bookingId);
+    if (kind === "quote" && booking.status !== "enquiry") throw new Error("Quotes are only available for enquiries.");
     if (kind === "receipt" && !d.payments.some((payment) => payment.id === paymentId && payment.bookingId === bookingId && payment.status === "paid")) throw new Error("Choose a paid payment for this receipt.");
     const issuedAt = now();
     const document: BookingDocument = {

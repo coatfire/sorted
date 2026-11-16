@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { eq } from "drizzle-orm";
 import { bookingAgenda, bookingStage, buildCalendar, calendarEvent, CreateBookingInput, DEFAULT_BOOKING_CONFIRMATION_TEMPLATE, dublinDateTime, moneyOwed, renderBookingMessage, taxEstimate, type Booking } from "@sorted/core";
 import { app } from "../src/app";
 import { db, schema } from "../src/db";
@@ -16,6 +17,25 @@ async function fixture() {
 }
 
 describe("incomplete enquiry API", () => {
+  it.each(["quote", "invoice", "receipt"] as const)("retrieves a frozen %s even when the booking no longer has a price", async kind => {
+    const f = await fixture(), other = await fixture();
+    const booking = await (await f.create({ start_at: "2027-07-10T09:00:00Z", price_cents: 8000, status: kind === "receipt" ? "confirmed" : "enquiry" })).json() as Booking;
+    const payment = kind === "receipt" ? await (await f.request(`/bookings/${booking.id}/payments`, { amount_cents: 1000, method: "cash" })).json() as { payment: { id: string } } : null;
+    const body = { kind, ...(payment ? { payment_id: payment.payment.id } : {}) };
+    const issued = await f.request(`/bookings/${booking.id}/documents`, body);
+    expect(issued.status).toBe(200);
+    const frozen = await issued.json();
+    if (kind === "receipt") await db.update(schema.bookings).set({ priceCents: null }).where(eq(schema.bookings.id, booking.id));
+    else expect((await f.request(`/bookings/${booking.id}`, { price_cents: null }, "PATCH")).status).toBe(200);
+    const retrieved = await f.request(`/bookings/${booking.id}/documents`, body);
+    expect(retrieved.status).toBe(200);
+    expect(await retrieved.json()).toEqual(frozen);
+    expect((await other.request(`/bookings/${booking.id}/documents`, body)).status).toBe(404);
+    const newDocument = await f.request(`/bookings/${booking.id}/documents`, { kind: kind === "quote" ? "invoice" : "quote" });
+    expect(newDocument.status).toBe(409);
+    expect(await newDocument.json()).toEqual({ error: "Add a price first" });
+    expect(await db.select().from(schema.invoices).where(eq(schema.invoices.bookingId, booking.id))).toHaveLength(1);
+  });
   it.each(["confirm", "update"])("requires an explicit start when agreeing a TBC time through %s", async action => {
     const f = await fixture();
     const booking = await (await f.create({ start_at: "2027-07-10T12:00:00Z", time_tbc: true, price_cents: 8000 })).json() as Booking;
@@ -150,6 +170,13 @@ describe("incomplete enquiry core", () => {
     resetDemo();
     const draft = { client: { name: "Client" }, service: "Bridal hair", startAt: null, priceCents: null, depositCents: 0, location: null, notes: null };
     const created = await demoBackend.createBooking(draft);
+    for (const kind of ["quote", "invoice"] as const) {
+      const priced = await demoBackend.createBooking({ ...draft, priceCents: 8000 });
+      const frozen = await demoBackend.document(priced.id, kind);
+      await demoBackend.updateBooking(priced.id, draft);
+      expect(await demoBackend.document(priced.id, kind)).toEqual(frozen);
+      await expect(demoBackend.document(priced.id, kind === "quote" ? "invoice" : "quote")).rejects.toThrow("Add a price first");
+    }
     const declined = await demoBackend.createBooking({ ...draft, followUpOn: "2027-07-09", priceCents: 8000 });
     await demoBackend.paymentRequested(declined.id);
     const requested = (await demoBackend.load()).bookings.find(booking => booking.id === declined.id)!;
