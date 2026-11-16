@@ -11,7 +11,7 @@ import { BookingCalendarSheet } from "../BookingCalendarSheet";
 import { BookingSteps } from "../BookingSteps";
 import { bookingPaymentPhrase, unpaidDepositCents, type BookingDetailAction } from "../lib/bookingDetail";
 import {
-  euros, kindLabel, longDay, messageLabel, methodLabel, stamp, time,
+  euros, formatPhone, kindLabel, longDay, messageLabel, methodLabel, stamp, time,
 } from "../lib/format";
 import { useAction, useData, useStore, useSession } from "../lib/store";
 import { download } from "../lib/image";
@@ -143,7 +143,7 @@ export function BookingDetail() {
           <span className="detail-icon"><Icon name="user" /></span>
           <Link to={`/clients/${client.id}`} className="detail-link">
             <strong>{client.name}</strong>
-            <span>{client.phone || "No mobile added — tap to add one"}</span>
+            <span>{formatPhone(client.phone) || "No mobile added — tap to add one"}</span>
           </Link>
         </div>
       </Card>

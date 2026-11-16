@@ -3,7 +3,7 @@ import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom"
 import { normaliseClientPhone, CreateClientInput, CalendarDate, irelandToday, addCalendarDays, bookAgainStart, bookingAtDublinTime, dublinDateTime, RepeatInput, type Client } from "@sorted/core";
 import { BackButton, Button, Card, EmptyState, Field, Icon, MoneyText, PageHeader } from "../components";
 import type { BookingRow } from "../lib/backend";
-import { centsToInput, longDay, parseEuros, time } from "../lib/format";
+import { centsToInput, formatPhone, longDay, parseEuros, time } from "../lib/format";
 import { bookingServiceChips, serviceChipPrice } from "../lib/bookingServices";
 import { BookingMessageSheet } from "../BookingMessageSheet";
 import { useAction, useData, useStore } from "../lib/store";
@@ -168,7 +168,7 @@ export function BookingForm() {
                 <span className="client-initial">{client.name[0]?.toUpperCase()}</span>
                 <div>
                   <strong>{client.name}</strong>
-                  <span>{client.phone ?? "No mobile on file"}</span>
+                  <span>{formatPhone(client.phone) || "No mobile on file"}</span>
                 </div>
                 <button type="button" className="text-link" onClick={() => setClient(null)}>Change</button>
               </div>
@@ -193,7 +193,7 @@ export function BookingForm() {
                     {matches.map((match) => (
                       <button type="button" key={match.id} onClick={() => { setClient(match); validation.clear(); }}>
                         <span className="client-initial">{match.name[0]?.toUpperCase()}</span>
-                        <span><strong>{match.name}</strong><small>{match.phone ?? "No mobile"}</small></span>
+                        <span><strong>{match.name}</strong><small>{formatPhone(match.phone) || "No mobile"}</small></span>
                         <em>Use</em>
                       </button>
                     ))}

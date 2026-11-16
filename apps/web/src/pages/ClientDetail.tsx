@@ -2,7 +2,7 @@ import { useState, type FormEvent } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { moneyOwed, normaliseClientPhone, UpdateClientInput } from "@sorted/core";
 import { BackButton, Button, Card, EmptyState, Field, Icon, MoneyText, Sheet } from "../components";
-import { dayMonth, whatsappLink } from "../lib/format";
+import { dayMonth, formatPhone, whatsappLink } from "../lib/format";
 import { useAction, useData, useStore } from "../lib/store";
 import { BookingRow } from "./Home";
 import { useValidation } from "../lib/useValidation";
@@ -18,7 +18,7 @@ export function ClientDetail() {
   const client = clients.find((item) => item.id === id);
   const [editing, setEditing] = useState(false);
   const [deleting, setDeleting] = useState(false);
-  const [form, setForm] = useState({ name: client?.name ?? "", phone: client?.phone ?? "", email: client?.email ?? "" });
+  const [form, setForm] = useState({ name: client?.name ?? "", phone: formatPhone(client?.phone), email: client?.email ?? "" });
   const validation = useValidation({
     email: () => form.email.trim() && !UpdateClientInput.shape.email.safeParse(form.email.trim()).success
       ? "Enter a valid email address." : undefined,
@@ -102,7 +102,7 @@ export function ClientDetail() {
           <div className="detail-line">
             <span className="detail-icon"><Icon name="message" /></span>
             <div>
-              <strong>{client.phone ?? "No mobile added"}</strong>
+              <strong>{formatPhone(client.phone) || "No mobile added"}</strong>
               <span>{client.phone ? "Mobile" : "Add one to open WhatsApp drafts"}</span>
             </div>
             {client.phone && (
@@ -115,7 +115,7 @@ export function ClientDetail() {
             <div><strong>{client.email ?? "No email added"}</strong><span>Email</span></div>
           </div>
           <div className="detail-line">
-            <button className="text-link" onClick={() => { validation.clear(); setForm({ name: client.name, phone: client.phone ?? "", email: client.email ?? "" }); setEditing(true); }}>
+            <button className="text-link" onClick={() => { validation.clear(); setForm({ name: client.name, phone: formatPhone(client.phone), email: client.email ?? "" }); setEditing(true); }}>
               <Icon name="edit" size={16} /> Edit client details
             </button>
           </div>

@@ -1,5 +1,6 @@
 import type { ExpenseCategory, MessageLogEntry, Payment } from "@sorted/core";
 import { calendarDaysBetween, dublinDateTime, irelandToday, normaliseClientPhone } from "@sorted/core";
+export { formatPhone } from "@sorted/core";
 
 export function jobDateLabel(startAt: string, now = new Date()) {
   const days = calendarDaysBetween(irelandToday(now), dublinDateTime(startAt).date);

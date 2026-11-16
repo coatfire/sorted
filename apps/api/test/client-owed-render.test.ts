@@ -3,7 +3,7 @@ import { build } from "esbuild";
 import { expect, it } from "vitest";
 
 it("renders client due-now balances from booking prices minus paid, including undone full payments", async () => {
-  const client = { id: "client", name: "Áine Murphy", phone: null, email: null };
+  const client = { id: "client", name: "Áine Murphy", phone: "353871234567", email: null };
   const booking = { id: "booking", clientId: client.id, client, service: "Hair", priceCents: 8000, depositCents: 2000, status: "completed", startAt: "2026-11-14T10:00:00Z" };
   const payment = { id: "payment", bookingId: booking.id, status: "cancelled", amountCents: 8000, paidAt: "2026-11-14T10:00:00Z" };
   const cases = [
@@ -50,6 +50,8 @@ it("renders client due-now balances from booking prices minus paid, including un
     child.stdin.end(`${bundle.outputFiles[0].text}\nprocess.stdout.write(JSON.stringify(${JSON.stringify(snapshots)}.map(snapshot => module.exports.render(snapshot))));`);
   });
   for (const [index, item] of cases.entries()) {
+    expect(html[index]).toContain("087 123 4567");
+    expect(html[index]).toContain("https://wa.me/353871234567?text=");
     expect(html[index].split("Owes you</span>")[1].split("</div>")[0]).toContain(item.owed);
     expect(html[index].split("Paid to date</span>")[1].split("</div>")[0]).toContain(item.paid);
   }

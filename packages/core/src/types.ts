@@ -83,6 +83,15 @@ export function normaliseClientPhone(input: string): string | null {
   return e164 && Phone.safeParse(e164).success ? e164.slice(1) : null;
 }
 
+export function formatPhone(input: string | null | undefined): string {
+  if (!input) return "";
+  const digits = normaliseClientPhone(input);
+  if (!digits) return input.trim();
+  const irishMobile = /^353(8\d)(\d{3})(\d{4})$/.exec(digits);
+  if (irishMobile) return `0${irishMobile[1]} ${irishMobile[2]} ${irishMobile[3]}`;
+  return `+${digits.replace(/\B(?=(\d{3})+(?!\d))/g, " ")}`;
+}
+
 const ClientPhone = z.string().transform(value => normaliseClientPhone(value) ?? "")
   .refine(value => /^\d{7,15}$/.test(value), "Enter a valid mobile number.");
 

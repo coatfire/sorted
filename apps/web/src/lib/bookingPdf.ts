@@ -1,6 +1,6 @@
 import { PDFDocument, PDFString, rgb } from "pdf-lib";
 import fontkit from "@pdf-lib/fontkit";
-import type { BookingDocumentData } from "@sorted/core";
+import { formatPhone, type BookingDocumentData } from "@sorted/core";
 import fontUrl from "../assets/DejaVuSans.ttf?url";
 
 let fontBytes: Promise<ArrayBuffer> | undefined;
@@ -74,7 +74,7 @@ export async function createBookingPdf(data: BookingDocumentData): Promise<Blob>
   }
   text(data.business.name, 19, accent);
   text(data.business.address, 10);
-  text([data.business.phone, data.business.email].filter(Boolean).join(" · "), 10);
+  text([formatPhone(data.business.phone), data.business.email].filter(Boolean).join(" · "), 10);
   if (data.vat && data.business.vatNumber) text(`VAT number: ${data.business.vatNumber}`, 10);
   y -= 16;
   rule();
@@ -85,7 +85,7 @@ export async function createBookingPdf(data: BookingDocumentData): Promise<Blob>
   y -= 14;
   text(data.kind === "receipt" ? "Received from" : data.kind === "quote" ? "Quote for" : "Bill to", 12, accent);
   text(data.client.name);
-  text([data.client.email, data.client.phone].filter(Boolean).join(" · "), 10);
+  text([data.client.email, formatPhone(data.client.phone)].filter(Boolean).join(" · "), 10);
   y -= 12;
   text(`Booking date: ${data.bookingDate}`, 10, muted);
   y -= 10;
