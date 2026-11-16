@@ -34,3 +34,6 @@ export function moneyYear(payments: readonly Payment[], expenses: readonly Expen
   }
   return { estimate, monthlyIncomeCents };
 }
+
+/** The last instant of the previous Irish calendar year; Ireland is on GMT at New Year. */
+export const lastYearEnd = (now: Date = new Date()): Date => new Date(Date.UTC(Number(dublinDateTime(now).date.slice(0, 4)), 0, 1) - 1);
