@@ -5,14 +5,14 @@
  * payment links are simulated — nothing leaves the browser.
  */
 import type { Client, Expense, MessageLogEntry, Payment, BookingDocument } from "@sorted/core";
-import { snapshotReceipt, snapshotDocument, TaxSettings, ConfirmExpenseInput, RecordPaymentInput, EditPaymentInput, paymentPaidAt, irelandToday, addCalendarDays, CalendarDate, shiftDublinWeeks, RepeatInput, Services, bookingStage, CreateClientInput, UpdateClientInput, MessageSentInput, CreateBookingInput, agreedBookingStart, missingBookingDetails } from "@sorted/core";
+import { snapshotReceipt, snapshotDocument, documentNumber, TaxSettings, ConfirmExpenseInput, RecordPaymentInput, EditPaymentInput, paymentPaidAt, irelandToday, addCalendarDays, CalendarDate, shiftDublinWeeks, RepeatInput, Services, bookingStage, CreateClientInput, UpdateClientInput, MessageSentInput, CreateBookingInput, agreedBookingStart, missingBookingDetails } from "@sorted/core";
 import type { Backend, BookingRow, Snapshot } from "./backend";
 import { blobToDataUrl } from "./image";
 import { settingsAutosaveRegistry } from "./settingsAutosaveSession";
 
 const KEY = "sorted_demo_v3";
 
-interface DemoData extends Snapshot {
+interface DemoData extends Omit<Snapshot, "documents"> {
   documents: BookingDocument[];
   messages: MessageLogEntry[];
   receipts: Record<string, string>; // expense id → data URL
@@ -223,10 +223,10 @@ export const demoBackend: Backend = {
   async document(bookingId, kind, paymentId) {
     const d = data();
     const booking = mustFind(d.bookings, bookingId, "Booking");
-    if (kind === "quote" && booking.status !== "enquiry") throw new Error("Quotes are only available for enquiries.");
     const documents = d.documents ??= [];
     const existing = documents.find((document) => document.bookingId === bookingId && document.kind === kind && (kind !== "receipt" || document.paymentId === paymentId));
     if (existing) return structuredClone(existing);
+    if (kind === "quote" && booking.status !== "enquiry") throw new Error("Quotes are only available for enquiries.");
     pricedBooking(bookingId);
     if (kind === "receipt" && !d.payments.some((payment) => payment.id === paymentId && payment.bookingId === bookingId && payment.status === "paid")) throw new Error("Choose a paid payment for this receipt.");
     const issuedAt = now();
@@ -250,7 +250,10 @@ export const demoBackend: Backend = {
   async load() {
     const { messages: _m, receipts: _r, documents: _d, ...snapshot } = data();
     snapshot.bookings.forEach((booking) => { booking.followUpOn ??= null; booking.paymentRequestedAt ??= null; });
-    return structuredClone({ ...snapshot, payments: snapshot.payments.map(payment => ({ ...payment, receiptVoidedAt: data().documents.find(document => document.kind === "receipt" && document.paymentId === payment.id)?.voidedAt ?? null })) });
+    const sentAt = (documentId: string) => data().messages.filter(message => message.meta?.documentId === documentId).map(message => message.sentAt).sort().at(-1) ?? null;
+    const documents = (data().documents ?? []).map(({ id, bookingId, kind, number, issuedAt, paymentId, voidedAt }) => ({ id, bookingId, kind, number, issuedAt, paymentId, voidedAt: voidedAt ?? null, sentAt: sentAt(id) }))
+      .sort((a, b) => b.issuedAt.localeCompare(a.issuedAt));
+    return structuredClone({ ...snapshot, documents, payments: snapshot.payments.map(payment => ({ ...payment, receiptVoidedAt: data().documents.find(document => document.kind === "receipt" && document.paymentId === payment.id)?.voidedAt ?? null })) });
   },
 
   async createBooking(draft) {
@@ -378,11 +381,14 @@ export const demoBackend: Backend = {
     const booking = mustFind(data().bookings, bookingId, "Booking");
     if (data().messages.some(message => message.bookingId === bookingId && message.meta?.acknowledgementId === input.acknowledgement_id)) return;
     if (input.kind === "follow_up" && booking.status !== "enquiry") throw new Error("Only enquiries can have a follow-up.");
+    const document = input.kind === "document" ? data().documents.find(item => item.id === input.document_id && item.bookingId === bookingId && !item.voidedAt) : undefined;
+    if (input.kind === "document" && !document) throw new Error("Document not found");
     const sentAt = now();
     if (input.kind === "follow_up") booking.followUpOn = addCalendarDays(irelandToday(new Date(sentAt)), 3);
     if (input.kind === "payment_request") booking.paymentRequestedAt = sentAt;
     data().messages.push({ id: id(), bookingId, template: input.kind === "follow_up" ? "reminder" : input.kind,
-      status: "sent", sentAt, meta: { userConfirmed: true, kind: input.kind, acknowledgementId: input.acknowledgement_id } });
+      status: "sent", sentAt, meta: { userConfirmed: true, kind: input.kind, acknowledgementId: input.acknowledgement_id,
+        ...(document ? { documentId: document.id, documentNumber: documentNumber(document.kind, document.number), reviewIncluded: input.review_included === true } : {}) } });
     save();
   },
 

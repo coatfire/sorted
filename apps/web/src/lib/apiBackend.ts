@@ -1,4 +1,4 @@
-import type { Booking, Client, Expense, Health, MessageLogEntry, Payment, User, BookingDocument, CalendarLinks } from "@sorted/core";
+import type { Booking, Client, Expense, Health, MessageLogEntry, Payment, User, BookingDocument, CalendarLinks, IssuedDocument } from "@sorted/core";
 import { api, apiBlob, apiUrl, patch, post } from "./api";
 import type { Backend, ExpenseDraft } from "./backend";
 import { blobToDataUrl } from "./image";
@@ -27,13 +27,14 @@ export const apiBackend: Backend = {
   forgot: (email) => post("/auth/forgot", { email }),
   resetPassword: (token, password) => post("/auth/reset", { token, password }),
   async load() {
-    const [user, health, clients, bookings, payments, expenses] = await Promise.all([
+    const [user, health, clients, bookings, payments, expenses, documents] = await Promise.all([
       api<User>("/auth/me"),
       api<Health>("/health"),
       api<Client[]>("/clients"),
       api<Array<{ booking: Booking; client: Client }>>("/bookings"),
       api<Array<{ payment: Payment; receiptVoidedAt: string | null }>>("/payments"),
       api<Expense[]>("/expenses"),
+      api<IssuedDocument[]>("/bookings/documents"),
     ]);
     return {
       user,
@@ -42,6 +43,7 @@ export const apiBackend: Backend = {
       bookings: bookings.map(({ booking, client }) => ({ ...booking, client })),
       payments: payments.map(({ payment, receiptVoidedAt }) => ({ ...payment, receiptVoidedAt })),
       expenses,
+      documents,
     };
   },
 

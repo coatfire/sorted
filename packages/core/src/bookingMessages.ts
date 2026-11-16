@@ -2,10 +2,14 @@ import type { Payment } from "./types";
 import { z } from "zod";
 
 export const MessageSentInput = z.object({
-  kind: z.enum(["confirmation", "payment_request", "follow_up"]),
-  channel: z.enum(["whatsapp", "email"]),
+  kind: z.enum(["confirmation", "payment_request", "follow_up", "document"]),
+  /** "share" is the phone's share sheet, used to send a document PDF. */
+  channel: z.enum(["whatsapp", "email", "share"]),
   acknowledgement_id: z.string().uuid(),
-});
+  document_id: z.string().uuid().optional(),
+  review_included: z.boolean().optional(),
+}).refine((input) => (input.kind === "document") === (input.document_id !== undefined), { message: "document_id is for document messages" })
+  .refine((input) => input.kind === "document" || (input.channel !== "share" && input.review_included === undefined), { message: "Only documents are shared" });
 export type MessageSentInput = z.infer<typeof MessageSentInput>;
 
 export const MESSAGE_PLACEHOLDERS = [
@@ -92,4 +96,17 @@ export function renderBookingMessage(template: string, details: BookingMessageDe
   const include = details.kind !== "confirmation" || /\{(?:iban|bic)\}/.test(template);
   const linked = revolut && new RegExp(revolut.replace(/^https:\/\//, "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "(?=$|[^A-Za-z0-9._-]|\\.(?:\\s|$))", "i").test(rendered);
   return revolut && include && !linked ? `${rendered}${rendered ? "\n" : ""}Pay by Revolut: ${revolut}` : rendered;
+}
+
+const DOCUMENT_NOUN = { invoice: "invoice", receipt: "receipt", quote: "quote" } as const;
+
+/** The draft that goes with an issued PDF. Receipts thank the client; a review link is only added when asked for. */
+export function documentMessage(details: {
+  kind: keyof typeof DOCUMENT_NOUN; number: string; client: string; business: string; service: string; reviewLink?: string | null;
+}) {
+  const opening = details.kind === "receipt"
+    ? `Hi ${details.client}, thanks for your payment. Your receipt ${details.number} from ${details.business} for ${details.service} is attached.`
+    : `Hi ${details.client}, your ${DOCUMENT_NOUN[details.kind]} ${details.number} from ${details.business} for ${details.service} is attached.`;
+  const review = details.reviewLink?.trim();
+  return review ? `${opening}\n\nIf you were happy with everything, a quick Google review would mean a lot: ${review}` : opening;
 }

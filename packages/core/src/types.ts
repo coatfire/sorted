@@ -51,6 +51,7 @@ export const MessageTemplate = z.enum([
   "reminder",
   "payment_request",
   "review_request",
+  "document",
 ]);
 export type MessageTemplate = z.infer<typeof MessageTemplate>;
 
@@ -329,7 +330,7 @@ export interface MessageLogEntry {
   template: MessageTemplate;
   status: "sent" | "delivered" | "failed";
   sentAt: string;
-  meta?: { userConfirmed?: boolean; kind?: string; acknowledgementId?: string } | null;
+  meta?: { userConfirmed?: boolean; kind?: string; acknowledgementId?: string; documentId?: string; documentNumber?: string; reviewIncluded?: boolean } | null;
 }
 
 /** GET /api/health — lets the UI be honest about what is wired up. */

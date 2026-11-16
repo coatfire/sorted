@@ -1,18 +1,24 @@
 import { useState, type FormEvent } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { moneyOwed, normaliseClientPhone, UpdateClientInput } from "@sorted/core";
+import { documentNumber, moneyOwed, normaliseClientPhone, UpdateClientInput, type IssuedDocument } from "@sorted/core";
 import { BackButton, Button, Card, EmptyState, Field, Icon, MoneyText, Sheet } from "../components";
 import { dayMonth, formatPhone, whatsappLink } from "../lib/format";
 import { useAction, useData, useStore } from "../lib/store";
 import { BookingRow } from "./Home";
 import { useValidation } from "../lib/useValidation";
 import { useNow } from "../lib/useNow";
+import { DocumentSendSheet } from "../DocumentSendSheet";
+import { buildDocumentFile, shareOrDownload } from "../lib/documentFile";
+
+const DOCUMENT_TITLE = { invoice: "Invoice", receipt: "Receipt", quote: "Quote" } as const;
 
 export function ClientDetail() {
   const now = useNow();
   const { id } = useParams();
-  const { clients, bookings, payments } = useData();
-  const { backend } = useStore();
+  const { clients, bookings, payments, documents, user } = useData();
+  const { backend, toast } = useStore();
+  const [sending, setSending] = useState<IssuedDocument | null>(null);
+  const [opening, setOpening] = useState<string | null>(null);
   const { busy, run } = useAction();
   const navigate = useNavigate();
   const client = clients.find((item) => item.id === id);
@@ -39,6 +45,22 @@ export function ClientDetail() {
     .filter((booking) => booking.clientId === client.id)
     .sort((a, b) => (b.startAt ?? "").localeCompare(a.startAt ?? ""));
   const ids = new Set(theirs.map((booking) => booking.id));
+  const issued = documents.flatMap((document) => {
+    const booking = theirs.find((item) => item.id === document.bookingId);
+    return booking ? [{ document, booking }] : [];
+  });
+  const sendingBooking = sending && theirs.find((booking) => booking.id === sending.bookingId);
+  async function open(document: IssuedDocument) {
+    const booking = theirs.find((item) => item.id === document.bookingId);
+    if (!booking || opening) return;
+    setOpening(document.id);
+    try {
+      const outcome = await shareOrDownload(await buildDocumentFile(backend, user, booking, payments, document.kind, document.paymentId ?? undefined));
+      if (outcome === "downloaded") toast("PDF downloaded");
+    } catch (error) {
+      toast(error instanceof Error ? error.message : "Couldn't create that PDF. Try again.", "error");
+    } finally { setOpening(null); }
+  }
   const hasPaymentHistory = payments.some((payment) => ids.has(payment.bookingId) && (payment.status === "paid" || payment.paidAt !== null));
   const hasOpenBookings = theirs.some((booking) => booking.status === "enquiry" || booking.status === "confirmed");
   const { dueNowCents } = moneyOwed(theirs, payments, now);
@@ -129,6 +151,31 @@ export function ClientDetail() {
         </div>
       </Card>
 
+      {issued.length > 0 && (
+        <section className="list-section">
+          <div className="section-heading">
+            <div><p className="eyebrow">Issued</p><h2>Invoices &amp; receipts</h2></div>
+          </div>
+          <Card className="list-card">
+            {issued.map(({ document, booking }) => {
+              const number = documentNumber(document.kind, document.number);
+              return (
+                <div className="document-row" key={document.id}>
+                  <button type="button" className="document-open" disabled={opening !== null} onClick={() => { void open(document); }} aria-label={`Open ${DOCUMENT_TITLE[document.kind].toLowerCase()} ${number}`}>
+                    <span className="row-icon"><Icon name="receipt" size={18} /></span>
+                    <span>
+                      <strong>{DOCUMENT_TITLE[document.kind]} {number}</strong>
+                      <small>{booking.service} · {dayMonth(document.issuedAt)}{document.voidedAt ? " · Void" : document.sentAt ? ` · Sent ${dayMonth(document.sentAt)}` : " · Not sent yet"}</small>
+                    </span>
+                  </button>
+                  {!document.voidedAt && <Button kind={document.sentAt ? "quiet" : "soft"} onClick={() => setSending(document)}>{document.sentAt ? "Send again" : "Send"}</Button>}
+                </div>
+              );
+            })}
+          </Card>
+        </section>
+      )}
+
       <section className="list-section">
         <div className="section-heading">
           <div><p className="eyebrow">History</p><h2>Bookings</h2></div>
@@ -147,6 +194,7 @@ export function ClientDetail() {
       <Button kind="danger" onClick={() => setDeleting(true)}>
         <Icon name="trash" /> Delete client
       </Button>
+      {sending && sendingBooking && <DocumentSendSheet document={sending} booking={sendingBooking} onClose={() => setSending(null)} />}
       {deleting && (
         <Sheet title="Delete client?" onClose={() => setDeleting(false)}>
           {hasOpenBookings ? (

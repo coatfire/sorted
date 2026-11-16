@@ -1,0 +1,1 @@
+ALTER TYPE "public"."message_template" ADD VALUE IF NOT EXISTS 'document';

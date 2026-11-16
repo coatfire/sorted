@@ -10,7 +10,7 @@
  * All booking routes follow the same edge-validation and user-scoping pattern.
  */
 import { Hono } from "hono";
-import { and, eq, gte, lte, desc, sql } from "drizzle-orm";
+import { and, eq, gte, lte, desc, isNull, sql } from "drizzle-orm";
 import {
   BookingStatus,
   CreateBookingInput,
@@ -24,6 +24,8 @@ import {
   addCalendarDays,
   shiftDublinWeeks,
   MessageSentInput,
+  documentNumber,
+  type DocumentKind,
   agreedBookingStart,
   missingBookingDetails,
 } from "@sorted/core";
@@ -54,16 +56,29 @@ bookingRoutes.post("/:id/message-sent", async (c) => {
     if (input.kind === "follow_up" && row.booking.status !== "enquiry") {
       return c.json({ error: "Only enquiries can have a follow-up." }, 409);
     }
+    let document: { id: string; kind: DocumentKind; number: number } | undefined;
+    if (input.kind === "document") {
+      [document] = await tx.select({ id: schema.invoices.id, kind: schema.invoices.kind, number: schema.invoices.number })
+        .from(schema.invoices).where(and(
+          eq(schema.invoices.id, input.document_id!), eq(schema.invoices.userId, userId),
+          eq(schema.invoices.bookingId, bookingId), isNull(schema.invoices.voidedAt),
+        ));
+      if (!document) return c.json({ error: "Document not found" }, 404);
+    }
     const sentAt = new Date();
     const patch = input.kind === "follow_up"
       ? { followUpOn: addCalendarDays(irelandToday(sentAt), 3) }
-      : input.kind === "payment_request" ? { paymentRequestedAt: sentAt } : null;
+      : input.kind === "payment_request" ? { paymentRequestedAt: sentAt }
+      : input.kind === "document" && input.review_included ? { reviewRequestedAt: sentAt } : null;
     const booking = patch ? (await tx.update(schema.bookings).set(patch)
       .where(and(eq(schema.bookings.id, bookingId), eq(schema.bookings.userId, userId))).returning())[0] : row.booking;
     await tx.insert(schema.messageLog).values({
       userId, bookingId, clientId: row.client.id, channel: input.channel,
       template: input.kind === "follow_up" ? "reminder" : input.kind,
-      status: "sent", sentAt, meta: { userConfirmed: true, kind: input.kind, acknowledgementId: input.acknowledgement_id },
+      status: "sent", sentAt, meta: {
+        userConfirmed: true, kind: input.kind, acknowledgementId: input.acknowledgement_id,
+        ...(document ? { documentId: document.id, documentNumber: documentNumber(document.kind, document.number), reviewIncluded: input.review_included === true } : {}),
+      },
     });
     return c.json(booking);
   });
@@ -145,7 +160,6 @@ bookingRoutes.post("/:id/documents", async (c) => {
     const row = await lockBookingWithClient(tx, userId, bookingId);
     if (!row) return c.json({ error: "Booking not found" }, 404);
     const { booking, client } = row;
-    if (kind === "quote" && booking.status !== "enquiry") return c.json({ error: "Quotes are only available for enquiries." }, 409);
     const paidPayments = await tx.select().from(schema.payments).where(and(
       eq(schema.payments.bookingId, bookingId), eq(schema.payments.userId, userId),
     )).orderBy(schema.payments.id).for("update");
@@ -154,6 +168,7 @@ bookingRoutes.post("/:id/documents", async (c) => {
       ...(kind === "receipt" ? [eq(schema.invoices.paymentId, paymentId!)] : []),
     ));
     if (existing) return c.json(existing);
+    if (kind === "quote" && booking.status !== "enquiry") return c.json({ error: "Quotes are only available for enquiries." }, 409);
     if (booking.priceCents === null) return c.json({ error: "Add a price first" }, 409);
     if (kind === "receipt") {
       const payment = paidPayments.find((payment) => payment.id === paymentId);
@@ -183,6 +198,24 @@ bookingRoutes.post("/:id/documents", async (c) => {
     const [frozen] = await tx.update(schema.invoices).set({ documentSnapshot }).where(and(eq(schema.invoices.id, document.id), eq(schema.invoices.userId, userId))).returning();
     return c.json(frozen);
   }, true);
+});
+
+/** GET /api/bookings/documents: every issued document, without snapshots, with when the trader last confirmed sending it. */
+bookingRoutes.get("/documents", async (c) => {
+  const userId = c.get("userId");
+  const documentId = sql<string>`${schema.messageLog.meta}->>'documentId'`;
+  const [rows, sends] = await Promise.all([
+    db.select({
+      id: schema.invoices.id, bookingId: schema.invoices.bookingId, kind: schema.invoices.kind, number: schema.invoices.number,
+      issuedAt: schema.invoices.issuedAt, paymentId: schema.invoices.paymentId, voidedAt: schema.invoices.voidedAt,
+    }).from(schema.invoices).where(eq(schema.invoices.userId, userId)).orderBy(desc(schema.invoices.issuedAt)),
+    db.select({ documentId, sentAt: sql<Date>`max(${schema.messageLog.sentAt})`.mapWith(schema.messageLog.sentAt) })
+      .from(schema.messageLog)
+      .where(and(eq(schema.messageLog.userId, userId), eq(schema.messageLog.template, "document")))
+      .groupBy(documentId),
+  ]);
+  const sentAt = new Map(sends.map((send) => [send.documentId, send.sentAt]));
+  return c.json(rows.map((row) => ({ ...row, sentAt: sentAt.get(row.id) ?? null })));
 });
 
 /** GET /api/bookings?from=&to=&status= */
