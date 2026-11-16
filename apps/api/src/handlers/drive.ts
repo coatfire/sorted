@@ -1,6 +1,6 @@
 import { Hono } from "hono";
-import { and, eq, sql } from "drizzle-orm";
-import { assembleBookingDocument, type DriveBackup } from "@sorted/core";
+import { and, eq, inArray, isNotNull, lte, sql } from "drizzle-orm";
+import { assembleBookingDocument, dublinDateTime, irelandToday, type DriveBackup } from "@sorted/core";
 import { db, schema } from "../db";
 import { env } from "../lib/env";
 import { publicUser } from "../lib/user";
@@ -31,6 +31,12 @@ driveRoutes.get("/files", async (c) => {
   const years = new Set<number>();
   for (const payment of payments) if (payment.paidAt) years.add(payment.paidAt.getUTCFullYear());
   for (const expense of expenses) if (expense.status === "confirmed" && expense.expenseDate) years.add(expense.expenseDate.getUTCFullYear());
+  // A year with only mileage still needs its yearly file: the export holds the mileage log too.
+  const trips = await db.select({ tripDate: schema.trips.tripDate }).from(schema.trips).where(and(eq(schema.trips.userId, userId), lte(schema.trips.tripDate, irelandToday())));
+  const travelled = await db.select({ startAt: schema.bookings.startAt }).from(schema.bookings)
+    .where(and(eq(schema.bookings.userId, userId), isNotNull(schema.bookings.travelMetres), inArray(schema.bookings.status, ["confirmed", "completed"]), lte(schema.bookings.startAt, new Date())));
+  for (const trip of trips) years.add(Number(trip.tripDate.slice(0, 4)));
+  for (const booking of travelled) if (booking.startAt) years.add(Number(dublinDateTime(booking.startAt).date.slice(0, 4)));
   return c.json<DriveBackup>({ userId, logo: user.invoiceLogo, years: [...years].sort(), photos: photos.map((photo) => ({ ...photo, date: photo.date.toISOString().slice(0, 10) })), documents: documents.map(({ document, booking, client }) => {
     const data = assembleBookingDocument(
       safeUser,

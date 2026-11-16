@@ -1,4 +1,4 @@
-import { expect, it } from "vitest";
+import { expect, it, vi } from "vitest";
 import { exportCsvText, exportSections, historySheet, kmInput, kmLabel, lastTravelTo, mileageLog, mileageMetres, mileageSection, parseKm, type Trip } from "@sorted/core";
 import { app } from "../src/app";
 import { db, schema } from "../src/db";
@@ -144,4 +144,16 @@ it("works the same in the demo", async () => {
   expect(csv).toContain('"2020-01-05","","Course","Training day","41.0"');
   await demoBackend.deleteTrip(trip.id);
   expect((await demoBackend.load()).trips).toHaveLength(1);
+});
+
+it("backs up a year to Drive when its only records are mileage", async () => {
+  vi.stubEnv("GOOGLE_CLIENT_ID", "drive-test-client"); vi.stubEnv("GOOGLE_CLIENT_SECRET", "");
+  try {
+    const { call } = await account();
+    await call("POST", "/trips", { trip_date: "2023-02-01", destination: "Wholesaler", purpose: "Stock", travel_metres: 27500 });
+    await call("POST", "/bookings", booking("2024-03-10T10:00:00Z", 24));
+    await call("POST", "/bookings", booking("2022-03-10T10:00:00Z", 24, { status: "enquiry" }));
+    await call("POST", "/bookings", booking("2999-03-10T10:00:00Z", 24));
+    expect((await (await call("GET", "/drive/files")).json()).years).toEqual([2023, 2024]);
+  } finally { vi.unstubAllEnvs(); }
 });
