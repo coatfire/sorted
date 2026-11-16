@@ -1,5 +1,6 @@
 import { Hono } from "hono";
-import { and, eq, gte, lt } from "drizzle-orm";
+import { and, asc, eq, gte, lt } from "drizzle-orm";
+import { exportBounds, exportFileName, ExportRange, paidOn, yearRange } from "@sorted/core";
 import { db, schema } from "../db";
 import type { AppEnv } from "../app";
 
@@ -88,18 +89,25 @@ reportRoutes.get("/summary", async (c) => {
 });
 
 /**
- * GET /api/reports/export?year=2026&format=csv
- * Streams the two sections an accountant expects:
+ * GET /api/reports/export?from=2025-01-01&to=2025-12-31 (both days included), or ?year=2025
+ * The two sections an accountant expects, oldest first:
  *   INCOME:   date_paid, client, service, kind, method, amount_eur
- *   EXPENSES: date, merchant, category, amount_eur, has_receipt
+ *   EXPENSES: date, merchant, category, amount_eur, has_receipt, vat_eur
  * Header row per section, amounts as decimal euro (cents/100, 2dp).
- * c.header("Content-Disposition", `attachment; filename=sorted-${year}.csv`)
  */
 reportRoutes.get("/export", async (c) => {
-  const year = Number(c.req.query("year") ?? new Date().getFullYear());
-  if (!Number.isInteger(year)) return c.json({ error: "Invalid year" }, 400);
-  const from = new Date(`${year}-01-01T00:00:00Z`);
-  const to = new Date(`${year + 1}-01-01T00:00:00Z`);
+  const { from, to, year } = c.req.query();
+  let range: ExportRange;
+  if (from !== undefined || to !== undefined) {
+    const parsed = ExportRange.safeParse({ from, to });
+    if (!parsed.success) return c.json({ error: "Choose a from date and a to date, with the from date first." }, 400);
+    range = parsed.data;
+  } else {
+    const wanted = Number(year ?? new Date().getFullYear());
+    if (!Number.isInteger(wanted) || wanted < 1000 || wanted > 9998) return c.json({ error: "Invalid year" }, 400);
+    range = yearRange(wanted);
+  }
+  const bounds = exportBounds(range);
   const userId = c.get("userId");
   const [income, expenses] = await Promise.all([
     db
@@ -118,10 +126,11 @@ reportRoutes.get("/export", async (c) => {
         and(
           eq(schema.payments.userId, userId),
           eq(schema.payments.status, "paid"),
-          gte(schema.payments.paidAt, from),
-          lt(schema.payments.paidAt, to),
+          gte(schema.payments.paidAt, bounds.paidFrom),
+          lt(schema.payments.paidAt, bounds.paidBefore),
         ),
-      ),
+      )
+      .orderBy(asc(schema.payments.paidAt)),
     db
       .select()
       .from(schema.expenses)
@@ -129,17 +138,18 @@ reportRoutes.get("/export", async (c) => {
         and(
           eq(schema.expenses.userId, userId),
           eq(schema.expenses.status, "confirmed"),
-          gte(schema.expenses.expenseDate, from),
-          lt(schema.expenses.expenseDate, to),
+          gte(schema.expenses.expenseDate, bounds.expenseFrom),
+          lt(schema.expenses.expenseDate, bounds.expenseBefore),
         ),
-      ),
+      )
+      .orderBy(asc(schema.expenses.expenseDate)),
   ]);
   const csvCell = (value: unknown) => `"${String(value ?? "").replaceAll('"', '""')}"`;
   const lines = [
     ["INCOME"],
     ["date_paid", "client", "service", "kind", "method", "amount_eur"],
     ...income.map((row) => [
-      row.paidAt?.toISOString().slice(0, 10),
+      row.paidAt && paidOn(row.paidAt),
       row.client,
       row.service,
       row.kind,
@@ -159,6 +169,6 @@ reportRoutes.get("/export", async (c) => {
     ]),
   ];
   c.header("Content-Type", "text/csv; charset=utf-8");
-  c.header("Content-Disposition", `attachment; filename=sorted-${year}.csv`);
+  c.header("Content-Disposition", `attachment; filename=${exportFileName(range)}`);
   return c.body(lines.map((row) => row.map(csvCell).join(",")).join("\n"));
 });

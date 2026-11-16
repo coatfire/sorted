@@ -1,4 +1,4 @@
-import type {
+import type { ExportRange,
   Booking,
   Client,
   Expense,
@@ -134,5 +134,6 @@ export interface Backend {
     vatPeriodMonths?: number;
     incomeTaxRateBp?: number | null;
   }>): Promise<void>;
-  exportCsv(year: number): Promise<Blob>;
+  /** Income and expenses between two dates, both included. */
+  exportCsv(range: ExportRange): Promise<Blob>;
 }

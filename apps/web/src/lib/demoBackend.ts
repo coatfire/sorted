@@ -5,7 +5,7 @@
  * payment links are simulated — nothing leaves the browser.
  */
 import type { Client, Expense, MessageLogEntry, Payment, BookingDocument, BusyBlock } from "@sorted/core";
-import { PlaceSearchInput, PLACE_SUGGESTION_LIMIT, snapshotReceipt, snapshotDocument, documentNumber, TaxSettings, ConfirmExpenseInput, RecordPaymentInput, EditPaymentInput, paymentPaidAt, irelandToday, addCalendarDays, CalendarDate, shiftDublinWeeks, RepeatInput, Services, bookingStage, CreateClientInput, UpdateClientInput, MessageSentInput, CreateBookingInput, agreedBookingStart, missingBookingDetails, bookingAtDublinTime, BusyRange } from "@sorted/core";
+import { inExportRange, paidOn, PlaceSearchInput, PLACE_SUGGESTION_LIMIT, snapshotReceipt, snapshotDocument, documentNumber, TaxSettings, ConfirmExpenseInput, RecordPaymentInput, EditPaymentInput, paymentPaidAt, irelandToday, addCalendarDays, CalendarDate, shiftDublinWeeks, RepeatInput, Services, bookingStage, CreateClientInput, UpdateClientInput, MessageSentInput, CreateBookingInput, agreedBookingStart, missingBookingDetails, bookingAtDublinTime, BusyRange } from "@sorted/core";
 import type { Backend, BookingRow, Snapshot } from "./backend";
 import { blobToDataUrl } from "./image";
 import { settingsAutosaveRegistry } from "./settingsAutosaveSession";
@@ -590,26 +590,24 @@ export const demoBackend: Backend = {
     settingsAutosaveRegistry.notifySaved(demoBackend, data().user.id, requested);
   },
 
-  async exportCsv(year) {
+  async exportCsv(range) {
     const d = data();
-    const inYear = (iso: string | null) => iso && new Date(iso).getFullYear() === year;
+    const oldestFirst = <T,>(rows: T[], date: (row: T) => string) => [...rows].sort((a, b) => date(a).localeCompare(date(b)));
     const rows = [
       ["INCOME"],
       ["date_paid", "client", "service", "kind", "method", "amount_eur"],
-      ...d.payments
-        .filter((p) => p.status === "paid" && inYear(p.paidAt))
+      ...oldestFirst(d.payments.filter((p) => p.status === "paid" && p.paidAt && inExportRange(paidOn(p.paidAt), range)), (p) => p.paidAt!)
         .map((p) => {
           const booking = d.bookings.find((bk) => bk.id === p.bookingId);
           return [
-            p.paidAt!.slice(0, 10), booking?.client.name, booking?.service, p.kind,
+            paidOn(p.paidAt!), booking?.client.name, booking?.service, p.kind,
             p.method, (p.amountCents / 100).toFixed(2),
           ];
         }),
       [],
       ["EXPENSES"],
       ["date", "merchant", "category", "amount_eur", "has_receipt", "vat_eur"],
-      ...d.expenses
-        .filter((e) => inYear(e.expenseDate))
+      ...oldestFirst(d.expenses.filter((e) => e.expenseDate && inExportRange(e.expenseDate.slice(0, 10), range)), (e) => e.expenseDate!)
         .map((e) => [
           e.expenseDate!.slice(0, 10), e.merchant, e.category,
           ((e.amountCents ?? 0) / 100).toFixed(2), e.receiptKey ? "yes" : "no",
