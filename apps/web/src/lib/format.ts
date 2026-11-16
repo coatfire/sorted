@@ -29,9 +29,16 @@ export function parseEuros(input: string): number | null {
 export const centsToInput = (cents: number | null) => cents === null ? "" :
   cents % 100 === 0 ? String(cents / 100) : (cents / 100).toFixed(2);
 
+const dublinYear = new Intl.DateTimeFormat("en-IE", { timeZone: "Europe/Dublin", year: "numeric" });
+/** A day in another year says which year: "14 Mar 2025". */
 const fmt = (options: Intl.DateTimeFormatOptions) => {
   const formatter = new Intl.DateTimeFormat("en-IE", { timeZone: "Europe/Dublin", ...options });
-  return (value: string | Date | null) => value === null ? options.hour && !options.day ? "Time to be agreed" : "Date to be agreed" : formatter.format(new Date(value));
+  const withYear = options.day && !options.year ? new Intl.DateTimeFormat("en-IE", { timeZone: "Europe/Dublin", ...options, year: "numeric" }) : formatter;
+  return (value: string | Date | null) => {
+    if (value === null) return options.hour && !options.day ? "Time to be agreed" : "Date to be agreed";
+    const date = new Date(value);
+    return (dublinYear.format(date) === dublinYear.format(new Date()) ? formatter : withYear).format(date);
+  };
 };
 
 export const time = fmt({ hour: "2-digit", minute: "2-digit", hour12: false });
