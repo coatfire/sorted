@@ -43,11 +43,12 @@ export const kmLabel = (metres: number) => `${(Math.round(metres / 100) / 10).to
 
 const samePlace = (a: string, b: string) => a.trim().toLowerCase().replace(/[\s,]+/g, " ") === b.trim().toLowerCase().replace(/[\s,]+/g, " ");
 
-/** The km recorded the last time the trader went to this address. */
-export function lastTravelTo(bookings: readonly Pick<Booking, "location" | "travelMetres" | "createdAt">[], location: string): number | null {
+/** The km recorded for the latest job at this address, by the job's date; a job with no date yet goes by when it was added. */
+export function lastTravelTo(bookings: readonly Pick<Booking, "location" | "travelMetres" | "startAt" | "createdAt">[], location: string): number | null {
   if (!location.trim()) return null;
   const visits = bookings.filter((booking) => booking.travelMetres && booking.location && samePlace(booking.location, location));
-  return visits.sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0]?.travelMetres ?? null;
+  const when = (booking: (typeof visits)[number]) => new Date(booking.startAt ?? booking.createdAt).getTime();
+  return visits.sort((a, b) => when(b) - when(a))[0]?.travelMetres ?? null;
 }
 
 export interface MileageRow { date: string; to: string; purpose: string; metres: number; bookingId?: string }

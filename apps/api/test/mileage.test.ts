@@ -30,12 +30,18 @@ it("reads and shows km", () => {
 
 it("offers the km from the last job at the same address", () => {
   const visits = [
-    { location: "7 West Village, Ballincollig", travelMetres: 24000, createdAt: "2026-01-01" },
-    { location: "7 west village  ballincollig", travelMetres: 26000, createdAt: "2026-02-01" },
-    { location: "7 West Village, Ballincollig", travelMetres: null, createdAt: "2026-03-01" },
-    { location: "Elsewhere", travelMetres: 90000, createdAt: "2026-04-01" },
+    { location: "7 West Village, Ballincollig", travelMetres: 24000, startAt: "2026-01-10T10:00:00Z", createdAt: "2026-01-01T09:00:00Z" },
+    { location: "7 west village  ballincollig", travelMetres: 26000, startAt: "2026-02-10T10:00:00Z", createdAt: "2026-02-01T09:00:00Z" },
+    { location: "7 West Village, Ballincollig", travelMetres: null, startAt: "2026-03-10T10:00:00Z", createdAt: "2026-03-01T09:00:00Z" },
+    { location: "Elsewhere", travelMetres: 90000, startAt: "2026-04-10T10:00:00Z", createdAt: "2026-04-01T09:00:00Z" },
   ];
   expect(lastTravelTo(visits, "7 West Village, Ballincollig")).toBe(26000);
+  // An older job typed in afterwards doesn't become the "last" one.
+  const backfilled = { location: "7 West Village, Ballincollig", travelMetres: 20000, startAt: "2025-06-01T10:00:00Z", createdAt: "2026-05-01T09:00:00Z" };
+  expect(lastTravelTo([...visits, backfilled], "7 West Village, Ballincollig")).toBe(26000);
+  // A job with no date yet goes by when it was added.
+  const undated = { location: "7 West Village, Ballincollig", travelMetres: 28000, startAt: null, createdAt: "2026-05-02T09:00:00Z" };
+  expect(lastTravelTo([...visits, backfilled, undated], "7 West Village, Ballincollig")).toBe(28000);
   expect(lastTravelTo(visits, "7 West Village")).toBeNull();
   expect(lastTravelTo(visits, " ")).toBeNull();
 });
