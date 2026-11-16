@@ -5,7 +5,7 @@
  * payment links are simulated — nothing leaves the browser.
  */
 import type { Client, Expense, MessageLogEntry, Payment, BookingDocument } from "@sorted/core";
-import { snapshotReceipt, snapshotDocument, TaxSettings, ConfirmExpenseInput, RecordPaymentInput, EditPaymentInput, paymentPaidAt, irelandToday, addCalendarDays, CalendarDate, shiftDublinWeeks, RepeatInput, Services, bookingStage } from "@sorted/core";
+import { snapshotReceipt, snapshotDocument, TaxSettings, ConfirmExpenseInput, RecordPaymentInput, EditPaymentInput, paymentPaidAt, irelandToday, addCalendarDays, CalendarDate, shiftDublinWeeks, RepeatInput, Services, bookingStage, CreateClientInput, UpdateClientInput, MessageSentInput } from "@sorted/core";
 import type { Backend, BookingRow, Snapshot } from "./backend";
 import { blobToDataUrl } from "./image";
 import { settingsAutosaveRegistry } from "./settingsAutosaveSession";
@@ -187,9 +187,6 @@ function mustFind<T extends { id: string }>(list: T[], itemId: string, what: str
   return item;
 }
 
-const log = (bookingId: string, template: MessageLogEntry["template"]) =>
-  data().messages.push({ id: id(), bookingId, template, status: "sent", sentAt: now() });
-
 const paidFor = (bookingId: string) =>
   data().payments
     .filter((p) => p.bookingId === bookingId && p.status === "paid")
@@ -251,9 +248,10 @@ export const demoBackend: Backend = {
     let client: Client;
     if (draft.clientId) client = mustFind(d.clients, draft.clientId, "Client");
     else {
+      const fields = CreateClientInput.parse(draft.client);
       client = {
-        id: id(), name: draft.client!.name, phone: draft.client!.phone ?? null,
-        email: draft.client!.email ?? null, notes: null, createdAt: now(),
+        id: id(), name: fields.name, phone: fields.phone ?? null,
+        email: fields.email ?? null, notes: null, createdAt: now(),
       };
       d.clients.unshift(client);
     }
@@ -301,7 +299,6 @@ export const demoBackend: Backend = {
         method: null, status: "pending", linkUrl: null, paidAt: null, createdAt: now(), vatRateBp: null,
       });
     }
-    if (booking.client.phone) log(bookingId, "confirmation");
     save();
   },
 
@@ -347,13 +344,25 @@ export const demoBackend: Backend = {
     save();
   },
 
+  async messageSent(bookingId, value) {
+    const input = MessageSentInput.parse(value);
+    const booking = mustFind(data().bookings, bookingId, "Booking");
+    if (data().messages.some(message => message.bookingId === bookingId && message.meta?.acknowledgementId === input.acknowledgement_id)) return;
+    if (input.kind === "follow_up" && booking.status !== "enquiry") throw new Error("Only enquiries can have a follow-up.");
+    const sentAt = now();
+    if (input.kind === "follow_up") booking.followUpOn = addCalendarDays(irelandToday(new Date(sentAt)), 3);
+    if (input.kind === "payment_request") booking.paymentRequestedAt = sentAt;
+    data().messages.push({ id: id(), bookingId, template: input.kind === "follow_up" ? "reminder" : input.kind,
+      status: "sent", sentAt, meta: { userConfirmed: true, kind: input.kind, acknowledgementId: input.acknowledgement_id } });
+    save();
+  },
+
   async paymentLink(paymentId) {
     const payment = mustFind(data().payments, paymentId, "Payment");
     if (!payment.linkUrl) {
       payment.linkUrl = `https://pay.sorted.example/demo-${payment.id.slice(0, 8)}`;
       payment.method = "stripe";
       const booking = mustFind(data().bookings, payment.bookingId, "Booking");
-      if (booking.client.phone) log(payment.bookingId, "payment_request");
       save();
     }
     return payment.linkUrl;
@@ -462,9 +471,10 @@ export const demoBackend: Backend = {
 
   async updateClient(clientId, changes) {
     const d = data();
-    Object.assign(mustFind(d.clients, clientId, "Client"), changes);
+    const patch = UpdateClientInput.parse(changes);
+    Object.assign(mustFind(d.clients, clientId, "Client"), patch);
     for (const booking of d.bookings) {
-      if (booking.clientId === clientId) Object.assign(booking.client, changes);
+      if (booking.clientId === clientId) Object.assign(booking.client, patch);
     }
     save();
   },

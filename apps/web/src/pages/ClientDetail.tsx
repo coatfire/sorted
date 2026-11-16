@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { moneyOwed, normalisePhone, UpdateClientInput } from "@sorted/core";
+import { moneyOwed, normaliseClientPhone, UpdateClientInput } from "@sorted/core";
 import { BackButton, Button, Card, EmptyState, Field, Icon, MoneyText, Sheet } from "../components";
 import { dayMonth, whatsappLink } from "../lib/format";
 import { useAction, useData, useStore } from "../lib/store";
@@ -22,7 +22,7 @@ export function ClientDetail() {
   const validation = useValidation({
     email: () => form.email.trim() && !UpdateClientInput.shape.email.safeParse(form.email.trim()).success
       ? "Enter a valid email address." : undefined,
-    phone: () => form.phone.trim() && !normalisePhone(form.phone)
+    phone: () => form.phone.trim() && !normaliseClientPhone(form.phone)
       ? "That mobile number doesn’t look right. Try it like 087 123 4567." : undefined,
   });
 
@@ -50,7 +50,7 @@ export function ClientDetail() {
   async function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!validation.validate(event.currentTarget)) return;
-    const phone = form.phone.trim() ? normalisePhone(form.phone) : null;
+    const phone = form.phone.trim() ? normaliseClientPhone(form.phone) : null;
     if (await run(() => backend.updateClient(client!.id, { name: form.name.trim(), phone, email: form.email.trim() || null }), "Client saved")) {
       setEditing(false);
     }

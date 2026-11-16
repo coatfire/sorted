@@ -14,6 +14,7 @@ import type {
   CalendarLinks,
   DriveBackup,
   Service,
+  MessageSentInput,
 } from "@sorted/core";
 
 export type BookingRow = Booking & { client: Client };
@@ -80,6 +81,7 @@ export interface Backend {
   cancelBooking(id: string): Promise<void>;
   followUp(id: string, date: string | null): Promise<void>;
   paymentRequested(id: string): Promise<void>;
+  messageSent(id: string, input: MessageSentInput): Promise<void>;
   messages(bookingId: string): Promise<MessageLogEntry[]>;
   document(bookingId: string, kind: DocumentKind, paymentId?: string): Promise<BookingDocument>;
   /** Creates (or returns the existing) payment link URL. */

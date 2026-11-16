@@ -45,7 +45,7 @@ describe("appointment-first creation", () => {
     expect(JSON.parse(String(fetch.mock.calls[0][1]?.body))).toEqual({
       event: "booking.confirmed", sent_at: expect.any(String),
       user: { id: f.user.id, business_name: "your vendor", phone: null, review_link: null },
-      client: { id: booking.clientId, name: "Áine Murphy", phone: "+353871234567" },
+      client: { id: booking.clientId, name: "Áine Murphy", phone: "353871234567" },
       booking: { id: booking.id, service: "Gel nails", start_at: "2026-10-18T09:00:00.000Z", price_cents: 6000, deposit_cents: 2000, location: null, gcal_event_id: null },
     });
   });

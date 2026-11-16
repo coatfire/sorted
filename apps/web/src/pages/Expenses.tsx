@@ -20,7 +20,6 @@ export function Expenses() {
   const { backend, toast } = useStore();
   const { busy, run, error, committed } = useAction();
   const fileInput = useRef<HTMLInputElement>(null);
-  const formTop = useRef<HTMLDivElement>(null);
   // null = closed · "new" = adding · Expense = editing
   const [open, setOpen] = useState<"new" | Expense | null>(null);
   const [photo, setPhoto] = useState<{ blob?: Blob; url: string } | null>(null);
@@ -70,7 +69,6 @@ export function Expenses() {
   function show(target: "new" | Expense) {
     setOpen(target);
     validation.clear();
-    requestAnimationFrame(() => formTop.current?.scrollIntoView({ block: "start", behavior: "smooth" }));
   }
 
   async function picked(event: ChangeEvent<HTMLInputElement>) {
@@ -132,10 +130,6 @@ export function Expenses() {
         action={<span className="year-total"><small>{year} so far</small><MoneyText cents={yearTotal} /></span>}
       />
 
-      <div ref={formTop} className="scroll-anchor" />
-      {error && <p className="sheet-copy" role="alert">{error}</p>}
-      {committed && error && <Button kind="soft" onClick={() => window.location.reload()}>Reload</Button>}
-      {!open ? (
         <div className="capture-stack">
           <button className="receipt-capture" onClick={() => fileInput.current?.click()}>
             <span className="camera-orb"><Icon name="camera" size={28} /></span>
@@ -146,7 +140,9 @@ export function Expenses() {
             <Icon name="plus" size={17} /> Add one without a photo
           </button>
         </div>
-      ) : (
+      {open && <Sheet title={editing ? "Edit expense" : "New expense"} onClose={close}>
+        {error && <p className="sheet-copy" role="alert">{error}</p>}
+        {committed && error && <Button kind="soft" onClick={() => window.location.reload()}>Reload</Button>}
         <Card className="receipt-form-card">
           {photo ? (
             <button type="button" className="receipt-preview" onClick={() => setZoom(true)} aria-label="View receipt full size">
@@ -230,7 +226,7 @@ export function Expenses() {
             </div>
           </form>
         </Card>
-      )}
+      </Sheet>}
       <input
         ref={fileInput}
         className="visually-hidden"

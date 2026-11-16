@@ -76,11 +76,21 @@ export function normalisePhone(input: string, defaultCountry = "353"): string | 
   return Phone.safeParse(e164).success ? e164 : null;
 }
 
+export function normaliseClientPhone(input: string): string | null {
+  const digits = input.replace(/\D/g, "");
+  const e164 = input.trim().startsWith("+") || digits.startsWith("0") || /^8\d{8}$/.test(digits)
+    ? normalisePhone(input) : `+${digits}`;
+  return e164 && Phone.safeParse(e164).success ? e164.slice(1) : null;
+}
+
+const ClientPhone = z.string().transform(value => normaliseClientPhone(value) ?? "")
+  .refine(value => /^\d{7,15}$/.test(value), "Enter a valid mobile number.");
+
 // ─── Request schemas (validate at the edge, trust internally) ─────────────
 
 export const CreateClientInput = z.object({
   name: z.string().min(1).max(200),
-  phone: Phone.optional(),
+  phone: ClientPhone.optional(),
   email: z.string().email().optional(),
   notes: z.string().max(2000).optional(),
 });
@@ -89,7 +99,7 @@ export type CreateClientInput = z.infer<typeof CreateClientInput>;
 export const UpdateClientInput = z.object({
   name: z.string().min(1).max(200).optional(),
   // null clears the field
-  phone: Phone.nullable().optional(),
+  phone: ClientPhone.nullable().optional(),
   email: z.string().email().nullable().optional(),
   notes: z.string().max(2000).nullable().optional(),
 });
@@ -300,6 +310,7 @@ export interface MessageLogEntry {
   template: MessageTemplate;
   status: "sent" | "delivered" | "failed";
   sentAt: string;
+  meta?: { userConfirmed?: boolean; kind?: string; acknowledgementId?: string } | null;
 }
 
 /** GET /api/health — lets the UI be honest about what is wired up. */

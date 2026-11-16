@@ -1,5 +1,5 @@
 import type { ExpenseCategory, MessageLogEntry, Payment } from "@sorted/core";
-import { calendarDaysBetween, dublinDateTime, irelandToday } from "@sorted/core";
+import { calendarDaysBetween, dublinDateTime, irelandToday, normaliseClientPhone } from "@sorted/core";
 
 export function jobDateLabel(startAt: string, now = new Date()) {
   const days = calendarDaysBetween(irelandToday(now), dublinDateTime(startAt).date);
@@ -91,12 +91,15 @@ export const messageLabel = (message: MessageLogEntry) => {
     payment_request: "Payment request",
     review_request: "Review request",
   }[message.template];
+  if (message.meta?.userConfirmed) return `${message.meta.kind === "follow_up" ? "Follow-up" : what} · you confirmed sending`;
   return message.status === "failed" ? `${what} failed to send` : `${what} sent`;
 };
 
 /** wa.me deep link — lets the trader send from their own WhatsApp. */
 export const whatsappLink = (phone: string, text: string) =>
-  `https://wa.me/${phone.replace(/\D/g, "")}?text=${encodeURIComponent(text)}`;
+  `https://wa.me/${normaliseClientPhone(phone) ?? phone.replace(/\D/g, "")}?text=${encodeURIComponent(text)}`;
+
+export const paymentRecordedToast = (client: string, cents: number) => `Marked ${client} ${euros(cents)} paid`;
 
 /** Buttons say what happens — including when no message will go out. */
 export function confirmCopy(

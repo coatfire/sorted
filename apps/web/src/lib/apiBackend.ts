@@ -77,6 +77,7 @@ export const apiBackend: Backend = {
   cancelBooking: (id) => post(`/bookings/${id}/cancel`),
   followUp: (id, date) => patch(`/bookings/${id}`, { follow_up_on: date }),
   paymentRequested: (id) => post(`/bookings/${id}/payment-requested`),
+  messageSent: (id, input) => post(`/bookings/${id}/message-sent`, input),
 
   async messages(bookingId) {
     const detail = await api<{ messages: MessageLogEntry[] }>(`/bookings/${bookingId}`);

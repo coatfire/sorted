@@ -14,8 +14,9 @@ export function moneyOwed<T extends Pick<Booking, "id" | "status" | "startAt" | 
     if (owedCents === 0 || !["due", "owing", "upcoming"].includes(stage)) continue;
     const paid = booking.priceCents - owedCents;
     const unpaidDeposit = Math.max(0, booking.depositCents - paid);
-    const kind = stage === "upcoming" && owedCents === unpaidDeposit ? "Deposit" : paid === 0 ? "Full payment" : "Balance";
-    (stage === "upcoming" ? comingUp : dueNow).push({ booking, owedCents, kind });
+    const upcoming = stage === "upcoming" && dublinDateTime(booking.startAt).date > dublinDateTime(now).date;
+    const kind = upcoming && owedCents === unpaidDeposit ? "Deposit" : paid === 0 ? "Full payment" : "Balance";
+    (upcoming ? comingUp : dueNow).push({ booking, owedCents, kind });
   }
   return { dueNow, comingUp, dueNowCents: dueNow.reduce((sum, item) => sum + item.owedCents, 0), comingUpCents: comingUp.reduce((sum, item) => sum + item.owedCents, 0) };
 }

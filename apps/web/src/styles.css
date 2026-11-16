@@ -574,6 +574,9 @@ a.button { text-decoration: none; }
   padding-top: 0;
   background: transparent;
 }
+.keyboard-open .sticky-action, .keyboard-open .tabbar { display: none; }
+.keyboard-open .sheet-backdrop { top: var(--visible-top, 0px); bottom: auto; height: var(--visible-height, 100dvh); }
+.keyboard-open .sheet { max-height: min(88dvh, calc(var(--visible-height, 100dvh) - 16px)); }
 .service-editor-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 88px 44px;
