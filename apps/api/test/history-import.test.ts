@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { and, eq, isNull, lte } from "drizzle-orm";
 import {
   exportCsvText, exportSections, exportXlsx, historyJobs, historySheet, historyTemplate, parseCsv, planHistoryImport, readCents, readTables,
@@ -7,6 +7,9 @@ import {
 import { app } from "../src/app";
 import { db, schema } from "../src/db";
 import { issueJwt } from "../src/lib/auth";
+import { demoBackend, resetDemo } from "../../web/src/lib/demoBackend";
+
+afterEach(() => { vi.unstubAllGlobals(); });
 
 const TODAY = "2026-11-16";
 const sheet = (rows: string[][], name = "") => historySheet([{ name, rows }], TODAY);
@@ -183,5 +186,29 @@ describe("saving past income and expenses", () => {
     expect(kept).toMatchObject({ id: receipted.bookingId, importId: null });
     expect(kept!.reviewRequestedAt).not.toBeNull();
     expect((await db.select().from(schema.expenses).where(eq(schema.expenses.id, mine!.id)))).toHaveLength(1);
+  });
+
+  it("does the same in demo mode", async () => {
+    const values = new Map<string, string>();
+    vi.stubGlobal("localStorage", { getItem: (key: string) => values.get(key) ?? null, setItem: (key: string, value: string) => values.set(key, value), removeItem: (key: string) => values.delete(key) });
+    resetDemo();
+    const before = await demoBackend.load();
+    const rows = { income: [...income], expenses: [...expenses] };
+    const result = await demoBackend.importHistory("2025.xlsx", rows);
+    expect(result).toMatchObject({ payments: 4, expenses: 1, clients: 2, alreadyThere: 0 });
+    expect(await demoBackend.importHistory("2025.xlsx", rows)).toEqual({ importId: null, payments: 0, expenses: 0, clients: 0, alreadyThere: 5 });
+    const after = await demoBackend.load();
+    const added = after.bookings.filter((booking) => booking.notes === "Imported from 2025.xlsx");
+    expect(added.map((booking) => [booking.status, booking.timeTbc, booking.priceCents]).sort()).toEqual([["completed", true, 20000], ["completed", true, 5500], ["completed", true, 5500]].sort());
+    expect(after.payments.length - before.payments.length).toBe(4);
+    expect(after.documents).toEqual(before.documents);
+    expect(await demoBackend.imports()).toMatchObject([{ id: result.importId, kind: "history", payments: 4, expenses: 1, clients: 2 }]);
+    const receipted = after.payments.find((payment) => payment.amountCents === 15000 && added.some((booking) => booking.id === payment.bookingId))!;
+    await demoBackend.document(receipted.bookingId, "receipt", receipted.id);
+    expect(await demoBackend.undoImport(result.importId!)).toEqual({ removed: 4, kept: 1 });
+    const undone = await demoBackend.load();
+    expect(undone.payments.length - before.payments.length).toBe(1);
+    expect(undone.expenses).toHaveLength(before.expenses.length);
+    expect(undone.clients.map((client) => client.name).sort()).toEqual([...before.clients.map((client) => client.name), "Gráinne Flynn"].sort());
   });
 });
