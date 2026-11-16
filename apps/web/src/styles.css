@@ -1292,6 +1292,10 @@ a.button { text-decoration: none; }
 .nudge-card > div { display: flex; flex-direction: column; gap: 3px; }
 .nudge-card strong { font-size: 0.9rem; }
 .nudge-card div span { color: var(--muted); font-size: 0.76rem; line-height: 1.4; }
+.import-nudge { grid-template-columns: 24px 1fr 44px; padding: 6px 4px 6px 14px; color: var(--muted); }
+.import-nudge a { display: flex; min-height: 44px; flex-direction: column; justify-content: center; gap: 3px; padding: 8px 0; color: var(--ink); text-decoration: none; }
+.import-nudge a span { color: var(--muted); font-size: 0.76rem; line-height: 1.4; }
+.nudge-dismiss { width: 44px; height: 44px; border: 0; border-radius: 50%; background: transparent; color: var(--muted); font-size: 1.4rem; line-height: 1; cursor: pointer; }
 .disclosure {
   display: flex;
   min-height: 44px;

@@ -15,6 +15,10 @@ export const importRoutes = new Hono<AppEnv>();
 const lockUser = (tx: Parameters<Parameters<typeof db.transaction>[0]>[0], userId: string) =>
   tx.select({ id: schema.users.id, vatRegistered: schema.users.vatRegistered, vatRateBp: schema.users.vatRateBp }).from(schema.users).where(eq(schema.users.id, userId)).for("update");
 
+// Someone who has imported no longer needs the reminder on Today.
+const closeOffer = (tx: Parameters<Parameters<typeof db.transaction>[0]>[0], userId: string) =>
+  tx.update(schema.users).set({ importOfferClosedAt: new Date() }).where(and(eq(schema.users.id, userId), isNull(schema.users.importOfferClosedAt)));
+
 importRoutes.get("/", async (c) => {
   const userId = c.get("userId");
   const held = (table: typeof schema.clients | typeof schema.payments | typeof schema.expenses) =>
@@ -67,6 +71,7 @@ importRoutes.post("/history", async (c) => {
     if (!plan.income.length && !plan.expenses.length) return { importId: null, payments: 0, expenses: 0, clients: 0, alreadyThere: plan.alreadyThere };
     const [batch] = await tx.insert(schema.imports).values({ userId, kind: "history", fileName: parsed.data.file_name ?? null }).returning();
     const importId = batch!.id, from = parsed.data.file_name ? `Imported from ${parsed.data.file_name}` : "Imported";
+    await closeOffer(tx, userId);
 
     // Two clients with one name: the payment goes to the one added first.
     const known = new Map<string, string>();
@@ -125,6 +130,7 @@ importRoutes.post("/clients", async (c) => {
     if (!plan.add.length) return { importId: null, added: 0, alreadyThere };
     const [batch] = await tx.insert(schema.imports).values({ userId, kind: "clients", fileName: parsed.data.file_name ?? null }).returning();
     await tx.insert(schema.clients).values(plan.add.map((row) => ({ userId, importId: batch!.id, ...row })));
+    await closeOffer(tx, userId);
     return { importId: batch!.id, added: plan.add.length, alreadyThere };
   });
   return c.json(result, result.added ? 201 : 200);

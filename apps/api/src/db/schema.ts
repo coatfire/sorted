@@ -90,6 +90,8 @@ export const users = pgTable("users", {
   invoiceFooter: text("invoice_footer"),
   vatNumber: text("vat_number"),
   revolutLink: text("revolut_link"),
+  // Set when the trader imports something or dismisses the reminder on Today; null means still offer it.
+  importOfferClosedAt: timestamp("import_offer_closed_at", { withTimezone: true }),
   services: jsonb("services").$type<Service[]>().notNull().default([]),
   name: text("name"),
   businessName: text("business_name"),

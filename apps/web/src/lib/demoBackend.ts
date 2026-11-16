@@ -110,7 +110,7 @@ function seed(): DemoData {
       id: "demo", email: "demo@sorted.app", name: "Shane", businessName: "Studio by Shane",
       phone: "+353871234567", reviewLink: "https://g.page/r/example/review",
       currency: "EUR", createdAt: at(-200, 9),
-      emailVerifiedAt: at(-200, 9), address: null, iban: null, bic: null, revolutLink: null, services: [],
+      emailVerifiedAt: at(-200, 9), address: null, iban: null, bic: null, revolutLink: null, importOfferClosedAt: at(-200, 9), services: [],
       bookingConfirmationTemplate: null, paymentRequestTemplate: null,
       invoiceLogo: null, invoiceAccent: null, invoiceFooter: null, vatNumber: null,
       vatRegistered: false, vatRateBp: null, vatPeriodMonths: 2, incomeTaxRateBp: null,
@@ -155,6 +155,7 @@ function read(): DemoData {
     if (saved) {
       const data = JSON.parse(saved) as DemoData;
       data.user = { ...data.user, ...TaxSettings.parse(data.user) };
+      if (data.user.importOfferClosedAt === undefined) data.user.importOfferClosedAt = data.user.createdAt;
       data.features = { ...data.features, addressSearch: true };
       data.expenses = data.expenses.map((expense) => ({ ...expense, vatCents: expense.vatCents ?? null }));
       data.payments = data.payments.map((payment) => ({ ...payment, vatRateBp: payment.vatRateBp ?? null }));
@@ -573,6 +574,7 @@ export const demoBackend: Backend = {
     const batch = { id: id(), fileName: parsed.file_name ?? null, createdAt: now(), clientIds: added.map((client) => client.id) };
     d.clients.unshift(...added);
     d.imports = [batch, ...(d.imports ?? [])];
+    d.user.importOfferClosedAt ??= now();
     save();
     return { importId: batch.id, added: added.length, alreadyThere };
   },
@@ -613,6 +615,7 @@ export const demoBackend: Backend = {
       d.expenses.unshift(expense); batch.expenseIds.push(expense.id);
     }
     d.imports = [batch, ...(d.imports ?? [])];
+    d.user.importOfferClosedAt ??= now();
     save();
     return { importId: batch.id, payments: batch.paymentIds.length, expenses: batch.expenseIds.length, clients: batch.clientIds.length, alreadyThere: plan.alreadyThere };
   },
@@ -675,9 +678,11 @@ export const demoBackend: Backend = {
 
   async updateUser(changes) {
     const requested = changes;
-    TaxSettings.parse({ ...data().user, ...changes });
-    if (changes.services !== undefined) changes = { ...changes, services: Services.parse(changes.services) };
-    Object.assign(data().user, changes);
+    const { importOfferClosed, ...fields } = changes;
+    TaxSettings.parse({ ...data().user, ...fields });
+    if (fields.services !== undefined) fields.services = Services.parse(fields.services);
+    Object.assign(data().user, fields);
+    if (importOfferClosed) data().user.importOfferClosedAt ??= now();
     save();
     settingsAutosaveRegistry.notifySaved(demoBackend, data().user.id, requested);
   },

@@ -69,7 +69,7 @@ it.each([false, true])("undo retains the payment and frozen receipt, with receip
     expect(document.voidedAt).toBeTruthy(); expect(document.id).toBe(receipt.id);
     expect(document.receiptSnapshot).toEqual(receipt.receiptSnapshot); expect(document.documentSnapshot).toEqual(receipt.documentSnapshot);
     const data = assembleBookingDocument(
-      { ...f.user, createdAt: f.user.createdAt.toISOString(), emailVerifiedAt: f.user.emailVerifiedAt?.toISOString() ?? null, driveBackedUpAt: f.user.driveBackedUpAt?.toISOString() ?? null },
+      { ...f.user, createdAt: f.user.createdAt.toISOString(), emailVerifiedAt: f.user.emailVerifiedAt?.toISOString() ?? null, driveBackedUpAt: f.user.driveBackedUpAt?.toISOString() ?? null, importOfferClosedAt: f.user.importOfferClosedAt?.toISOString() ?? null },
       { ...f.booking, startAt: f.booking.startAt?.toISOString() ?? null, endAt: null, completedAt: null, paymentRequestedAt: null, createdAt: f.booking.createdAt.toISOString() },
       { ...f.client, createdAt: f.client.createdAt.toISOString() }, [], document,
     );

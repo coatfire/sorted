@@ -169,6 +169,13 @@
       "when": 1794840000000,
       "tag": "0023_history_import",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1794843000000,
+      "tag": "0024_import_offer",
+      "breakpoints": true
     }
   ]
 }

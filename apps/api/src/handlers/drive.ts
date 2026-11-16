@@ -26,7 +26,7 @@ driveRoutes.get("/files", async (c) => {
   const photos = await db.select({ id: schema.expenses.id, receiptKey: schema.expenses.receiptKey, date: sql<Date>`coalesce(${schema.expenses.expenseDate}, ${schema.expenses.createdAt})`.mapWith(schema.expenses.createdAt), merchant: schema.expenses.merchant, contentType: schema.receipts.contentType })
     .from(schema.expenses).innerJoin(schema.receipts, and(eq(sql`${schema.receipts.id}::text`, schema.expenses.receiptKey), eq(schema.receipts.userId, userId)))
     .where(eq(schema.expenses.userId, userId));
-  const safeUser = { ...publicUser(user), createdAt: user.createdAt.toISOString(), emailVerifiedAt: user.emailVerifiedAt?.toISOString() ?? null, driveBackedUpAt: user.driveBackedUpAt?.toISOString() ?? null };
+  const safeUser = { ...publicUser(user), createdAt: user.createdAt.toISOString(), emailVerifiedAt: user.emailVerifiedAt?.toISOString() ?? null, driveBackedUpAt: user.driveBackedUpAt?.toISOString() ?? null, importOfferClosedAt: user.importOfferClosedAt?.toISOString() ?? null };
   const paid = payments.map((payment) => ({ ...payment, paidAt: payment.paidAt?.toISOString() ?? null, createdAt: payment.createdAt.toISOString() }));
   const years = new Set<number>();
   for (const payment of payments) if (payment.paidAt) years.add(payment.paidAt.getUTCFullYear());

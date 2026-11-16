@@ -162,6 +162,7 @@ export const apiBackend: Backend = {
       invoice_footer: changes.invoiceFooter,
       vat_number: changes.vatNumber,
       revolut_link: changes.revolutLink,
+      import_offer_closed: changes.importOfferClosed,
       services: changes.services?.map(service => ({ name: service.name, price_cents: service.priceCents })),
       vat_registered: changes.vatRegistered,
       vat_rate_bp: changes.vatRateBp,

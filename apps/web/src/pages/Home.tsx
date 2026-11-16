@@ -31,6 +31,7 @@ function GroupedRows({ bookings, now }: { bookings: Booking[]; now: Date }) {
 
 export function Home() {
   const { bookings, payments, user } = useData();
+  const offer = useAction();
   const { backend } = useStore();
   const { busy, run, error, committed } = useAction();
   const [showLater, setShowLater] = useState(false);
@@ -86,6 +87,12 @@ export function Home() {
     </section>}
 
     {!user.businessName && <Link className="card nudge-card" to="/settings"><Icon name="sparkles" /><div><strong>Welcome to Sorted</strong><span>Add your business name so clients know who’s messaging them.</span></div><Icon name="chevron" size={17} /></Link>}
+
+    {user.businessName && !user.importOfferClosedAt && <div className="card nudge-card import-nudge">
+      <Icon name="download" />
+      <Link to="/import"><strong>Bring in your clients and past figures</strong><span>Import them from a spreadsheet. It’s also in Settings.</span></Link>
+      <button type="button" className="nudge-dismiss" aria-label="Don’t show this again" disabled={offer.busy} onClick={() => void offer.run(() => backend.updateUser({ importOfferClosed: true }), "You’ll find Import in Settings.")}>×</button>
+    </div>}
 
     <section className="list-section">
       <div className="section-heading"><div><p className="eyebrow">Today</p><h2>{irelandLongDay(now)}</h2></div></div>
