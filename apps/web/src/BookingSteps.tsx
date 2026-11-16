@@ -91,7 +91,7 @@ export function BookingSteps({ booking, stage, owedCents, depositCents, hasPaidP
       </Card>
       {!hasPaidPayment && <p className="sheet-copy" id="receipt-unavailable">Record a payment to create a receipt.</p>}
       {noPrice && <p className="sheet-copy">Add a price first to request or record a payment, quote or invoice.</p>}
-      {missingBookingDetails(booking).length > 0 && <p className="sheet-copy">Add the missing details to confirm, or cancel this enquiry as it is.</p>}
+      {booking.status === "enquiry" && missingBookingDetails(booking).length > 0 && <p className="sheet-copy">Add the missing details to confirm, or cancel this enquiry as it is.</p>}
     </section>
   </>;
 }

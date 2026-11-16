@@ -10,6 +10,9 @@ export function jobDateLabel(startAt: string | null, now = new Date()) {
   return `job on ${new Intl.DateTimeFormat("en-IE", { weekday: "short", day: "numeric", month: "short", timeZone: "Europe/Dublin" }).format(new Date(startAt)).replace(/,/g, "")}`;
 }
 
+/** A finished job with no time is one brought in from a spreadsheet, which only has the day. */
+export const noTime = (booking: { status: string }) => booking.status === "completed" ? "Time not recorded" : "Time to be agreed";
+
 export const euros = (cents: number | null) => cents === null ? "Price to be agreed" :
   new Intl.NumberFormat("en-IE", { style: "currency", currency: "EUR" }).format(cents / 100);
 
@@ -26,9 +29,16 @@ export function parseEuros(input: string): number | null {
 export const centsToInput = (cents: number | null) => cents === null ? "" :
   cents % 100 === 0 ? String(cents / 100) : (cents / 100).toFixed(2);
 
+const dublinYear = new Intl.DateTimeFormat("en-IE", { timeZone: "Europe/Dublin", year: "numeric" });
+/** A day in another year says which year: "14 Mar 2025". */
 const fmt = (options: Intl.DateTimeFormatOptions) => {
   const formatter = new Intl.DateTimeFormat("en-IE", { timeZone: "Europe/Dublin", ...options });
-  return (value: string | Date | null) => value === null ? options.hour && !options.day ? "Time to be agreed" : "Date to be agreed" : formatter.format(new Date(value));
+  const withYear = options.day && !options.year ? new Intl.DateTimeFormat("en-IE", { timeZone: "Europe/Dublin", ...options, year: "numeric" }) : formatter;
+  return (value: string | Date | null) => {
+    if (value === null) return options.hour && !options.day ? "Time to be agreed" : "Date to be agreed";
+    const date = new Date(value);
+    return (dublinYear.format(date) === dublinYear.format(new Date()) ? formatter : withYear).format(date);
+  };
 };
 
 export const time = fmt({ hour: "2-digit", minute: "2-digit", hour12: false });
@@ -83,7 +93,7 @@ export const kindLabel = (kind: Payment["kind"]) =>
 
 export const methodLabel = (method: Payment["method"]) =>
   method
-    ? { stripe: "Card (Stripe)", revolut: "Revolut", cash: "Cash", bank_transfer: "Bank transfer" }[method]
+    ? { stripe: "Card (Stripe)", revolut: "Revolut", cash: "Cash", bank_transfer: "Bank transfer", card: "Card" }[method]
     : null;
 
 export const messageLabel = (message: MessageLogEntry) => {

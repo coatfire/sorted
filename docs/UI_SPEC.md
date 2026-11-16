@@ -102,6 +102,7 @@ Route map:
 /clients/import    Import a client list
 /clients/:id       Client detail
 /money             Money (owed + year summary)
+/money/import      Import past income and expenses
 /expenses          Expenses (snap + list)
 /expenses/:id      Expense confirm/edit
 /settings          Settings + onboarding fields
@@ -610,7 +611,63 @@ Rules:
 - Importing never sends a message to anyone.
 - At most 2,000 new clients per file.
 
-**Settings → Import.** A link to the import screen, and each past import with its
-date and how many of its clients are still in Sorted. **Undo** asks once, then
-removes that import's clients, except any who have a booking; those stay and the
-count kept is shown.
+**Settings → Import.** Links to both import screens, and each past import with
+its date and how much of it is still in Sorted. **Undo** asks once. For a client
+import it removes that import's clients, except any who have a booking; those
+stay and the count kept is shown. For an income and expenses import, see below.
+
+## Import past income and expenses
+
+**`/money/import`**, linked from the export card on Money and from Settings →
+Import. Same three steps as the client import: choose a file, preview, done.
+
+**The file.** Excel (.xlsx) or CSV, up to 5 MB and 5,000 rows. The template is
+the two sheets of **Export for accountant** (Income: `date_paid, client, service,
+kind, method, amount_eur`; Expenses: `date, merchant, category, amount_eur,
+has_receipt, vat_eur`), so an exported file uploads unchanged, as Excel or as the
+Drive backup CSV. A hand-made sheet works if it has a date column and an amount
+column; common headings (Customer, Description, Supplier, Total, Paid with…) are
+recognised, and the sheet name or a client/supplier column decides whether it is
+income or expenses. A sheet where that can't be told is not read.
+
+**How cells are read.**
+- Dates: `2025-03-14`, `14/03/2025`, `14.03.25`, `14 Mar 2025`. `03/04/2025` is
+  3 April. Month-first is used only when the column itself shows it (a `12/25`),
+  and a column with both kinds is refused rather than guessed.
+- Amounts: `55`, `55.50`, `55,50`, `€1,250.00`, `1.250,00`. `1.250`, negatives
+  and zero are not read. No amount is ever rounded.
+- A row with no readable date, no amount above zero, or a date after today is
+  left out, and the preview says how many of each.
+- No client name → "Client not recorded". No service → "Service not recorded".
+  No supplier → "Not recorded". Unknown category → Other. Unknown method → none. Any card payment → Card.
+  Unknown kind → full. VAT more than the amount → no VAT.
+
+**Preview.** How many payments and expenses will be added, income and expenses
+totalled per year (so a misread date column is obvious), what was left out and
+why, how many new clients come with it, and the first three of each.
+
+**What saving does.** Each payment becomes a completed, fully paid job on the day
+it was paid, with no time ("Time not recorded"), under the client of that name;
+a client not yet in Sorted is added with no phone or email. A balance joins the
+deposit paid before it by the same client for the same service, as one job.
+Expenses are saved as confirmed, with no receipt photo.
+
+**Rules.**
+- A row is skipped when Sorted already holds one with the same date, client,
+  service and amount (or date, supplier and amount). Two identical rows in one
+  file are two payments. The same file twice adds nothing.
+- Nothing existing is changed.
+- Imported jobs never get a reminder or a review request, no receipt or invoice
+  is issued and no document number is used. Nothing is sent to anyone.
+- All of it saves together or none of it does.
+
+**Undo** (Settings → Import) removes the payments, past jobs, expenses and
+clients that import added. Kept: a job that has since had a receipt or invoice
+issued, a message recorded or a payment added by hand, together with all of its
+payments (removing one would make the rest of its price look unpaid); an expense
+a receipt photo has since been added to; and a client who still has a booking.
+
+A card payment in a file ("card", "credit card", "debit card" or "stripe") is
+saved with the method **Card**, never as a Stripe charge, because this account's
+Stripe did not take it. It can be edited or undone on its job like any payment
+recorded by hand.

@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { bookingAgenda, bookingStage, dublinDateTime, moneyOwed } from "@sorted/core";
 import { Button, Card, EmptyState, Icon, MoneyText, StatusChip } from "../components";
 import type { BookingRow as Booking } from "../lib/backend";
-import { euros, firstName } from "../lib/format";
+import { euros, firstName, noTime } from "../lib/format";
 import { useAction, useData, useStore } from "../lib/store";
 import { appointmentWhen, irelandDayLabel, irelandDayMonth, irelandLongDay, irelandTime } from "../lib/today";
 import { useNow } from "../lib/useNow";
@@ -11,7 +11,7 @@ import { FollowUps } from "../FollowUp";
 
 export function BookingRow({ booking, lead }: { booking: Booking; lead?: string }) {
   return <Link className={`booking-row${!booking.startAt || booking.timeTbc ? " is-incomplete" : ""}`} to={`/bookings/${booking.id}`}>
-    <time dateTime={booking.startAt ?? undefined}>{!booking.startAt ? "Date to be agreed" : booking.timeTbc ? `${lead ? `${lead} · ` : ""}Time to be agreed` : lead ?? irelandTime(booking.startAt)}</time>
+    <time dateTime={booking.startAt ?? undefined}>{!booking.startAt ? "Date to be agreed" : booking.timeTbc ? `${lead ? `${lead} · ` : ""}${noTime(booking)}` : lead ?? irelandTime(booking.startAt)}</time>
     <div className="booking-row-main"><strong>{booking.client.name}</strong><span>{booking.service}</span></div>
     <div className="booking-row-trailing"><MoneyText cents={booking.priceCents} /><StatusChip status={booking.status} /></div>
     <Icon name="chevron" size={17} />

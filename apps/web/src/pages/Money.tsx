@@ -120,6 +120,7 @@ export function Money() {
               ? `An Excel file of income and expenses from ${longDate(range.from)} to ${longDate(range.to)}, ready for your accountant.`
               : "Choose a from date that's on or before the to date."}
           </p>
+          <Link className="text-link" to="/money/import">Import past income and expenses</Link>
         </Card>
       </section>
       <TaxEstimateCard estimate={estimate} />

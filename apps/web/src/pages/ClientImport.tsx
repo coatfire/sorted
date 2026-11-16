@@ -6,6 +6,7 @@ import { useAction, useData, useStore } from "../lib/store";
 import { dayMonth } from "../lib/format";
 
 const people = (count: number) => `${count} ${count === 1 ? "client" : "clients"}`;
+const rows = (count: number, one: string) => `${count} ${count === 1 ? one : `${one}s`}`;
 
 function download(blob: Blob, name: string) {
   const url = URL.createObjectURL(blob), link = document.createElement("a");
@@ -97,23 +98,31 @@ export function ImportSettings() {
   const [confirming, setConfirming] = useState<string>();
   const [outcome, setOutcome] = useState<string>();
   useEffect(() => { let live = true; backend.imports().then((rows) => { if (live) setBatches(rows); }).catch(() => {}); return () => { live = false; }; }, [backend]);
+  const holds = (batch: ImportBatch) => batch.kind === "history"
+    ? [batch.payments && rows(batch.payments, "payment"), batch.expenses && rows(batch.expenses, "expense")].filter(Boolean).join(" and ") || "nothing left to remove"
+    : people(batch.clients);
   return <section className="settings-section"><h2>Import</h2>
-    <p className="sheet-copy">Bring your client list in from a spreadsheet.</p>
+    <p className="sheet-copy">Bring your client list and your past income and expenses in from a spreadsheet.</p>
     <Card className="form-card">
       <Link className="button button-soft" to="/clients/import">Import clients</Link>
+      <Link className="button button-soft" to="/money/import">Import past income and expenses</Link>
       {batches.map((batch) => <div className="import-batch" key={batch.id}>
-        <div><strong>{batch.fileName ?? "Imported list"}</strong><span>{dayMonth(batch.createdAt)} · {people(batch.clients)}</span></div>
+        <div><strong>{batch.fileName ?? (batch.kind === "history" ? "Imported income and expenses" : "Imported list")}</strong><span>{dayMonth(batch.createdAt)} · {holds(batch)}</span></div>
         {confirming === batch.id
           ? <Button kind="danger" disabled={busy} onClick={async () => {
             if (await run(async () => {
               const { removed, kept } = await backend.undoImport(batch.id);
-              setOutcome(`${people(removed)} removed.${kept ? ` ${people(kept)} kept because they have bookings.` : ""}`);
+              setOutcome(batch.kind === "history"
+                ? `${rows(removed, "row")} removed.${kept ? ` ${rows(kept, "row")} kept because you’ve used ${kept === 1 ? "it" : "them"} since.` : ""}`
+                : `${people(removed)} removed.${kept ? ` ${people(kept)} kept because they have bookings.` : ""}`);
               setBatches(await backend.imports());
             })) setConfirming(undefined);
-          }}>Remove {people(batch.clients)}</Button>
+          }}>Remove {batch.kind === "history" ? "them" : people(batch.clients)}</Button>
           : <Button kind="quiet" onClick={() => { setConfirming(batch.id); setOutcome(undefined); }}>Undo</Button>}
       </div>)}
-      {confirming && <p className="sheet-copy">Clients from this import who have a booking are kept.</p>}
+      {confirming && <p className="sheet-copy">{batches.find((batch) => batch.id === confirming)?.kind === "history"
+        ? "This removes the payments, past jobs and expenses this import added. A job you’ve issued a receipt or invoice for, messaged about or added a payment to is kept with its payments, and so is an expense you’ve added a receipt photo to."
+        : "Clients from this import who have a booking are kept."}</p>}
       {outcome && <p className="sheet-copy" role="status">{outcome}</p>}
       {error && <p role="alert" className="sheet-copy">{error}</p>}
     </Card>

@@ -142,6 +142,7 @@ export const apiBackend: Backend = {
 
   createClient: (input) => post("/clients", input),
   importClients: (fileName, rows) => post("/imports/clients", { file_name: fileName, clients: rows }),
+  importHistory: (fileName, rows) => post("/imports/history", { file_name: fileName, ...rows }),
   imports: () => api("/imports"),
   undoImport: (id) => api(`/imports/${id}`, { method: "DELETE", body: JSON.stringify({ confirm: true }) }),
 

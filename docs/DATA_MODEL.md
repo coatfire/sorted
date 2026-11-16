@@ -43,7 +43,7 @@ enquiry ──▶ confirmed ──▶ completed
 ### payments
 Money expected or received against a booking.
 `id, user_id, booking_id, kind (deposit|balance|full|custom),
-amount_cents, method (stripe|revolut|cash|bank_transfer), status
+amount_cents, method (stripe|revolut|cash|bank_transfer|card; stripe = charged through a Sorted payment link, card = any other card payment), status
 (pending|paid|cancelled), stripe_payment_link_id, link_url, paid_at, created_at`
 
 Rule: "what's owed at a glance" = `booking.price_cents − SUM(paid payments)`.
