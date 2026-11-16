@@ -84,13 +84,30 @@ function findColumns(row: string[]) {
 
 // The accountant export puts ' in front of text a spreadsheet could run as a formula.
 const text = (value: string | undefined) => (value ?? "").replace(/^'(?=[=+\-@])/, "").replace(/\s+/g, " ").trim();
-// A cell can hold several: "087 123 4567 or 01 234 5678", "a@b.ie / c@d.ie". Sorted uses the first it can read.
-// Only text that is nothing but a number counts, so "087 123 4567 ext 12" never becomes a longer wrong number.
-const firstPhone = (value: string) => value.split(/:::|[,;]|\bor\b/i)
-  // "087/1234567" is one number; "01 234 5678 / 086 111 2222" is two.
-  .flatMap((chunk) => /^\s*\(?\d{2,4}\)?\s*\/[\d\s-]+$/.test(chunk) ? [chunk] : chunk.split("/"))
-  .map((part) => part.trim())
-  .find((part) => /^[+\d\s()./-]+$/.test(part) && normaliseClientPhone(part));
+const digitsOnly = (value: string) => /^[+\d\s().,/-]+$/.test(value);
+const readPhone = (value: string) => {
+  const phone = digitsOnly(value) ? normaliseClientPhone(value) : null;
+  // An Irish mobile is 08x plus seven digits; anything longer has something else stuck to it.
+  return phone && !(phone.startsWith("3538") && phone.length !== 12) ? phone : undefined;
+};
+
+/**
+ * The number in a phone cell, or undefined when there isn't exactly one way to read it. A wrong number is worse
+ * than none, so the cell is then kept in the notes instead.
+ *   "087 123 4567 or 01 234 5678"  several numbers: the first
+ *   "087 123 4567, ext 12"         a number and some words: the number
+ *   "087/1234567"                  a dialling prefix and the rest: one number
+ *   "087 123 4567/12"              a number and loose digits: not read
+ */
+function firstPhone(value: string): string | undefined {
+  const parts = value.split(/:::|[,;/]|\bor\b/i).map((part) => part.trim()).filter(Boolean);
+  if (parts.length < 2) return readPhone(value);
+  const numeric = parts.filter(digitsOnly);
+  if (numeric.every(readPhone)) return numeric.map(readPhone)[0];
+  const [prefix, rest] = parts;
+  const split = parts.length === 2 && numeric.length === 2 && /^\(?[+0]/.test(prefix!) && prefix!.replace(/\D/g, "").length <= 5 && /^[1-9]/.test(rest!);
+  return split ? readPhone(value) : undefined;
+}
 const isEmail = (value: string) => z.string().email().max(320).safeParse(value).success;
 const firstEmail = (value: string) => value.toLowerCase().split(/:::|[,;/\s]/).find(isEmail);
 
@@ -118,13 +135,12 @@ export function clientSheet(table: string[][]): ClientSheet {
     if (!name) { sheet.noName++; continue; }
     if (EXAMPLE.test(name)) continue;
     const phoneText = cell(row, at.phone), emailText = cell(row, at.email);
-    const phonePart = firstPhone(phoneText), email = firstEmail(emailText);
-    const phone = phonePart ? normaliseClientPhone(phonePart) ?? undefined : undefined;
+    const phone = firstPhone(phoneText), email = firstEmail(emailText);
     // Nothing is thrown away: a cell Sorted can't read, or one holding more than it used, goes into the notes as written.
     const unread: string[] = [];
     if (phoneText && !phone) sheet.unreadPhones++;
     if (emailText && !email) sheet.unreadEmails++;
-    if (phoneText && phonePart !== phoneText) unread.push(`Phone as written: ${phoneText}`);
+    if (phoneText && (!phone || phone !== readPhone(phoneText))) unread.push(`Phone as written: ${phoneText}`);
     if (emailText && email !== emailText.toLowerCase()) unread.push(`Email as written: ${emailText}`);
     // Long notes give way to the unread details, never the other way round.
     const details = unread.join(" · ").slice(0, 2000);
