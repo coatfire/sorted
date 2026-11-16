@@ -54,7 +54,7 @@ export function Calendar() {
   const jobs = selected ? byDay.get(selected) ?? [] : [];
   const grid = monthWeeks(month).flat();
   const busy = useBusy(grid[0], grid[grid.length - 1]);
-  const busyDays = busyByDay(busy?.blocks ?? []);
+  const busyDays = busyByDay(busy?.blocks ?? [], grid[0], grid[grid.length - 1]);
   const blocks = selected ? busyDays.get(selected) ?? [] : [];
 
   return <div className="page">

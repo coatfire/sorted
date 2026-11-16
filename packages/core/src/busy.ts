@@ -59,15 +59,16 @@ export interface BusyResult {
   failed: ExternalCalendarProvider[];
 }
 
-/** Busy blocks by each day they touch in Ireland: all-day first, then by start. */
-export function busyByDay(blocks: readonly BusyBlock[]): Map<string, BusyBlock[]> {
+/** Busy blocks by each day from `from` to `to` that they touch in Ireland: all-day first, then by start. */
+export function busyByDay(blocks: readonly BusyBlock[], from: string, to: string): Map<string, BusyBlock[]> {
   const days = new Map<string, BusyBlock[]>();
   const sorted = [...blocks].sort((a, b) => Number(b.allDay) - Number(a.allDay) || a.start.localeCompare(b.start) || a.title.localeCompare(b.title));
   for (const block of sorted) {
     const first = block.allDay ? block.start : dublinDateTime(block.start).date;
     // A timed block that ends exactly at midnight doesn't touch the next day.
     const last = block.allDay ? block.end : dublinDateTime(new Date(Math.max(Date.parse(block.start), Date.parse(block.end) - 1))).date;
-    for (let day = first, count = 0; day <= last && count <= 366; day = addCalendarDays(day, 1), count++) {
+    // Only the days asked for: an absence can run for years, and its whole length must stay busy.
+    for (let day = first > from ? first : from; day <= last && day <= to; day = addCalendarDays(day, 1)) {
       days.set(day, [...(days.get(day) ?? []), block]);
     }
   }
