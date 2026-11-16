@@ -12,3 +12,7 @@ EXCEPTION
 END $$;
 --> statement-breakpoint
 CREATE UNIQUE INDEX IF NOT EXISTS "external_calendars_user_url_idx" ON "external_calendars" USING btree ("user_id","url");
+--> statement-breakpoint
+-- The links are private. The API connects as the table owner, which RLS doesn't restrict;
+-- with no policies, Supabase's public Data API roles can't read this table.
+ALTER TABLE "external_calendars" ENABLE ROW LEVEL SECURITY;

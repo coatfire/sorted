@@ -127,7 +127,10 @@ export const loginCodes = pgTable("login_codes", {
   expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
 });
 
-/** Private iCal links to the trader's own calendars. Read for Busy blocks; never written to. */
+/**
+ * Private iCal links to the trader's own calendars. Read for Busy blocks; never written to.
+ * Row level security is on (migration 0020) so only the API's own database role can read the links.
+ */
 export const externalCalendars = pgTable("external_calendars", {
   id: uuid("id").primaryKey().defaultRandom(),
   userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
