@@ -19,4 +19,5 @@ export * from "./busy";
 export * from "./places";
 export * from "./csv";
 export * from "./exportFile";
+export * from "./clientImport";
 export * from "./exportRange";

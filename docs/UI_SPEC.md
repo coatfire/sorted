@@ -88,8 +88,9 @@ Bottom tab bar (already built in `AppShell.tsx`):
 
 - The centre **＋ FAB goes straight to Add Booking** — no menu in between.
 - Long-press ＋ (M5, nice-to-have): quick action sheet → "Booking / Receipt".
-- Client list is deliberately NOT a tab: clients are reached through bookings
-  or via search on Today. A fifth "Clients" tab makes it feel like a CRM.
+- Client list is deliberately NOT a tab: clients are reached through bookings,
+  or from the person icon top-right of Today, beside Settings. A fifth
+  "Clients" tab makes it feel like a CRM.
 - Settings: small avatar/gear top-right of Today → Settings screen.
 
 Route map:
@@ -97,6 +98,8 @@ Route map:
 /                  Today (home)
 /bookings/new      Add booking
 /bookings/:id      Booking detail
+/clients           Client list (search, add, import)
+/clients/import    Import a client list
 /clients/:id       Client detail
 /money             Money (owed + year summary)
 /expenses          Expenses (snap + list)
@@ -570,3 +573,44 @@ last-loaded data" banner (read-only offline is enough for MVP).
   events; undated enquiries are omitted from the Enquiries feed. Default
   message drafts omit unknown-price lines and use natural agreed-later wording.
 - Keep shared sheets, 44px targets, reduced motion and demo parity.
+
+## Clients and client import
+
+**Clients — `/clients`.** Everyone, A–Z, with their mobile or email and how many
+bookings they have. Search matches a name without needing its accents
+("grainne" finds Gráinne), a number however it was typed, or an email.
+**Add a client** takes a name and optional mobile and email. **Import a list**
+opens the import screen. The client page shows and edits notes.
+
+**Import — `/clients/import`.** Three steps, on one screen:
+
+1. **Choose a file:** Excel (.xlsx) or CSV, up to 5 MB. **Download a template
+   to fill in** gives Name, Phone, Email, Notes with example rows; rows starting
+   with "Example" are never imported. Sorted finds the heading row itself and
+   recognises common headings (Name, First Name + Last Name, Mobile, Phone,
+   E-mail Address, Comments, and Google Contacts' and Outlook's export names).
+   If there is no names column, say so and say what to do; never guess.
+2. **Preview:** "N clients to add", then what was left out and why: already in
+   Sorted, repeated in the file, no name. Show which column each field came from
+   and the first five clients. Nothing is saved until **Add N clients**.
+3. **Done:** how many were added, and that the import can be undone in Settings.
+
+Rules:
+- A row is already in Sorted when its phone or email matches a client, or its
+  name matches and the phone numbers don't disagree. Two people with the same
+  name and different numbers are both kept. The server decides again when
+  saving, so the same file sent twice adds nothing.
+- A phone or email Sorted can't read is not dropped: it goes into the client's
+  notes as written. A cell with more than one number or address uses the first
+  one and keeps the whole cell in the notes too. A number is only saved when
+  there is one way to read it: "087/1234567" is one number, but
+  "087 123 4567 ext 12" and "087 123 4567/12" are kept in the notes, not saved
+  as a longer wrong number.
+- An existing client is never changed by an import.
+- Importing never sends a message to anyone.
+- At most 2,000 new clients per file.
+
+**Settings → Import.** A link to the import screen, and each past import with its
+date and how many of its clients are still in Sorted. **Undo** asks once, then
+removes that import's clients, except any who have a booking; those stay and the
+count kept is shown.

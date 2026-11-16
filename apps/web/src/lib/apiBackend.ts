@@ -140,6 +140,11 @@ export const apiBackend: Backend = {
     method: "DELETE", body: JSON.stringify({ confirm: true }),
   }),
 
+  createClient: (input) => post("/clients", input),
+  importClients: (fileName, rows) => post("/imports/clients", { file_name: fileName, clients: rows }),
+  imports: () => api("/imports"),
+  undoImport: (id) => api(`/imports/${id}`, { method: "DELETE", body: JSON.stringify({ confirm: true }) }),
+
   async updateUser(changes) {
     const user = await patch<User>("/auth/me", {
       name: changes.name,
