@@ -47,7 +47,10 @@ describe("reading a client list", () => {
     ]);
     expect(sheet).toMatchObject({ noName: 1, unreadPhones: 1, unreadEmails: 1 });
     expect(clientSheet([["Name", "Phone 1 - Value"], ["Aoife", "087 123 4567 ::: 01 234 5678"]]).rows).toEqual([{ name: "Aoife", phone: "353871234567", email: undefined, notes: undefined }]);
-    expect(clientSheet([["Name", "Email"], ["Mary", "mary@or.ie"], ["Orla", "or@example.com or orla@example.com"], ["Una", "una@example.com; other@example.com"]]).rows.map((row) => row.email)).toEqual(["mary@or.ie", "or@example.com", "una@example.com"]);
+    expect(clientSheet([["Name", "Email"], ["Mary", "mary@or.ie"], ["Orla", "or@example.com or orla@example.com"], ["Una", "una@example.com; other@example.com"], ["Ita", "Ita@Example.com/orla@example.com"], ["Eve", "work: eve@example.com"]]).rows.map((row) => row.email)).toEqual(["mary@or.ie", "or@example.com", "una@example.com", "ita@example.com", "eve@example.com"]);
+    expect(clientSheet([["Name", "Phone"], ["A", "087/1234567"], ["B", "01 234 5678 / 086 111 2222"], ["C", "ask her sister or 085 111 2222"], ["D", "landline only, ask Mary"]]).rows.map((row) => [row.phone, row.notes])).toEqual([
+      ["353871234567", undefined], ["35312345678", undefined], ["353851112222", undefined], [undefined, "Phone as written: landline only, ask Mary"]]);
+    expect(clientSheet([["Name", "Email"], ["Mary", "Ask Mary for address"]]).rows[0]).toMatchObject({ email: undefined, notes: "Email as written: Ask Mary for address" });
     const long = clientSheet([["Name", "Phone", "Notes"], ["Mary", "ask her sister", "x".repeat(2500)]]).rows[0]!.notes!;
     expect(long).toHaveLength(2000);
     expect(long.endsWith(" · Phone as written: ask her sister")).toBe(true);

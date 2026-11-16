@@ -84,9 +84,10 @@ function findColumns(row: string[]) {
 
 // The accountant export puts ' in front of text a spreadsheet could run as a formula.
 const text = (value: string | undefined) => (value ?? "").replace(/^'(?=[=+\-@])/, "").replace(/\s+/g, " ").trim();
-// A cell can hold several: "087 123 4567 or 01 234 5678", "a@b.ie; c@d.ie". Sorted keeps the first.
-const firstPhone = (value: string) => value.split(/:::|[,;/]|\bor\b/i)[0]!.trim();
-const firstEmail = (value: string) => value.split(/:::|[,;\s]/).find(Boolean) ?? "";
+// A cell can hold several: "087 123 4567 or 01 234 5678", "a@b.ie / c@d.ie". Sorted keeps the first it can read.
+const firstPhone = (value: string) => [value, ...value.split(/:::|[,;/]|\bor\b/i)].map((part) => normaliseClientPhone(part) ?? undefined).find(Boolean);
+const isEmail = (value: string) => z.string().email().max(320).safeParse(value).success;
+const firstEmail = (value: string) => value.toLowerCase().split(/:::|[,;/\s]/).find(isEmail);
 
 /** Reads a client list out of a spreadsheet's rows. Throws when no names column can be found. */
 export function clientSheet(table: string[][]): ClientSheet {
@@ -111,9 +112,8 @@ export function clientSheet(table: string[][]): ClientSheet {
     const name = (cell(row, at.name) || `${cell(row, at.first)} ${cell(row, at.last)}`.trim()).slice(0, 200);
     if (!name) { sheet.noName++; continue; }
     if (EXAMPLE.test(name)) continue;
-    const phoneText = firstPhone(cell(row, at.phone)), emailText = firstEmail(cell(row, at.email)).toLowerCase();
-    const phone = phoneText ? normaliseClientPhone(phoneText) ?? undefined : undefined;
-    const email = emailText && z.string().email().max(320).safeParse(emailText).success ? emailText : undefined;
+    const phoneText = cell(row, at.phone), emailText = cell(row, at.email);
+    const phone = firstPhone(phoneText), email = firstEmail(emailText);
     // Nothing is thrown away: details Sorted can't use go into the notes as they were written.
     const unread: string[] = [];
     if (phoneText && !phone) { sheet.unreadPhones++; unread.push(`Phone as written: ${phoneText}`); }
