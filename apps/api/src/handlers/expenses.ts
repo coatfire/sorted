@@ -14,12 +14,12 @@ export const expenseRoutes = new Hono<AppEnv>();
 
 /**
  * POST /api/expenses/receipts { content_type, data_base64 } → { receipt_key }
- * The web app downscales the photo before upload. Stored in Postgres for the
+ * The web app downscales photos before upload; PDFs are stored as uploaded. Stored in Postgres for the
  * MVP (see schema.receipts); the key is opaque so S3 can replace it later.
  */
 expenseRoutes.post("/receipts", async (c) => {
   const parsed = UploadReceiptInput.safeParse(await c.req.json());
-  if (!parsed.success) return c.json({ error: "A JPEG, PNG or WebP photo under 1.5 MB is required" }, 400);
+  if (!parsed.success) return c.json({ error: "Choose a photo or a PDF under 3 MB" }, 400);
   const [receipt] = await db
     .insert(schema.receipts)
     .values({
@@ -89,6 +89,7 @@ expenseRoutes.get("/:id/receipt", async (c) => {
   if (!row) return c.json({ error: "Receipt not found" }, 404);
   return c.body(Buffer.from(row.receipt.dataBase64, "base64"), 200, {
     "Content-Type": row.receipt.contentType,
+    "X-Content-Type-Options": "nosniff",
     "Cache-Control": "private, max-age=86400",
   });
 });

@@ -186,14 +186,19 @@ export const MarkPaidInput = z.object({
 });
 
 /** A receipt photo, downscaled client-side. ~1.5 MB of base64 is plenty. */
+/** Raw size limits: photos are downscaled first; PDFs are stored as uploaded. */
+export const RECEIPT_PDF_MAX_BYTES = 3_000_000;
 export const UploadReceiptInput = z.object({
-  content_type: z.enum(["image/jpeg", "image/png", "image/webp"]),
+  content_type: z.enum(["image/jpeg", "image/png", "image/webp", "application/pdf"]),
   data_base64: z
     .string()
     .min(1)
-    .max(2_000_000)
+    .max(4_000_000)
     .regex(/^[A-Za-z0-9+/]+=*$/, "Must be base64"),
-});
+}).refine((v) => v.content_type === "application/pdf"
+  // "%PDF-" in base64
+  ? v.data_base64.startsWith("JVBERi0")
+  : v.data_base64.length <= 2_000_000, { message: "Unsupported receipt file" });
 
 const expenseFields = {
   merchant: z.string().min(1).max(200),

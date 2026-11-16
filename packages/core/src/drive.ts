@@ -21,7 +21,7 @@ export function backupFiles(backup: DriveBackup): BackupFile[] {
     ...backup.documents.map((document, index) => ({ path: `${folders[document.kind]}/${document.number}.pdf`, kind: "document" as const, index, ...(document.voided ? { replace: true } : {}) })),
     ...backup.photos.map((photo, index) => {
       const merchant = (photo.merchant ?? "receipt").replace(/[^\p{L}\p{N} _-]/gu, "").trim().slice(0, 80) || "receipt";
-      const extension = photo.contentType === "image/png" ? "png" : photo.contentType === "image/webp" ? "webp" : "jpg";
+      const extension = photo.contentType === "application/pdf" ? "pdf" : photo.contentType === "image/png" ? "png" : photo.contentType === "image/webp" ? "webp" : "jpg";
       return { path: `Expense photos/${photo.date}-${merchant}-${photo.id}.${extension}`, kind: "photo" as const, index };
     }),
     ...[...new Set(backup.years)].sort().map((year) => ({ path: `sorted-${year}.csv`, kind: "csv" as const, index: year })),

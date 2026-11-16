@@ -1,11 +1,24 @@
 import { useEffect, useRef, useState, type ChangeEvent, type FormEvent } from "react";
-import type { Expense, ExpenseCategory } from "@sorted/core";
+import { RECEIPT_PDF_MAX_BYTES, type Expense, type ExpenseCategory } from "@sorted/core";
 import { Button, Card, EmptyState, Field, Icon, MoneyText, PageHeader, Sheet } from "../components";
 import { CATEGORIES, categoryLabel, centsToInput, dayMonth, monthYear, parseEuros, toDateInput } from "../lib/format";
 import { downscaleImage } from "../lib/image";
 import { manageDialogFocus } from "../lib/dialogFocus";
 import { useAction, useData, useStore } from "../lib/store";
 import { useValidation } from "../lib/useValidation";
+
+/** Browsers won't open a data: URL in a new tab, so PDFs always get a blob: URL. */
+async function storedReceipt(pending: Promise<string | null>) {
+  try {
+    const url = await pending;
+    if (!url) return null;
+    const blob = await (await fetch(url)).blob();
+    const pdf = blob.type === "application/pdf";
+    if (!pdf) return { url, pdf };
+    if (url.startsWith("blob:")) URL.revokeObjectURL(url);
+    return { url: URL.createObjectURL(blob), pdf };
+  } catch { return null; }
+}
 
 const blank = () => ({
   merchant: "",
@@ -20,9 +33,10 @@ export function Expenses() {
   const { backend, toast } = useStore();
   const { busy, run, error, committed } = useAction();
   const fileInput = useRef<HTMLInputElement>(null);
+  const uploadInput = useRef<HTMLInputElement>(null);
   // null = closed · "new" = adding · Expense = editing
   const [open, setOpen] = useState<"new" | Expense | null>(null);
-  const [photo, setPhoto] = useState<{ blob?: Blob; url: string } | null>(null);
+  const [photo, setPhoto] = useState<{ blob?: Blob; url: string; pdf?: boolean; name?: string } | null>(null);
   const [form, setForm] = useState(blank);
   const validation = useValidation({
     amount: () => !parseEuros(form.amount) ? "Add the amount, like 24.60." : !user.vatRegistered && (parseEuros(form.vat) ?? 0) > parseEuros(form.amount)! ? "The amount cannot be less than the saved VAT paid. Update VAT in Settings to edit it." : undefined,
@@ -64,6 +78,7 @@ export function Expenses() {
     setForm(blank());
     validation.clear();
     if (fileInput.current) fileInput.current.value = "";
+    if (uploadInput.current) uploadInput.current.value = "";
   }
 
   function show(target: "new" | Expense) {
@@ -73,16 +88,26 @@ export function Expenses() {
 
   async function picked(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
+    event.target.value = "";
     if (!file) return;
+    const pdf = file.type === "application/pdf" || (!file.type && file.name.toLowerCase().endsWith(".pdf"));
+    if (!pdf && !file.type.startsWith("image/")) {
+      toast("Choose a photo or a PDF.", "error");
+      return;
+    }
+    if (pdf && file.size > RECEIPT_PDF_MAX_BYTES) {
+      toast("That PDF is over 3 MB. Try a smaller file or a photo.", "error");
+      return;
+    }
     try {
-      const blob = await downscaleImage(file);
-      setPhoto({ blob, url: URL.createObjectURL(blob) });
+      const blob = pdf ? new Blob([await file.arrayBuffer()], { type: "application/pdf" }) : await downscaleImage(file);
+      setPhoto({ blob, url: URL.createObjectURL(blob), pdf, name: file.name });
       if (!open) {
         setForm(blank());
         show("new");
       }
     } catch {
-      toast("Couldn't read that photo. Try taking it again.", "error");
+      toast(pdf ? "Couldn't read that file. Try again." : "Couldn't read that photo. Try again.", "error");
     }
   }
 
@@ -97,8 +122,8 @@ export function Expenses() {
     setPhoto(null);
     show(expense);
     if (expense.receiptKey) {
-      const url = await backend.receiptUrl(expense).catch(() => null);
-      if (url) setPhoto({ url });
+      const stored = await storedReceipt(backend.receiptUrl(expense));
+      if (stored) setPhoto(stored);
     }
   }
 
@@ -133,27 +158,41 @@ export function Expenses() {
         <div className="capture-stack">
           <button className="receipt-capture" onClick={() => fileInput.current?.click()}>
             <span className="camera-orb"><Icon name="camera" size={28} /></span>
-            <span><strong>Snap a receipt</strong><small>The photo is kept with the expense</small></span>
+            <span><strong>Snap a receipt</strong><small>Take a photo with your camera</small></span>
             <Icon name="arrow" />
           </button>
+          <button className="receipt-upload" onClick={() => uploadInput.current?.click()}>
+            <Icon name="receipt" size={20} />
+            <span><strong>Upload a file</strong><small>A photo from your gallery or a PDF</small></span>
+          </button>
           <button className="reveal-button" onClick={() => { setForm(blank()); show("new"); }}>
-            <Icon name="plus" size={17} /> Add one without a photo
+            <Icon name="plus" size={17} /> Add one without a receipt
           </button>
         </div>
       {open && <Sheet title={editing ? "Edit expense" : "New expense"} onClose={close}>
         {error && <p className="sheet-copy" role="alert">{error}</p>}
         {committed && error && <Button kind="soft" onClick={() => window.location.reload()}>Reload</Button>}
         <Card className="receipt-form-card">
-          {photo ? (
+          {photo?.pdf ? (
+            <a className="receipt-file" href={photo.url} target="_blank" rel="noreferrer">
+              <Icon name="receipt" />
+              <span><strong>{photo.name ?? "Receipt PDF"}</strong><small>Tap to open</small></span>
+            </a>
+          ) : photo ? (
             <button type="button" className="receipt-preview" onClick={() => setZoom(true)} aria-label="View receipt full size">
               <img src={photo.url} alt="Receipt" />
               <span>Tap to zoom</span>
             </button>
           ) : (
             !editing && (
-              <button type="button" className="receipt-add" onClick={() => fileInput.current?.click()}>
-                <Icon name="camera" /> Add a receipt photo
-              </button>
+              <div className="receipt-add-row">
+                <button type="button" className="receipt-add" onClick={() => fileInput.current?.click()}>
+                  <Icon name="camera" /> Take a photo
+                </button>
+                <button type="button" className="receipt-add" onClick={() => uploadInput.current?.click()}>
+                  <Icon name="receipt" /> Upload a file
+                </button>
+              </div>
             )
           )}
           <form onSubmit={submit} noValidate>
@@ -237,6 +276,15 @@ export function Expenses() {
         tabIndex={-1}
         aria-hidden="true"
       />
+      <input
+        ref={uploadInput}
+        className="visually-hidden"
+        type="file"
+        accept="image/*,application/pdf"
+        onChange={picked}
+        tabIndex={-1}
+        aria-hidden="true"
+      />
 
       <section className="list-section">
         <div className="section-heading">
@@ -295,7 +343,7 @@ export function Expenses() {
         <Sheet title="Delete this expense?" onClose={() => setConfirmDelete(false)}>
           <p className="sheet-copy">
             {editing.merchant} · <MoneyText cents={editing.amountCents ?? 0} />. It comes out of your
-            year totals and export{editing.receiptKey ? ", and the receipt photo is deleted" : ""}.
+            year totals and export{editing.receiptKey ? ", and its receipt is deleted" : ""}.
           </p>
           <Button
             kind="danger"
@@ -312,7 +360,7 @@ export function Expenses() {
           <Button kind="quiet" onClick={() => setConfirmDelete(false)}>Keep it</Button>
         </Sheet>
       )}
-      {zoom && photo && (
+      {zoom && photo && !photo.pdf && (
         <div ref={lightbox} tabIndex={-1} className="lightbox" onClick={() => setZoom(false)} role="dialog" aria-modal="true" aria-label="Receipt photo">
           <img src={photo.url} alt="Receipt, full size" />
         </div>

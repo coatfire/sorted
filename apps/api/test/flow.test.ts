@@ -318,6 +318,21 @@ describe("booking → payment → report", () => {
     expect(image.status).toBe(200);
     expect(image.headers.get("content-type")).toBe("image/png");
 
+    // A PDF receipt is stored as uploaded; anything else claiming to be a PDF is refused
+    const pdf = Buffer.from("%PDF-1.4\n%%EOF\n").toString("base64");
+    const pdfReceipt = await call("/expenses/receipts", "POST", { content_type: "application/pdf", data_base64: pdf });
+    expect(pdfReceipt.status).toBe(201);
+    expect((await call("/expenses/receipts", "POST", { content_type: "application/pdf", data_base64: pixel })).status).toBe(400);
+    expect((await call("/expenses/receipts", "POST", { content_type: "image/png", data_base64: "A".repeat(2_000_004) })).status).toBe(400);
+    const pdfExpense = await json(await call("/expenses", "POST", {
+      receipt_key: (await json(pdfReceipt)).receipt_key, merchant: "Emailed invoice", amount_cents: 100,
+      category: "other", expense_date: today, confirmed: true,
+    }));
+    const stored = await call(`/expenses/${pdfExpense.id}/receipt`);
+    expect(stored.headers.get("content-type")).toBe("application/pdf");
+    expect(Buffer.from(await stored.arrayBuffer()).toString("base64")).toBe(pdf);
+    expect((await call(`/expenses/${pdfExpense.id}`, "DELETE")).status).toBe(204);
+
     // Year summary + accountant CSV
     const summary = await json(await call("/reports/summary"));
     expect(summary).toMatchObject({

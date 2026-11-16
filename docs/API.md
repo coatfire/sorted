@@ -335,12 +335,12 @@ Recording a payment requires a confirmed or completed booking (409 otherwise), o
 ## Expenses
 | Method | Path                    | Notes |
 |--------|-------------------------|-------|
-| POST   | /expenses/receipts      | body `{content_type, data_base64}` (photo downscaled by the client, ≤1.5 MB) → `{receipt_key}`. Stored in Postgres for now |
-| GET    | /expenses/:id/receipt   | the receipt image |
+| POST   | /expenses/receipts      | body `{content_type, data_base64}`: a JPEG/PNG/WebP photo (downscaled by the client, ≤1.5 MB) or a PDF (≤3 MB) → `{receipt_key}`. Stored in Postgres for now |
+| GET    | /expenses/:id/receipt   | the receipt photo or PDF |
 | POST   | /expenses               | optional `receipt_key`. `confirmed: true` + all four fields → a confirmed expense; otherwise `status=needs_review` (where OCR suggestions will land) |
 | GET    | /expenses               | `?year=&category=&status=` |
 | PATCH  | /expenses/:id           | confirm/correct OCR fields → `status=confirmed` |
-| DELETE | /expenses/:id           | also deletes its receipt photo |
+| DELETE | /expenses/:id           | also deletes its receipt |
 
 ## Reports
 | Method | Path                  | Notes |
