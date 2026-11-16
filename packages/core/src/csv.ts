@@ -1,4 +1,4 @@
-type CsvCell = string | number | null | undefined | false;
+export type CsvCell = string | number | null | undefined | false;
 
 /** Spreadsheets run a cell that starts with one of these as a formula. */
 const startsFormula = /^[=+\-@\t\r]/;

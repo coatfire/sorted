@@ -25,6 +25,8 @@ it("validates a range and names the file", () => {
     expect(ExportRange.safeParse(range).success).toBe(false);
   expect(exportFileName(yearRange(2025))).toBe("sorted-2025.csv");
   expect(exportFileName({ from: "2025-04-06", to: "2026-04-05" })).toBe("sorted-2025-04-06-to-2026-04-05.csv");
+  expect(exportFileName(yearRange(2025), "xlsx")).toBe("sorted-2025.xlsx");
+  expect(exportFileName({ from: "2025-04-06", to: "2026-04-05" }, "xlsx")).toBe("sorted-2025-04-06-to-2026-04-05.xlsx");
   expect(exportBounds({ from: "2025-07-01", to: "2025-07-31" })).toEqual({
     paidFrom: new Date("2025-06-30T23:00:00Z"), paidBefore: new Date("2025-07-31T23:00:00Z"),
     expenseFrom: new Date("2025-07-01T00:00:00Z"), expenseBefore: new Date("2025-08-01T00:00:00Z"),
@@ -98,7 +100,7 @@ it("the demo exports the same range, oldest first", async () => {
   const paid = payments.filter((payment) => payment.status === "paid" && payment.paidAt).map((payment) => paidOn(payment.paidAt!)).sort();
   expect(paid.length).toBeGreaterThan(1);
   const [first, last] = [paid[0], paid[paid.length - 1]];
-  const rows = async (from: string, to: string) => (await (await demoBackend.exportCsv({ from, to })).text()).split("\n");
+  const rows = async (from: string, to: string) => (await (await demoBackend.exportFile({ from, to }, "csv")).text()).split("\n");
   const all = await rows("2000-01-01", "2099-12-31");
   const income = all.slice(2, all.indexOf(""));
   expect(income).toHaveLength(paid.length);

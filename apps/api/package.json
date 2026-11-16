@@ -4,7 +4,7 @@
   "type": "module",
   "scripts": {
     "dev": "tsx watch --env-file-if-exists=.env src/local.ts",
-    "build": "rm -rf dist && esbuild src/lambda.ts --bundle --platform=node --target=node20 --format=esm --external:@electric-sql/pglite --outfile=dist/lambda/index.mjs --banner:js=\"import { createRequire } from 'module'; const require = createRequire(import.meta.url);\"",
+    "build": "rm -rf dist && esbuild src/lambda.ts --bundle --platform=node --target=node20 --format=esm --external:@electric-sql/pglite --outfile=dist/lambda/index.mjs --banner:js=\"import { createRequire as bannerRequire } from 'module'; const require = bannerRequire(import.meta.url);\"",
     "db:studio": "drizzle-kit studio",
     "typecheck": "tsc --noEmit",
     "db:generate": "drizzle-kit generate",
@@ -26,6 +26,7 @@
   "devDependencies": {
     "drizzle-kit": "^0.28.0",
     "esbuild": "^0.24.0",
+    "fflate": "0.8.3",
     "tsx": "^4.19.0",
     "typescript": "^5.5.0",
     "vitest": "^2.1.9"

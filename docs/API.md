@@ -375,7 +375,7 @@ Recording a payment requires a confirmed or completed booking (409 otherwise), o
 | Method | Path                  | Notes |
 |--------|-----------------------|-------|
 | GET    | /reports/summary      | `?year=` → income, expenses, profit, by month + category (dashboard) |
-| GET    | /reports/export       | `?from=YYYY-MM-DD&to=YYYY-MM-DD` (both days included, dates in Ireland) or `?year=` → accountant CSV: income lines then expense lines, oldest first. `400` if a date is missing or invalid, or `from` is after `to`. The file is named `sorted-2025.csv` for a whole calendar year, otherwise `sorted-<from>-to-<to>.csv`. UTF-8 with a byte order mark so Excel and Sheets read accented names correctly; a text cell starting with `=`, `+`, `-` or `@` is prefixed with `'` so it can't run as a formula |
+| GET    | /reports/export       | `?from=YYYY-MM-DD&to=YYYY-MM-DD` (both days included, dates in Ireland) or `?year=`, plus optional `&format=xlsx` or `csv` (default `csv`) → accountant export: income lines then expense lines, oldest first. `400` if a date is missing or invalid, `from` is after `to`, or the format is unknown. The file is named `sorted-2025.<format>` for a whole calendar year, otherwise `sorted-<from>-to-<to>.<format>`. **xlsx** (what the app downloads) has an Income sheet and an Expenses sheet, text exactly as typed and amounts as numbers; phone spreadsheet apps misread accented names in a CSV but not in this. **csv** (used for the Drive backup) has both tables in one file, UTF-8 with a byte order mark; a text cell starting with `=`, `+`, `-` or `@` is prefixed with `'` so it can't run as a formula |
 
 ## Webhooks (no JWT)
 | Method | Path              | Notes |

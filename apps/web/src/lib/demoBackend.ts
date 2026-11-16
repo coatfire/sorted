@@ -5,7 +5,7 @@
  * payment links are simulated — nothing leaves the browser.
  */
 import type { Client, Expense, MessageLogEntry, Payment, BookingDocument, BusyBlock } from "@sorted/core";
-import { toCsv, inExportRange, paidOn, PlaceSearchInput, PLACE_SUGGESTION_LIMIT, snapshotReceipt, snapshotDocument, documentNumber, TaxSettings, ConfirmExpenseInput, RecordPaymentInput, EditPaymentInput, paymentPaidAt, irelandToday, addCalendarDays, CalendarDate, shiftDublinWeeks, RepeatInput, Services, bookingStage, CreateClientInput, UpdateClientInput, MessageSentInput, CreateBookingInput, agreedBookingStart, missingBookingDetails, bookingAtDublinTime, BusyRange } from "@sorted/core";
+import { exportCsvText, exportSections, exportXlsx, inExportRange, paidOn, PlaceSearchInput, PLACE_SUGGESTION_LIMIT, snapshotReceipt, snapshotDocument, documentNumber, TaxSettings, ConfirmExpenseInput, RecordPaymentInput, EditPaymentInput, paymentPaidAt, irelandToday, addCalendarDays, CalendarDate, shiftDublinWeeks, RepeatInput, Services, bookingStage, CreateClientInput, UpdateClientInput, MessageSentInput, CreateBookingInput, agreedBookingStart, missingBookingDetails, bookingAtDublinTime, BusyRange } from "@sorted/core";
 import type { Backend, BookingRow, Snapshot } from "./backend";
 import { blobToDataUrl } from "./image";
 import { settingsAutosaveRegistry } from "./settingsAutosaveSession";
@@ -588,30 +588,21 @@ export const demoBackend: Backend = {
     settingsAutosaveRegistry.notifySaved(demoBackend, data().user.id, requested);
   },
 
-  async exportCsv(range) {
+  async exportFile(range, format) {
     const d = data();
     const oldestFirst = <T,>(rows: T[], date: (row: T) => string) => [...rows].sort((a, b) => date(a).localeCompare(date(b)));
-    const rows = [
-      ["INCOME"],
-      ["date_paid", "client", "service", "kind", "method", "amount_eur"],
-      ...oldestFirst(d.payments.filter((p) => p.status === "paid" && p.paidAt && inExportRange(paidOn(p.paidAt), range)), (p) => p.paidAt!)
+    const sections = exportSections(
+      oldestFirst(d.payments.filter((p) => p.status === "paid" && p.paidAt && inExportRange(paidOn(p.paidAt), range)), (p) => p.paidAt!)
         .map((p) => {
           const booking = d.bookings.find((bk) => bk.id === p.bookingId);
-          return [
-            paidOn(p.paidAt!), booking?.client.name, booking?.service, p.kind,
-            p.method, (p.amountCents / 100).toFixed(2),
-          ];
+          return { paidOn: paidOn(p.paidAt!), client: booking?.client.name, service: booking?.service, kind: p.kind, method: p.method, amountCents: p.amountCents };
         }),
-      [],
-      ["EXPENSES"],
-      ["date", "merchant", "category", "amount_eur", "has_receipt", "vat_eur"],
-      ...oldestFirst(d.expenses.filter((e) => e.expenseDate && inExportRange(e.expenseDate.slice(0, 10), range)), (e) => e.expenseDate!)
-        .map((e) => [
-          e.expenseDate!.slice(0, 10), e.merchant, e.category,
-          ((e.amountCents ?? 0) / 100).toFixed(2), e.receiptKey ? "yes" : "no",
-          e.vatCents == null ? "" : (e.vatCents / 100).toFixed(2),
-        ]),
-    ];
-    return new Blob([toCsv(rows)], { type: "text/csv;charset=utf-8" });
+      oldestFirst(d.expenses.filter((e) => e.expenseDate && inExportRange(e.expenseDate.slice(0, 10), range)), (e) => e.expenseDate!)
+        .map((e) => ({
+          date: e.expenseDate!.slice(0, 10), merchant: e.merchant, category: e.category,
+          amountCents: e.amountCents, hasReceipt: Boolean(e.receiptKey), vatCents: e.vatCents ?? null,
+        })),
+    );
+    return format === "xlsx" ? exportXlsx(sections) : new Blob([exportCsvText(sections)], { type: "text/csv;charset=utf-8" });
   },
 };

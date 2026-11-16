@@ -58,7 +58,7 @@ offers what is actually connected.
 | "Owed to you", mark paid (cash / transfer) | ✅ |
 | Card payment links, auto-marked paid by webhook | ✅ needs Stripe keys |
 | Expenses with receipt photos, categories, edit/delete | ✅ |
-| Year at a glance + CSV export for the accountant | ✅ |
+| Year at a glance + Excel export for the accountant | ✅ |
 | Send confirmations / payment links from your own WhatsApp | ✅ |
 | Automatic WhatsApp confirmations, reminders, review requests | API ready; n8n workflows to build |
 | Google Calendar sync, receipt OCR | not yet |
@@ -104,7 +104,7 @@ The enabled Settings card preloads Google Identity Services and prepares its
 token client. The button says “Getting ready…” and stays disabled until ready;
 the tap then opens Google's popup synchronously. The browser keeps its
 short-lived access token in memory only. PDFs use the existing renderer, photos
-are copied in their original format, and yearly accountant CSVs use `exportCsv`.
+are copied in their original format, and yearly accountant CSVs use `exportFile`.
 Files live in app-created Sorted folders, separated per Sorted account. Existing
 PDFs/photos are skipped by name; CSVs are updated in place for every year with
 financial data. No automatic backups, server-side Google tokens or refresh tokens.

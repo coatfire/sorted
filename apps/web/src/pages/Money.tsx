@@ -108,13 +108,13 @@ export function Money() {
           <Button
             className="export-button"
             disabled={busy || !range}
-            onClick={() => range && run(async () => download(await backend.exportCsv(range), exportFileName(range)), "Export downloaded")}
+            onClick={() => range && run(async () => download(await backend.exportFile(range, "xlsx"), exportFileName(range, "xlsx")), "Export downloaded")}
           >
             <Icon name="download" /> Export for accountant
           </Button>
           <p className="export-note" role="status">
             {range
-              ? `A CSV of income and expenses from ${longDate(range.from)} to ${longDate(range.to)}, ready for your accountant.`
+              ? `An Excel file of income and expenses from ${longDate(range.from)} to ${longDate(range.to)}, ready for your accountant.`
               : "Choose a from date that's on or before the to date."}
           </p>
         </Card>

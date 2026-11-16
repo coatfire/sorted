@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { and, asc, eq, gte, lt } from "drizzle-orm";
-import { exportBounds, exportFileName, ExportRange, paidOn, toCsv, yearRange } from "@sorted/core";
+import { exportBounds, exportCsvText, exportFileName, ExportFormat, ExportRange, exportSections, exportXlsx, paidOn, XLSX_TYPE, yearRange } from "@sorted/core";
 import { db, schema } from "../db";
 import type { AppEnv } from "../app";
 
@@ -97,6 +97,8 @@ reportRoutes.get("/summary", async (c) => {
  */
 reportRoutes.get("/export", async (c) => {
   const { from, to, year } = c.req.query();
+  const format = ExportFormat.safeParse(c.req.query("format") ?? "csv");
+  if (!format.success) return c.json({ error: "Choose xlsx or csv." }, 400);
   let range: ExportRange;
   if (from !== undefined || to !== undefined) {
     const parsed = ExportRange.safeParse({ from, to });
@@ -144,30 +146,22 @@ reportRoutes.get("/export", async (c) => {
       )
       .orderBy(asc(schema.expenses.expenseDate)),
   ]);
-  const lines = [
-    ["INCOME"],
-    ["date_paid", "client", "service", "kind", "method", "amount_eur"],
-    ...income.map((row) => [
-      row.paidAt && paidOn(row.paidAt),
-      row.client,
-      row.service,
-      row.kind,
-      row.method,
-      (row.amountCents / 100).toFixed(2),
-    ]),
-    [],
-    ["EXPENSES"],
-    ["date", "merchant", "category", "amount_eur", "has_receipt", "vat_eur"],
-    ...expenses.map((row) => [
-      row.expenseDate?.toISOString().slice(0, 10),
-      row.merchant,
-      row.category,
-      ((row.amountCents ?? 0) / 100).toFixed(2),
-      row.receiptKey ? "yes" : "no",
-      row.vatCents === null ? "" : (row.vatCents / 100).toFixed(2),
-    ]),
-  ];
+  const sections = exportSections(
+    income.map((row) => ({ ...row, paidOn: row.paidAt ? paidOn(row.paidAt) : "" })),
+    expenses.map((row) => ({
+      date: row.expenseDate?.toISOString().slice(0, 10) ?? "",
+      merchant: row.merchant,
+      category: row.category,
+      amountCents: row.amountCents,
+      hasReceipt: Boolean(row.receiptKey),
+      vatCents: row.vatCents,
+    })),
+  );
+  c.header("Content-Disposition", `attachment; filename=${exportFileName(range, format.data)}`);
+  if (format.data === "xlsx") {
+    c.header("Content-Type", XLSX_TYPE);
+    return c.body(await (await exportXlsx(sections)).arrayBuffer());
+  }
   c.header("Content-Type", "text/csv; charset=utf-8");
-  c.header("Content-Disposition", `attachment; filename=${exportFileName(range)}`);
-  return c.body(toCsv(lines));
+  return c.body(exportCsvText(sections));
 });
