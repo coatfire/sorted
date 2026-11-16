@@ -60,6 +60,18 @@ export interface BookingDocument {
   receiptSnapshot: ReceiptSnapshot | null;
 }
 
+/** An issued document as listed beside its client: no snapshot, plus when the trader last said they sent it. */
+export interface IssuedDocument {
+  id: string;
+  bookingId: string;
+  kind: DocumentKind;
+  number: number;
+  issuedAt: string;
+  paymentId: string | null;
+  voidedAt: string | null;
+  sentAt: string | null;
+}
+
 export const documentNumber = (kind: DocumentKind, number: number) =>
   `${kind === "invoice" ? "INV" : kind === "quote" ? "QTE" : "RCT"}-${String(number).padStart(4, "0")}`;
 

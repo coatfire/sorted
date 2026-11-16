@@ -35,9 +35,9 @@ it("renders client due-now balances from booking prices minus paid, including un
         export const useStore = () => ({backend: {}, toast: () => {}});
         export const useAction = () => ({busy: false, error: null, committed: false, run: () => {}});` }));
     } }],
-    bundle: true, platform: "node", format: "cjs", jsx: "automatic", write: false,
+    bundle: true, platform: "node", format: "cjs", jsx: "automatic", write: false, external: ["./bookingPdf"],
   });
-  const snapshots = cases.map(item => ({ ...item, clients: [client] }));
+  const snapshots = cases.map(item => ({ ...item, clients: [client], documents: [], user: { reviewLink: null } }));
   const html = await new Promise<string[]>((resolve, reject) => {
     const child = spawn(process.execPath, ["-"], { stdio: ["pipe", "pipe", "pipe"] });
     const output: Buffer[] = [], errors: Buffer[] = [];

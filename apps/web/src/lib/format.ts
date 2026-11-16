@@ -92,6 +92,7 @@ export const messageLabel = (message: MessageLogEntry) => {
     reminder: "Reminder",
     payment_request: "Payment request",
     review_request: "Review request",
+    document: `${message.meta?.documentNumber ?? "Document"}${message.meta?.reviewIncluded ? " with review request" : ""}`,
   }[message.template];
   if (message.meta?.userConfirmed) return `${message.meta.kind === "follow_up" ? "Follow-up" : what} · you confirmed sending`;
   return message.status === "failed" ? `${what} failed to send` : `${what} sent`;

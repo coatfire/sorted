@@ -58,6 +58,7 @@ export const messageTemplate = pgEnum("message_template", [
   "reminder",
   "payment_request",
   "review_request",
+  "document",
 ]);
 export const messageStatus = pgEnum("message_status", [
   "sent",

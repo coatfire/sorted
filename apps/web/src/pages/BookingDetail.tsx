@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { FollowUpLater } from "../FollowUp";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { assembleBookingDocument, bookingStage, missingBookingDetails, type DocumentKind, type MessageLogEntry, type Payment } from "@sorted/core";
+import { bookingStage, missingBookingDetails, type DocumentKind, type MessageLogEntry, type Payment } from "@sorted/core";
 import { ConfirmBookingSheet } from "../ConfirmBookingSheet";
 import { BackButton, Button, Card, EmptyState, Icon, MoneyText, Sheet, StatusChip } from "../components";
 import { PaymentActions } from "../PaymentActions";
@@ -15,13 +15,13 @@ import {
   euros, formatPhone, kindLabel, longDay, messageLabel, methodLabel, stamp, time,
 } from "../lib/format";
 import { useAction, useData, useStore, useSession } from "../lib/store";
-import { download } from "../lib/image";
+import { buildDocumentFile, shareOrDownload } from "../lib/documentFile";
 
 export function BookingDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { bookings, payments, features, user } = useData();
-  const { backend, toast } = useStore();
+  const { backend, toast, refresh } = useStore();
   const { mode } = useSession();
   const [documentBusy, setDocumentBusy] = useState(false);
   const [chooseReceipt, setChooseReceipt] = useState(false);
@@ -76,17 +76,9 @@ export function BookingDetail() {
     if (!booking) return;
     setDocumentBusy(true);
     try {
-      const record = await backend.document(booking.id, kind, paymentId);
-      const data = assembleBookingDocument(user, booking, booking.client, payments, record);
-      const { createBookingPdf } = await import("../lib/bookingPdf");
-      const blob = await createBookingPdf(data);
-      const file = new File([blob], `${data.number}.pdf`, { type: "application/pdf" });
-      if (navigator.canShare?.({ files: [file] })) {
-        try { await navigator.share({ files: [file], title: `${data.title} ${data.number}` }); return; }
-        catch (error) { if (error instanceof DOMException && error.name === "AbortError") return; }
-      }
-      download(blob, file.name);
-      toast("PDF downloaded");
+      const outcome = await shareOrDownload(await buildDocumentFile(backend, user, booking, payments, kind, paymentId));
+      if (outcome === "downloaded") toast("PDF downloaded");
+      void refresh();
     } catch (error) {
       toast(error instanceof Error ? error.message : "Couldn't create that PDF. Try again.", "error");
     } finally { setDocumentBusy(false); }

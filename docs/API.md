@@ -253,6 +253,19 @@ IDs return without recording/rescheduling again. Missing/foreign bookings: 404;
 follow-up on a non-enquiry: 409; invalid input: 400. Confirm/cancel clears
 enquiry follow-ups without changing payment reminders.
 
+`GET /bookings/documents` lists every invoice, receipt and quote the trader has
+issued, newest first: `{ id, bookingId, kind, number, issuedAt, paymentId,
+voidedAt, sentAt }`. Snapshots are not included; `sentAt` is the latest
+acknowledged `document` message for that document, or `null`.
+
+`message-sent` also accepts `kind: "document"` with a required `document_id`
+(an unvoided document on that booking, else 404), optional `review_included`,
+and the extra channel `share` (the phone's share sheet). It logs template
+`document` with `meta.documentId`, `meta.documentNumber` and
+`meta.reviewIncluded`; when `review_included` is true it also sets the booking's
+`reviewRequestedAt`. `document_id`, `review_included` and `share` are rejected
+on other kinds.
+
 Legacy `POST /bookings/:id/payment-requested` (authenticated, no body) records the
 current time in `paymentRequestedAt` and returns the booking. Missing or foreign
 bookings return 404. It emits no event and creates no message-log entry: opening

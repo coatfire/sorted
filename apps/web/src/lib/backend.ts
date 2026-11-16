@@ -15,6 +15,7 @@ import type {
   DriveBackup,
   Service,
   MessageSentInput,
+  IssuedDocument,
 } from "@sorted/core";
 
 export type BookingRow = Booking & { client: Client };
@@ -27,6 +28,8 @@ export interface Snapshot {
   bookings: BookingRow[];
   payments: Payment[];
   expenses: Expense[];
+  /** Issued invoices, receipts and quotes, newest first. */
+  documents: IssuedDocument[];
 }
 
 export interface BookingDraft {
