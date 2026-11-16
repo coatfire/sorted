@@ -45,6 +45,7 @@ describe("reading a client list", () => {
     ]);
     expect(sheet).toMatchObject({ noName: 1, unreadPhones: 1, unreadEmails: 1 });
     expect(clientSheet([["Name", "Phone 1 - Value"], ["Aoife", "087 123 4567 ::: 01 234 5678"]]).rows).toEqual([{ name: "Aoife", phone: "353871234567", email: undefined, notes: undefined }]);
+    expect(clientSheet([["Name", "Email"], ["Mary", "mary@or.ie"], ["Orla", "or@example.com or orla@example.com"], ["Una", "una@example.com; other@example.com"]]).rows.map((row) => row.email)).toEqual(["mary@or.ie", "or@example.com", "una@example.com"]);
     expect(() => clientSheet([["Gráinne Flynn", "0871234567"]])).toThrow(/column of names/);
   });
 

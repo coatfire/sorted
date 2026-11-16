@@ -84,7 +84,9 @@ function findColumns(row: string[]) {
 
 // The accountant export puts ' in front of text a spreadsheet could run as a formula.
 const text = (value: string | undefined) => (value ?? "").replace(/^'(?=[=+\-@])/, "").replace(/\s+/g, " ").trim();
-const firstOf = (value: string) => value.split(/:::|[,;/]|\bor\b/i)[0]!.trim();
+// A cell can hold several: "087 123 4567 or 01 234 5678", "a@b.ie; c@d.ie". Sorted keeps the first.
+const firstPhone = (value: string) => value.split(/:::|[,;/]|\bor\b/i)[0]!.trim();
+const firstEmail = (value: string) => value.split(/:::|[,;\s]/).find(Boolean) ?? "";
 
 /** Reads a client list out of a spreadsheet's rows. Throws when no names column can be found. */
 export function clientSheet(table: string[][]): ClientSheet {
@@ -109,7 +111,7 @@ export function clientSheet(table: string[][]): ClientSheet {
     const name = (cell(row, at.name) || `${cell(row, at.first)} ${cell(row, at.last)}`.trim()).slice(0, 200);
     if (!name) { sheet.noName++; continue; }
     if (EXAMPLE.test(name)) continue;
-    const phoneText = firstOf(cell(row, at.phone)), emailText = firstOf(cell(row, at.email)).toLowerCase();
+    const phoneText = firstPhone(cell(row, at.phone)), emailText = firstEmail(cell(row, at.email)).toLowerCase();
     const phone = phoneText ? normaliseClientPhone(phoneText) ?? undefined : undefined;
     const email = emailText && z.string().email().max(320).safeParse(emailText).success ? emailText : undefined;
     const kept: string[] = [];
