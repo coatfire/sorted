@@ -265,7 +265,7 @@ Money → Client messages. Lead with at most one primary page action.
   chips. Paid rows retain method/date; pending rows optionally offer **Payment
   link** when enabled. Header: **€120 of €350 paid**. No standalone Record/Request
   payment buttons and no per-row Mark paid on booking detail. Money's quick
-  Mark paid sheet still offers Cash / Bank transfer / Revolut.
+  Mark paid sheet still offers Cash / Bank transfer / Revolut / Card.
 - **Add to calendar:** non-cancelled bookings offer a button opening a Sheet
   with primary **Add to phone calendar** (download an `.ics` file)
   and secondary **Google Calendar (web)** (a prefilled event). Explain
@@ -283,22 +283,24 @@ Money → Client messages. Lead with at most one primary page action.
   sheet. Paid manual payment rows are ≥44px buttons opening **Edit payment**
   (amount, method and Ireland-local date). **Undo payment** requires a second
   confirmation explaining that the amount returns to owed, any receipt is
-  marked VOID, the audit row remains, and no money is moved. Card-paid rows say
-  **Paid by card** and have no correction actions; refund those in Stripe.
+  marked VOID, the audit row remains, and no money is moved. Rows paid through
+  a Sorted payment link (method `stripe`) say **Paid by card** and have no
+  correction actions; refund those in Stripe. A **Card** payment recorded by
+  hand, such as one taken on a card terminal, is corrected like cash.
   Undone rows remain visible as **Undone**; **Voided receipt** downloads the
   original frozen receipt with a clear VOID marker, not a newly issued receipt.
   Issued receipts block editing: undo and record a new payment instead.
   Actions preserve committed/refresh-error handling and offer Reload rather
   than encouraging a duplicate write. The regular Record payment
   sheet has a euro-prefixed decimal amount
-  (defaults to all outstanding), method (Cash / Bank transfer / Revolut), and
+  (defaults to all outstanding), method (Cash / Bank transfer / Revolut / Card), and
   date (defaults to today in Ireland; no future dates). Validate on blur,
   clear errors on edit, focus the first invalid field on submit. Success:
   "Payment recorded". Custom rows are labelled "Payment" and each can have
   its own Receipt. At paid ≥ price show **Paid in full**; Add payment moves to
   More instead of disappearing. Existing limits still prevent overpayments.
   This is the only record/mark-paid action on booking detail; Money keeps its
-  quick Mark paid sheet with Cash / Bank transfer / Revolut. Failed saves stay
+  quick Mark paid sheet with Cash / Bank transfer / Revolut / Card. Failed saves stay
   open with an inline error. If saving succeeds but reloading fails, explain
   that it was saved, keep the sheet open, and offer Reload instead of letting
   the person record the same payment again.
@@ -354,7 +356,7 @@ Order: heading → Owed hero → Due now → Coming up → This year → collaps
   **Send reminder** opens the existing editable draft with the booking's owed
   amount, not a pending row's amount. Opening WhatsApp/Email records nothing.
   Use **I sent it / Close** and draft-only wording.
-- **Mark paid** offers Cash / Bank transfer / Revolut and records the full owed
+- **Mark paid** offers Cash / Bank transfer / Revolut / Card and records the full owed
   amount via the booking record-payment handler. Existing pending deposits/
   balances are voided, not additionally marked paid. It works without pending
   rows. Preserve inline errors and the committed-save Reload guard.

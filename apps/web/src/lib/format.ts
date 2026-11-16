@@ -91,6 +91,8 @@ export const categoryLabel = (value: ExpenseCategory | null) =>
 export const kindLabel = (kind: Payment["kind"]) =>
   ({ deposit: "Deposit", balance: "Balance", full: "Full payment", custom: "Payment" })[kind];
 
+/** What a trader can pick when recording a payment by hand. "stripe" is only ever set by a payment link. */
+export const MANUAL_METHODS = ["cash", "bank_transfer", "revolut", "card"] as const;
 export const methodLabel = (method: Payment["method"]) =>
   method
     ? { stripe: "Card (Stripe)", revolut: "Revolut", cash: "Cash", bank_transfer: "Bank transfer", card: "Card" }[method]

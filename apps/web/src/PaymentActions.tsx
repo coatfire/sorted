@@ -2,7 +2,7 @@ import { useState } from "react";
 import type { Payment } from "@sorted/core";
 import { Button, Icon, MoneyText, Sheet } from "./components";
 import type { BookingRow } from "./lib/backend";
-import { euros, firstName, methodLabel, whatsappLink, paymentRecordedToast } from "./lib/format";
+import { euros, firstName, methodLabel, MANUAL_METHODS, whatsappLink, paymentRecordedToast } from "./lib/format";
 import { useAction, useData, useStore } from "./lib/store";
 import { MessageOutcome } from "./MessageOutcome";
 
@@ -66,7 +66,7 @@ export function PaymentActions({ payment, booking, showMarkPaid = true, owedCent
           </p>
           {error && <p className="sheet-copy" role="alert">{error}</p>}
           {committed && error && <Button kind="soft" onClick={() => window.location.reload()}>Reload</Button>}
-          {(["cash", "bank_transfer", "revolut"] as const).map((method) => (
+          {MANUAL_METHODS.map((method) => (
             <Button
               key={method}
               kind="soft"

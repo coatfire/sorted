@@ -320,7 +320,7 @@ cap belongs on the key's quota in Google Cloud.
 ### Correcting a manually recorded payment
 
 `PATCH /payments/:id` accepts `{ amount_cents, method, paid_at }`: a positive
-integer amount, cash/bank_transfer/revolut, and an ISO timestamp with timezone
+integer amount, cash/bank_transfer/revolut/card, and an ISO timestamp with timezone
 no later than now. At least one field is required; omissions stay unchanged. Only paid manual rows may be
 edited. Total paid cannot exceed the booking price (409). An issued receipt
 blocks editing (409): **A receipt was issued for this payment. Undo it and record it again.**
@@ -354,8 +354,8 @@ empty. Empty years overwrite the old CSV with a header-only export.
 |--------|--------------------------|-------|
 | GET    | /payments                | `?status=pending` = the "who owes me" view |
 | POST   | /payments/:id/link       | creates Stripe Payment Link (503 if Stripe isn't configured), stores url, emits `payment.link_created` (n8n WhatsApps it) |
-| POST   | /payments/:id/mark-paid  | manual: body `{method}` (cash/bank_transfer/revolut). Emits `payment.paid` |
-| POST   | /bookings/:id/payments   | Record any instalment: `{ amount_cents: positive integer, method: "cash" | "bank_transfer" | "revolut", paid_on?: "YYYY-MM-DD" }`. Returns 201 `{ payment, booking }` in camelCase; payment kind is `custom`, status `paid`, VAT rate frozen. Emits `payment.paid`. |
+| POST   | /payments/:id/mark-paid  | manual: body `{method}` (cash/bank_transfer/revolut/card). Emits `payment.paid` |
+| POST   | /bookings/:id/payments   | Record any instalment: `{ amount_cents: positive integer, method: "cash" | "bank_transfer" | "revolut" | "card", paid_on?: "YYYY-MM-DD" }`. Returns 201 `{ payment, booking }` in camelCase; payment kind is `custom`, status `paid`, VAT rate frozen. Emits `payment.paid`. |
 
 Recording a payment requires a confirmed or completed booking (409 otherwise), owned by the caller (404 otherwise). The transaction locks the booking, rejects amounts above price minus paid payments (400 with the amount still owed), cancels all pending rows and deactivates their Stripe links after commit. A completed booking with money still owed gets one fresh pending balance row; confirmed bookings have no pending rows until completion. Fully paid bookings have none. Existing pending-row mark-paid remains available.
 

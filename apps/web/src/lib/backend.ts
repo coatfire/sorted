@@ -1,4 +1,4 @@
-import type { ExportFormat, ExportRange,
+import type { ExportFormat, ExportRange, PaymentMethod,
   Booking,
   Client,
   Expense,
@@ -108,7 +108,7 @@ export interface Backend {
   /** Creates (or returns the existing) payment link URL. */
   paymentLink(paymentId: string): Promise<string>;
   bookingPaymentLink(bookingId: string): Promise<string>;
-  markPaid(paymentId: string, method: "cash" | "bank_transfer" | "revolut"): Promise<void>;
+  markPaid(paymentId: string, method: Exclude<PaymentMethod, "stripe">): Promise<void>;
   recordPayment(bookingId: string, input: RecordPaymentInput): Promise<void>;
   editPayment(paymentId: string, input: EditPaymentInput): Promise<void>;
   undoPayment(paymentId: string): Promise<void>;

@@ -56,7 +56,12 @@ describe("record instalment payments", () => {
     expect((await f.payments()).filter(row => row.status === "paid")).toMatchObject([{ amountCents: 3000 }]);
   });
 
-  it.each(["cash", "bank_transfer", "revolut"] as const)("marks an existing pending payment paid by %s", async method => {
+  it("records a payment taken on a card terminal as card, which stays editable", async () => {
+    const f = await fixture();
+    const { payment } = await (await f.record(3000, { method: "card" })).json() as { payment: Payment };
+    expect(payment).toMatchObject({ status: "paid", method: "card", amountCents: 3000 });
+  });
+  it.each(["cash", "bank_transfer", "revolut", "card"] as const)("marks an existing pending payment paid by %s", async method => {
     const f = await fixture();
     expect((await f.request(`/payments/${f.deposit.id}/mark-paid`, { method })).status).toBe(200);
     expect((await f.payments()).find(row => row.id === f.deposit.id)).toMatchObject({ status: "paid", method });
@@ -185,5 +190,6 @@ describe("Irish payment dates", () => {
     expect(() => paymentPaidAt("2026-02-30")).toThrow();
     expect(() => paymentPaidAt("2026-07-03", new Date("2026-07-01"))).toThrow("future");
     expect(RecordPaymentInput.safeParse({ amount_cents: 1, method: "cash" }).success).toBe(true);
+    expect(RecordPaymentInput.safeParse({ amount_cents: 1, method: "card" }).success).toBe(true);
   });
 });

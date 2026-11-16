@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { irelandToday, RecordPaymentInput, type PaymentMethod } from "@sorted/core";
 import { Button, Field, Sheet } from "./components";
-import { centsToInput, methodLabel, parseEuros, paymentRecordedToast } from "./lib/format";
+import { centsToInput, methodLabel, MANUAL_METHODS, parseEuros, paymentRecordedToast } from "./lib/format";
 import { useAction, useData, useStore } from "./lib/store";
 import { useValidation } from "./lib/useValidation";
 
@@ -31,7 +31,7 @@ export function RecordPaymentSheet({ bookingId, outstanding, onClose }: { bookin
       </Field>
       <Field label="Method" {...validation.field("method")}>
         <select name="method" value={method} onChange={(event) => setMethod(event.target.value as Exclude<PaymentMethod, "stripe">)}>
-          {(["cash", "bank_transfer", "revolut"] as const).map((value) => <option key={value} value={value}>{methodLabel(value)}</option>)}
+          {MANUAL_METHODS.map((value) => <option key={value} value={value}>{methodLabel(value)}</option>)}
         </select>
       </Field>
       <Field label="Date" {...validation.field("paid_on")}><input name="paid_on" type="date" required max={irelandToday()} value={date} onChange={(event) => setDate(event.target.value)} /></Field>
