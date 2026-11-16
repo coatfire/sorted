@@ -44,11 +44,11 @@ export function HistoryImport() {
       const plan = planHistoryImport(sheet, heldHistory(data));
       const known = new Set(data.clients.map((client) => client.name.toLowerCase().replace(/\s+/g, " ").trim()));
       const added = new Set(plan.income.map((row) => row.client.toLowerCase().replace(/\s+/g, " ").trim()).filter((name) => !known.has(name)));
-      const rows = plan.income.length + plan.expenses.length;
+      const rows = sheet.income.length + sheet.expenses.length;
       if (!sheet.income.length && !sheet.expenses.length) setProblem(sheet.noDate || sheet.noAmount || sheet.future
         ? "Sorted found the headings but couldn't use any of the rows. Each one needs a date in the past and an amount above zero."
         : "That file has headings but nothing under them.");
-      else if (rows > IMPORT_MAX_HISTORY_ROWS) setProblem(`That file has ${rows} rows to add. Sorted adds up to ${IMPORT_MAX_HISTORY_ROWS} at a time, so split it into smaller files, such as one per year.`);
+      else if (rows > IMPORT_MAX_HISTORY_ROWS) setProblem(`That file has ${rows} rows. Sorted reads up to ${IMPORT_MAX_HISTORY_ROWS} at a time, so split it into smaller files, such as one per year.`);
       else setPreview({ fileName: file.name, sheet, ...plan, newClients: added.size });
     } catch (cause) {
       setProblem(cause instanceof Error ? cause.message : "Sorted couldn't read that file.");
@@ -95,7 +95,8 @@ export function HistoryImport() {
       {error && <p role="alert" className="sheet-copy">{error}</p>}
       {total > 0 && <Button disabled={busy} onClick={async () => {
         let result: ImportHistoryResult | undefined;
-        if (await run(async () => { result = await backend.importHistory(preview.fileName, { income: preview.income, expenses: preview.expenses }); }) && result) { setDone(result); setPreview(undefined); }
+        if (await run(async () => { // Every row read from the file goes up, not only the new ones: the server works out again which it already holds.
+          result = await backend.importHistory(preview.fileName, { income: preview.sheet.income, expenses: preview.sheet.expenses }); }) && result) { setDone(result); setPreview(undefined); }
       }}>{busy ? "Adding…" : `Add ${both(preview.income.length, preview.expenses.length)}`}</Button>}
       <Button kind="quiet" disabled={busy} onClick={() => setPreview(undefined)}>Choose a different file</Button>
     </Card> : <Card className="form-card import-card">
