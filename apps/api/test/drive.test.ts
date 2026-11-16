@@ -94,8 +94,9 @@ describe("Drive backup planning", () => {
     const files = backupFiles({ userId: "user", logo: null, documents: [{ kind: "receipt", number: "RCT-0001" }, { kind: "quote", number: "QTE-0001" }] as BookingDocumentData[], photos: [
       { id: "id", receiptKey: "key", date: "2026-07-01", merchant: "A/B \\ Shop", contentType: "image/png" },
       { id: "id2", receiptKey: "key2", date: "2026-07-02", merchant: null, contentType: "image/jpeg" },
+      { id: "id3", receiptKey: "key3", date: "2026-07-03", merchant: "Emailed", contentType: "application/pdf" },
     ], years: [2026, 2024, 2026] });
-    expect(files.map((file) => file.path)).toEqual(["Receipts/RCT-0001.pdf", "Quotes/QTE-0001.pdf", "Expense photos/2026-07-01-AB  Shop-id.png", "Expense photos/2026-07-02-receipt-id2.jpg", "sorted-2024.csv", "sorted-2026.csv"]);
+    expect(files.map((file) => file.path)).toEqual(["Receipts/RCT-0001.pdf", "Quotes/QTE-0001.pdf", "Expense photos/2026-07-01-AB  Shop-id.png", "Expense photos/2026-07-02-receipt-id2.jpg", "Expense photos/2026-07-03-Emailed-id3.pdf", "sorted-2024.csv", "sorted-2026.csv"]);
     expect(backupFiles({ userId: "user", logo: null, documents: [], photos: [], years: [] })).toEqual([]);
   });
 });

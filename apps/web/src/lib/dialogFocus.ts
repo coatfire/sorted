@@ -6,7 +6,8 @@ export function manageDialogFocus(panel: HTMLElement, onClose: () => void) {
   const body = document.body;
   if (scrollLocks === 0) originalOverflow = body.style.overflow;
   scrollLocks += 1;
-  panel.focus();
+  // An autofocused field inside the panel keeps focus; stealing it would blur-validate an empty form.
+  if (!panel.contains(document.activeElement)) panel.focus();
   body.style.overflow = "hidden";
   const onKey = (event: KeyboardEvent) => {
     if (event.key === "Escape") {

@@ -6,6 +6,8 @@ class Element {
   disabled = false;
   hidden = false;
   focus = vi.fn(() => { documentState.activeElement = this; });
+  children: Element[] = [];
+  contains(other: unknown) { return other === this || this.children.includes(other as Element); }
   matches() { return this.disabled || this.hidden; }
   getClientRects() { return this.hidden ? [] : [{}]; }
 }
@@ -95,4 +97,16 @@ it.each(["", "auto", "clip"])("restores the original overflow %s only after ever
     last();
     expect(documentState.body.style.overflow).toBe(overflow);
   }
+});
+
+it("leaves focus on a field the sheet autofocused", () => {
+  const field = new Element();
+  const panel = Object.assign(new Element(), { querySelectorAll: () => [field], children: [field] });
+  documentState.activeElement = field;
+  vi.stubGlobal("HTMLElement", Element);
+  vi.stubGlobal("document", { ...documentState, get activeElement() { return documentState.activeElement; } });
+  const cleanup = manageDialogFocus(panel as unknown as HTMLElement, vi.fn());
+  expect(panel.focus).not.toHaveBeenCalled();
+  expect(documentState.activeElement).toBe(field);
+  cleanup();
 });

@@ -1249,6 +1249,26 @@ a.button { text-decoration: none; }
   font-size: 0.82rem;
   font-weight: 700;
 }
+.receipt-add-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.receipt-upload, .receipt-file {
+  display: flex;
+  width: 100%;
+  min-height: 56px;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  border: 1px solid var(--line, #dfe5dd);
+  border-radius: 16px;
+  background: #fff;
+  color: var(--brand);
+  cursor: pointer;
+  text-align: left;
+  text-decoration: none;
+}
+.receipt-file { margin-bottom: 16px; background: #f6f8f4; }
+.receipt-upload > span, .receipt-file > span { display: flex; min-width: 0; flex-direction: column; gap: 2px; }
+.receipt-upload strong, .receipt-file strong { overflow: hidden; font-size: 0.9rem; text-overflow: ellipsis; white-space: nowrap; }
+.receipt-upload small, .receipt-file small { color: #557160; font-size: 0.72rem; }
 .form-footer { display: flex; align-items: center; justify-content: space-between; }
 .form-footer .text-link { min-height: 44px; cursor: pointer; }
 .text-link.danger { color: var(--danger); }
