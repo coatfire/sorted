@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { FollowUpLater } from "../FollowUp";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { bookingStage, missingBookingDetails, type DocumentKind, type MessageLogEntry, type Payment } from "@sorted/core";
+import { bookingStage, missingBookingDetails, type DocumentKind, type IssuedDocument, type MessageLogEntry, type Payment } from "@sorted/core";
 import { ConfirmBookingSheet } from "../ConfirmBookingSheet";
 import { BackButton, Button, Card, EmptyState, Icon, MoneyText, Sheet, StatusChip } from "../components";
 import { PaymentActions } from "../PaymentActions";
@@ -17,7 +17,8 @@ import {
   directionsLink,
 } from "../lib/format";
 import { useAction, useData, useStore, useSession } from "../lib/store";
-import { buildDocumentFile, shareOrDownload } from "../lib/documentFile";
+import { buildDocumentFile, downloadFile, shareFile } from "../lib/documentFile";
+import { DocumentSendSheet } from "../DocumentSendSheet";
 
 export function BookingDetail() {
   const { id } = useParams();
@@ -26,6 +27,7 @@ export function BookingDetail() {
   const { backend, toast, refresh } = useStore();
   const { mode } = useSession();
   const [documentBusy, setDocumentBusy] = useState(false);
+  const [sending, setSending] = useState<IssuedDocument | null>(null);
   const [chooseReceipt, setChooseReceipt] = useState(false);
   const [recordPayment, setRecordPayment] = useState(false);
   const [correctPayment, setCorrectPayment] = useState<Payment | null>(null);
@@ -78,9 +80,13 @@ export function BookingDetail() {
     if (!booking) return;
     setDocumentBusy(true);
     try {
-      const outcome = await shareOrDownload(await buildDocumentFile(backend, user, booking, payments, kind, paymentId));
-      if (outcome === "downloaded") toast("PDF downloaded");
+      const prepared = await buildDocumentFile(backend, user, booking, payments, kind, paymentId);
       void refresh();
+      if (await shareFile(prepared) !== "failed") return;
+      // The share menu didn't open. The send sheet has the PDF ready for a fresh tap, and other ways to send it.
+      const { record } = prepared;
+      if (record.voidedAt) { downloadFile(prepared); toast("PDF downloaded"); }
+      else setSending({ id: record.id, bookingId: record.bookingId, kind: record.kind, number: record.number, issuedAt: record.issuedAt, paymentId: record.paymentId, voidedAt: null, sentAt: null });
     } catch (error) {
       toast(error instanceof Error ? error.message : "Couldn't create that PDF. Try again.", "error");
     } finally { setDocumentBusy(false); }
@@ -255,6 +261,7 @@ export function BookingDetail() {
       )}
       {followUp && <FollowUpLater booking={booking} onClose={() => setFollowUp(false)} />}
       {message && <BookingMessageSheet booking={booking} kind={message} requestLabel="Ask for payment" onClose={() => setMessage(null)} />}
+      {sending && <DocumentSendSheet document={sending} booking={booking} onClose={() => setSending(null)} />}
       {calendar && <BookingCalendarSheet booking={booking} onClose={() => setCalendar(false)} />}
       {recordPayment && <RecordPaymentSheet bookingId={booking.id} outstanding={owedCents} onClose={() => setRecordPayment(false)} />}
       {confirmDetails && <ConfirmBookingSheet booking={booking} onClose={() => setConfirmDetails(false)} />}

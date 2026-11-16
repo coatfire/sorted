@@ -1,8 +1,8 @@
-import { assembleBookingDocument, type BookingDocumentData, type DocumentKind, type Payment, type User } from "@sorted/core";
+import { assembleBookingDocument, type BookingDocument, type BookingDocumentData, type DocumentKind, type Payment, type User } from "@sorted/core";
 import type { Backend, BookingRow } from "./backend";
 import { download } from "./image";
 
-export interface DocumentFile { file: File; data: BookingDocumentData }
+export interface DocumentFile { file: File; data: BookingDocumentData; record: BookingDocument }
 
 /** Issues the document if it doesn't exist yet, then renders its frozen PDF. */
 export async function buildDocumentFile(backend: Backend, user: User, booking: BookingRow, payments: readonly Payment[], kind: DocumentKind, paymentId?: string): Promise<DocumentFile> {
@@ -10,7 +10,7 @@ export async function buildDocumentFile(backend: Backend, user: User, booking: B
   const data = assembleBookingDocument(user, booking, booking.client, payments, record);
   const { createBookingPdf } = await import("./bookingPdf");
   const blob = await createBookingPdf(data);
-  return { file: new File([blob], `${data.number}.pdf`, { type: "application/pdf" }), data };
+  return { file: new File([blob], `${data.number}.pdf`, { type: "application/pdf" }), data, record };
 }
 
 export const canShareFile = (file: File) => typeof navigator.share === "function" && navigator.canShare?.({ files: [file] }) === true;

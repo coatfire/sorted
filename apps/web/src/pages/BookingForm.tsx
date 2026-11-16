@@ -11,6 +11,9 @@ import { useAction, useData, useStore } from "../lib/store";
 import { useValidation } from "../lib/useValidation";
 
 /** Add a booking (/bookings/new) or edit one (/bookings/:id/edit). */
+// On the hour, so a tap avoids the phone's time picker, which opens on the current minute.
+const QUICK_TIMES = Array.from({ length: 14 }, (_, index) => `${String(index + 7).padStart(2, "0")}:00`);
+
 export function BookingForm() {
   const { id } = useParams();
   const { bookings, clients, user } = useData();
@@ -252,6 +255,11 @@ export function BookingForm() {
             <Field label="Time" {...validation.field("time")}>
               <input name="time" type="time" value={form.time} onChange={(event) => update("time", event.target.value)} />
             </Field>
+          </div>
+          <div className="suggestion-row time-chips" role="group" aria-label="Quick times">
+            {QUICK_TIMES.map((value) => (
+              <button type="button" key={value} aria-pressed={form.time === value} onClick={() => update("time", value)}>{value}</button>
+            ))}
           </div>
           {original?.startAt && <div className="repeat-week-chips" role="group" aria-label="Book again in">
             {([1, 2, 4, 6] as const).map((value) => <button type="button" aria-pressed={weeks === value} key={value} onClick={() => {

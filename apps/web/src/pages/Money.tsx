@@ -24,14 +24,14 @@ export function Money() {
   const { dueNow, comingUp, dueNowCents, comingUpCents } = moneyOwed(bookings, payments, now);
   const { estimate, monthlyIncomeCents } = moneyYear(payments, expenses, user, now);
   const year = estimate.year;
-  const [period, setPeriod] = useState<"this" | "last" | "custom">("this");
   const [showLast, setShowLast] = useState(false);
+  const [otherDates, setOtherDates] = useState(false);
   const last = showLast ? moneyYear(payments, expenses, user, lastYearEnd(now)) : null;
   const shown = last?.estimate ?? estimate, months = last?.monthlyIncomeCents ?? monthlyIncomeCents;
   const thisMonth = showLast ? -1 : Number(dublinDateTime(now).date.slice(5, 7)) - 1;
   const peak = Math.max(...months, 1);
   const [custom, setCustom] = useState<ExportRange>(() => ({ from: `${year}-01-01`, to: irelandToday(now) }));
-  const chosen = ExportRange.safeParse(period === "custom" ? custom : yearRange(period === "last" ? year - 1 : year));
+  const chosen = ExportRange.safeParse(otherDates ? custom : yearRange(shown.year));
   const range = chosen.success ? chosen.data : null;
 
   return (
@@ -70,6 +70,11 @@ export function Money() {
           <div><p className="eyebrow">{showLast ? "Last year" : "This year"}</p><h2>{showLast ? shown.year : `${year} so far`}</h2></div>
         </div>
         <Card className="year-card">
+          <div className="export-choices year-choices" role="group" aria-label="Year shown">
+            {([[false, `This year (${year})`], [true, `Last year (${year - 1})`]] as const).map(([value, label]) => (
+              <button type="button" key={label} aria-pressed={showLast === value} onClick={() => setShowLast(value)}>{label}</button>
+            ))}
+          </div>
           <p className="year-basis">{showLast ? "Full year" : "Year to date"} · after recorded VAT and reclaimable expense VAT</p>
           <div className="year-stats">
             <div><span>Paid income</span><MoneyText cents={shown.netIncomeCents} /></div>
@@ -98,11 +103,11 @@ export function Money() {
           <fieldset className="export-period">
             <legend>Export for your accountant</legend>
             <div className="export-choices">
-              {([["this", `This year (${year})`], ["last", `Last year (${year - 1})`], ["custom", "Other dates"]] as const).map(([value, label]) => (
-                <button type="button" key={value} aria-pressed={period === value} onClick={() => { setPeriod(value); if (value !== "custom") setShowLast(value === "last"); }}>{label}</button>
+              {([[false, `All of ${shown.year}`], [true, "Other dates"]] as const).map(([value, label]) => (
+                <button type="button" key={label} aria-pressed={otherDates === value} onClick={() => setOtherDates(value)}>{label}</button>
               ))}
             </div>
-            {period === "custom" && (
+            {otherDates && (
               <div className="export-dates">
                 <Field label="From"><input name="export-from" type="date" value={custom.from} onChange={(event) => setCustom({ ...custom, from: event.target.value })} /></Field>
                 <Field label="To"><input name="export-to" type="date" value={custom.to} onChange={(event) => setCustom({ ...custom, to: event.target.value })} /></Field>

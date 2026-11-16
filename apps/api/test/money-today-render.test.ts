@@ -56,6 +56,13 @@ it("renders matching due-now totals, a leading appointment and secondary yearly 
   expect(money).toContain("Balance · job was 1 day ago");
   expect(money).toContain("€20.00 deposit due first · job on Mon 16 Nov");
   expect(money.indexOf("2026 so far")).toBeLessThan(money.indexOf("Tax estimate (rough guide)"));
+  // The year switch sits on the card, above the figures it changes, and the export follows the year shown.
+  expect(money.indexOf('aria-pressed="true">This year (2026)')).toBeGreaterThan(-1);
+  expect(money.indexOf("Last year (2025)</button>")).toBeLessThan(money.indexOf("Paid income"));
+  const exportChoices = money.split("Export for your accountant</legend>")[1].split("</fieldset>")[0];
+  expect(exportChoices).toContain('aria-pressed="true">All of 2026</button>');
+  expect(exportChoices).toContain('aria-pressed="false">Other dates</button>');
+  expect(exportChoices).not.toContain("Last year");
   expect(money).toContain('<details class="tax-guide"><summary>Tax estimate (rough guide)</summary>');
   expect(money).not.toContain('<details class="tax-guide" open');
   const taxSummary = money.split("Tax estimate (rough guide)</summary>")[1].split('<details class="tax-workings">')[0];
