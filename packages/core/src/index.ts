@@ -14,3 +14,4 @@ export * from "./bookingStage";
 export * from "./money";
 export * from "./agenda";
 export * from "./enquiries";
+export * from "./monthCalendar";

@@ -20,6 +20,8 @@ export function BookingForm() {
   const [params] = useSearchParams();
   const original = !id ? bookings.find((booking) => booking.id === params.get("again") && booking.status !== "enquiry") : undefined;
   const initial = editing ?? original;
+  /** A day picked on the Calendar screen. */
+  const forDay = !id && CalendarDate.safeParse(params.get("date")).success ? params.get("date") : null;
   const [weeks, setWeeks] = useState(1);
   const [repeatEvery, setRepeatEvery] = useState("");
   const [repeatCount, setRepeatCount] = useState("2");
@@ -37,7 +39,7 @@ export function BookingForm() {
       clientPhone: "",
       clientEmail: "",
       service: initial?.service ?? "",
-      date: start?.date ?? "",
+      date: start?.date ?? forDay ?? "",
       time: initial?.timeTbc ? "" : start?.time ?? "",
       price: initial ? centsToInput(initial.priceCents) : "",
       deposit: initial?.depositCents ? centsToInput(initial.depositCents) : "",
@@ -151,7 +153,7 @@ export function BookingForm() {
 
   return (
     <div className="page form-page">
-      {editing && <BackButton />}
+      {(editing || forDay) && <BackButton />}
       <PageHeader
         eyebrow={editing ? "Edit booking" : "New booking"}
         title={editing ? editing.service : original ? "Book again" : "Who are you seeing?"}

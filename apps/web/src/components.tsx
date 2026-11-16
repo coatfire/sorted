@@ -10,6 +10,7 @@ export function Icon({
 }: {
   name:
     | "calendar"
+    | "home"
     | "plus"
     | "wallet"
     | "receipt"
@@ -38,6 +39,7 @@ export function Icon({
         <path d="M16 3v4M8 3v4M3 10h18" />
       </>
     ),
+    home: <path d="m3 11 9-7 9 7M5.5 9.5V20h13V9.5M10 20v-6h4v6" />,
     plus: <path d="M12 5v14M5 12h14" />,
     wallet: (
       <>
