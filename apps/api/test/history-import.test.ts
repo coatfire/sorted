@@ -113,7 +113,7 @@ describe("saving past income and expenses", () => {
     const bookings = await db.select().from(schema.bookings).where(eq(schema.bookings.userId, user.id));
     const bridal = bookings.find((booking) => booking.service === "Bridal hair")!;
     expect(bridal).toMatchObject({ clientId: existing!.id, status: "completed", priceCents: 20000, depositCents: 5000, timeTbc: true, notes: "Imported from 2025.xlsx", importId: result.importId });
-    expect(bridal.startAt?.toISOString()).toBe("2025-06-14T11:00:00.000Z");
+    expect([bridal.startAt?.toISOString(), bridal.completedAt?.toISOString()]).toEqual(["2025-06-13T23:00:00.000Z", "2025-06-14T11:00:00.000Z"]);
     expect(bookings.every((booking) => booking.reminderSentAt && booking.reviewRequestedAt && booking.completedAt && booking.status === "completed")).toBe(true);
     const due = await db.select().from(schema.bookings).where(and(eq(schema.bookings.userId, user.id), eq(schema.bookings.status, "completed"),
       lte(schema.bookings.completedAt, new Date()), isNull(schema.bookings.reviewRequestedAt)));

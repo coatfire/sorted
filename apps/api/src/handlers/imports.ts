@@ -2,18 +2,17 @@ import { Hono } from "hono";
 import { randomUUID } from "node:crypto";
 import { and, asc, count, desc, eq, inArray, isNotNull, isNull, notExists, sql } from "drizzle-orm";
 import {
-  historyJobs, ImportClientsInput, ImportHistoryInput, irelandToday, paidOn, paymentPaidAt, planClientImport, planHistoryImport,
+  bookingAtDublinTime, historyJobs, ImportClientsInput, ImportHistoryInput, irelandToday, paidOn, paymentPaidAt, planClientImport, planHistoryImport,
   type ImportBatch, type ImportClientsResult, type ImportHistoryResult, type UndoImportResult,
 } from "@sorted/core";
 import { db, schema } from "../db";
-import { effectivePaymentVatRate } from "../lib/tax";
 import type { AppEnv } from "../app";
 
 export const importRoutes = new Hono<AppEnv>();
 
 // One import at a time per trader: a double tap or two tabs can't add the same file twice.
 const lockUser = (tx: Parameters<Parameters<typeof db.transaction>[0]>[0], userId: string) =>
-  tx.select({ id: schema.users.id }).from(schema.users).where(eq(schema.users.id, userId)).for("update");
+  tx.select({ id: schema.users.id, vatRegistered: schema.users.vatRegistered, vatRateBp: schema.users.vatRateBp }).from(schema.users).where(eq(schema.users.id, userId)).for("update");
 
 importRoutes.get("/", async (c) => {
   const userId = c.get("userId");
@@ -44,7 +43,10 @@ importRoutes.post("/history", async (c) => {
   }
   const userId = c.get("userId");
   const result = await db.transaction(async (tx): Promise<ImportHistoryResult> => {
-    await lockUser(tx, userId);
+    const [user] = await lockUser(tx, userId);
+    if (!user) throw new Error("User not found");
+    // The rate in force now, as for a payment recorded by hand today.
+    const vatRateBp = user.vatRegistered ? user.vatRateBp ?? 0 : 0;
     const [paid, spent, clients] = await Promise.all([
       tx.select({ paidAt: schema.payments.paidAt, client: schema.clients.name, service: schema.bookings.service, amount_cents: schema.payments.amountCents })
         .from(schema.payments)
@@ -78,10 +80,11 @@ importRoutes.post("/history", async (c) => {
     }
     const bookings: (typeof schema.bookings.$inferInsert)[] = [], payments: (typeof schema.payments.$inferInsert)[] = [];
     for (const job of jobs) {
-      const bookingId = randomUUID(), at = paymentPaidAt(job.payments.at(-1)!.paid_on);
+      // The file gives the day the money came in, not a time, so the job is on that day with no time.
+      const bookingId = randomUUID(), last = job.payments.at(-1)!.paid_on, at = paymentPaidAt(last), day = bookingAtDublinTime(last, "00:00");
       bookings.push({
         id: bookingId, userId, importId, clientId: known.get(nameKey(job.client))!, service: job.service, status: "completed",
-        startAt: at, endAt: at, timeTbc: true, completedAt: at, reminderSentAt: at, reviewRequestedAt: at, createdAt: at, notes: from,
+        startAt: day, timeTbc: true, completedAt: at, reminderSentAt: at, reviewRequestedAt: at, createdAt: at, notes: from,
         priceCents: job.payments.reduce((sum, payment) => sum + payment.amount_cents, 0),
         depositCents: job.payments.length > 1 ? job.payments[0]!.amount_cents : 0,
       });
@@ -89,7 +92,7 @@ importRoutes.post("/history", async (c) => {
         const paidAt = paymentPaidAt(payment.paid_on);
         payments.push({
           userId, importId, bookingId, kind: payment.kind, method: payment.method, status: "paid", amountCents: payment.amount_cents,
-          paidAt, createdAt: paidAt, vatRateBp: effectivePaymentVatRate(userId),
+          paidAt, createdAt: paidAt, vatRateBp,
         });
       }
     }

@@ -13,6 +13,7 @@ import { BookingSteps } from "../BookingSteps";
 import { bookingPaymentPhrase, unpaidDepositCents, type BookingDetailAction } from "../lib/bookingDetail";
 import {
   euros, formatPhone, kindLabel, longDay, messageLabel, methodLabel, stamp, time,
+  noTime,
 } from "../lib/format";
 import { useAction, useData, useStore, useSession } from "../lib/store";
 import { buildDocumentFile, shareOrDownload } from "../lib/documentFile";
@@ -124,7 +125,7 @@ export function BookingDetail() {
           <span className="detail-icon"><Icon name="calendar" /></span>
           <div>
             <strong>{longDay(booking.startAt)}</strong>
-            <span>{booking.timeTbc ? "Time to be agreed" : time(booking.startAt)}</span>
+            <span>{booking.timeTbc ? noTime(booking) : time(booking.startAt)}</span>
           </div>
         </div>
         {booking.location && (

@@ -13,6 +13,7 @@ import { BookingDetail } from "./pages/BookingDetail";
 import { ClientDetail } from "./pages/ClientDetail";
 import { Clients } from "./pages/Clients";
 import { ClientImport } from "./pages/ClientImport";
+import { HistoryImport } from "./pages/HistoryImport";
 import { Settings } from "./pages/Settings";
 import { Login } from "./pages/Login";
 import { Signup, Verify, Forgot, Reset, GoogleLogin } from "./pages/Account";
@@ -40,6 +41,7 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
             <Route path="/clients/import" element={<ClientImport />} />
             <Route path="/clients/:id" element={<ClientDetail />} />
             <Route path="/money" element={<Money />} />
+            <Route path="/money/import" element={<HistoryImport />} />
             <Route path="/expenses" element={<Expenses />} />
             <Route path="/settings" element={<Settings />} />
             <Route path="/welcome" element={<Settings welcome />} />

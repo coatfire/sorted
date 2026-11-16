@@ -22,6 +22,8 @@ import type { ExportFormat, ExportRange,
   ImportBatch,
   ImportClientRow,
   ImportClientsResult,
+  ImportHistoryInput,
+  ImportHistoryResult,
   UndoImportResult,
 } from "@sorted/core";
 
@@ -120,8 +122,10 @@ export interface Backend {
   createClient(input: ImportClientRow): Promise<{ id: string }>;
   /** Adds the rows that aren't already clients, as one import that can be undone. */
   importClients(fileName: string, rows: ImportClientRow[]): Promise<ImportClientsResult>;
+  /** Adds past payments and expenses that aren't already in Sorted, as one import that can be undone. Sends nothing. */
+  importHistory(fileName: string, rows: Pick<ImportHistoryInput, "income" | "expenses">): Promise<ImportHistoryResult>;
   imports(): Promise<ImportBatch[]>;
-  /** Removes an import's clients, except any who have been booked since. */
+  /** Removes what an import added, except anything used since: a booked client, a payment with a receipt, an expense with a photo. */
   undoImport(id: string): Promise<UndoImportResult>;
   updateUser(patch: Partial<{
     name: string | null;

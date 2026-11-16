@@ -10,6 +10,9 @@ export function jobDateLabel(startAt: string | null, now = new Date()) {
   return `job on ${new Intl.DateTimeFormat("en-IE", { weekday: "short", day: "numeric", month: "short", timeZone: "Europe/Dublin" }).format(new Date(startAt)).replace(/,/g, "")}`;
 }
 
+/** A finished job with no time is one brought in from a spreadsheet, which only has the day. */
+export const noTime = (booking: { status: string }) => booking.status === "completed" ? "Time not recorded" : "Time to be agreed";
+
 export const euros = (cents: number | null) => cents === null ? "Price to be agreed" :
   new Intl.NumberFormat("en-IE", { style: "currency", currency: "EUR" }).format(cents / 100);
 

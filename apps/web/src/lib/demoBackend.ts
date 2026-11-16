@@ -5,7 +5,7 @@
  * payment links are simulated — nothing leaves the browser.
  */
 import type { Client, Expense, MessageLogEntry, Payment, BookingDocument, BusyBlock } from "@sorted/core";
-import { ImportClientsInput, planClientImport, exportCsvText, exportSections, exportXlsx, inExportRange, paidOn, PlaceSearchInput, PLACE_SUGGESTION_LIMIT, snapshotReceipt, snapshotDocument, documentNumber, TaxSettings, ConfirmExpenseInput, RecordPaymentInput, EditPaymentInput, paymentPaidAt, irelandToday, addCalendarDays, CalendarDate, shiftDublinWeeks, RepeatInput, Services, bookingStage, CreateClientInput, UpdateClientInput, MessageSentInput, CreateBookingInput, agreedBookingStart, missingBookingDetails, bookingAtDublinTime, BusyRange } from "@sorted/core";
+import { ImportClientsInput, planClientImport, ImportHistoryInput, planHistoryImport, historyJobs, heldHistory, exportCsvText, exportSections, exportXlsx, inExportRange, paidOn, PlaceSearchInput, PLACE_SUGGESTION_LIMIT, snapshotReceipt, snapshotDocument, documentNumber, TaxSettings, ConfirmExpenseInput, RecordPaymentInput, EditPaymentInput, paymentPaidAt, irelandToday, addCalendarDays, CalendarDate, shiftDublinWeeks, RepeatInput, Services, bookingStage, CreateClientInput, UpdateClientInput, MessageSentInput, CreateBookingInput, agreedBookingStart, missingBookingDetails, bookingAtDublinTime, BusyRange } from "@sorted/core";
 import type { Backend, BookingRow, Snapshot } from "./backend";
 import { blobToDataUrl } from "./image";
 import { settingsAutosaveRegistry } from "./settingsAutosaveSession";
@@ -16,7 +16,7 @@ interface DemoData extends Omit<Snapshot, "documents"> {
   documents: BookingDocument[];
   messages: MessageLogEntry[];
   receipts: Record<string, string>; // expense id → data URL
-  imports?: Array<{ id: string; fileName: string | null; createdAt: string; clientIds: string[] }>;
+  imports?: Array<{ id: string; kind?: "history"; fileName: string | null; createdAt: string; clientIds: string[]; bookingIds?: string[]; paymentIds?: string[]; expenseIds?: string[] }>;
 }
 
 const id = () => crypto.randomUUID();
@@ -577,21 +577,74 @@ export const demoBackend: Backend = {
     return { importId: batch.id, added: added.length, alreadyThere };
   },
 
+  async importHistory(fileName, rows) {
+    const d = data();
+    const parsed = ImportHistoryInput.parse({ file_name: fileName, ...rows });
+    const today = irelandToday();
+    if (parsed.income.some((row) => row.paid_on > today) || parsed.expenses.some((row) => row.date > today)) throw new Error("Only past income and expenses can be imported.");
+    const plan = planHistoryImport(parsed, heldHistory(d));
+    if (!plan.income.length && !plan.expenses.length) return { importId: null, payments: 0, expenses: 0, clients: 0, alreadyThere: plan.alreadyThere };
+    const nameKey = (name: string) => name.toLowerCase().replace(/\s+/g, " ").trim();
+    const known = new Map<string, Client>();
+    for (const client of [...d.clients].sort((a, b) => a.createdAt.localeCompare(b.createdAt))) if (!known.has(nameKey(client.name))) known.set(nameKey(client.name), client);
+    const batch = { id: id(), kind: "history" as const, fileName: parsed.file_name ?? null, createdAt: now(), clientIds: [] as string[], bookingIds: [] as string[], paymentIds: [] as string[], expenseIds: [] as string[] };
+    for (const job of historyJobs(plan.income)) {
+      let client = known.get(nameKey(job.client));
+      if (!client) {
+        client = { id: id(), name: job.client, phone: null, email: null, notes: null, createdAt: now() };
+        known.set(nameKey(job.client), client); d.clients.unshift(client); batch.clientIds.push(client.id);
+      }
+      const last = job.payments.at(-1)!.paid_on, done = paymentPaidAt(last).toISOString();
+      const booking: BookingRow = {
+        id: id(), clientId: client.id, client, service: job.service, startAt: bookingAtDublinTime(last, "00:00").toISOString(), timeTbc: true, endAt: null,
+        priceCents: job.payments.reduce((sum, payment) => sum + payment.amount_cents, 0), depositCents: job.payments.length > 1 ? job.payments[0]!.amount_cents : 0,
+        status: "completed", location: null, notes: parsed.file_name ? `Imported from ${parsed.file_name}` : "Imported", gcalEventId: null,
+        completedAt: done, createdAt: done, followUpOn: null, paymentRequestedAt: null,
+      };
+      d.bookings.push(booking); batch.bookingIds.push(booking.id);
+      for (const payment of job.payments) {
+        const paidAt = paymentPaidAt(payment.paid_on).toISOString(), paymentId = id();
+        d.payments.push({ id: paymentId, bookingId: booking.id, kind: payment.kind, amountCents: payment.amount_cents, method: payment.method, status: "paid", linkUrl: null, paidAt, createdAt: paidAt, vatRateBp: d.user.vatRegistered ? d.user.vatRateBp : 0 });
+        batch.paymentIds.push(paymentId);
+      }
+    }
+    for (const row of plan.expenses) {
+      const expense: Expense = { id: id(), merchant: row.merchant, amountCents: row.amount_cents, vatCents: row.vat_cents, category: row.category, expenseDate: `${row.date}T00:00:00.000Z`, receiptKey: null, status: "confirmed", createdAt: now() };
+      d.expenses.unshift(expense); batch.expenseIds.push(expense.id);
+    }
+    d.imports = [batch, ...(d.imports ?? [])];
+    save();
+    return { importId: batch.id, payments: batch.paymentIds.length, expenses: batch.expenseIds.length, clients: batch.clientIds.length, alreadyThere: plan.alreadyThere };
+  },
+
   async imports() {
-    const d = data(), here = new Set(d.clients.map((client) => client.id));
-    return (d.imports ?? []).map((batch) => ({ id: batch.id, kind: "clients" as const, fileName: batch.fileName, createdAt: batch.createdAt, clients: batch.clientIds.filter((clientId) => here.has(clientId)).length }));
+    const d = data(), here = (rows: { id: string }[], ids: string[] = []) => ids.filter((item) => rows.some((row) => row.id === item)).length;
+    return (d.imports ?? []).map((batch) => ({
+      id: batch.id, kind: batch.kind ?? "clients" as const, fileName: batch.fileName, createdAt: batch.createdAt,
+      clients: here(d.clients, batch.clientIds), payments: here(d.payments, batch.paymentIds), expenses: here(d.expenses, batch.expenseIds),
+    }));
   },
 
   async undoImport(importId) {
     const d = data();
     const batch = mustFind(d.imports ?? [], importId, "Import");
+    const inBatch = (ids: string[] = []) => (row: { id: string }) => ids.includes(row.id);
+    const receipted = new Set(d.documents.filter((document) => document.kind === "receipt").map((document) => document.paymentId));
+    const payments = d.payments.filter(inBatch(batch.paymentIds)), goPayments = new Set(payments.filter((payment) => !receipted.has(payment.id)).map((payment) => payment.id));
+    const expenses = d.expenses.filter(inBatch(batch.expenseIds)), goExpenses = new Set(expenses.filter((expense) => !expense.receiptKey).map((expense) => expense.id));
+    d.payments = d.payments.filter((payment) => !goPayments.has(payment.id));
+    d.expenses = d.expenses.filter((expense) => !goExpenses.has(expense.id));
+    const used = new Set([...d.payments.map((payment) => payment.bookingId), ...d.documents.map((document) => document.bookingId), ...d.messages.map((message) => message.bookingId)]);
+    d.bookings = d.bookings.filter((booking) => !(batch.bookingIds ?? []).includes(booking.id) || used.has(booking.id));
     const booked = new Set(d.bookings.map((booking) => booking.clientId));
-    const mine = d.clients.filter((client) => batch.clientIds.includes(client.id));
+    const mine = d.clients.filter(inBatch(batch.clientIds));
     const remove = new Set(mine.filter((client) => !booked.has(client.id)).map((client) => client.id));
     d.clients = d.clients.filter((client) => !remove.has(client.id));
     d.imports = (d.imports ?? []).filter((item) => item.id !== importId);
     save();
-    return { removed: remove.size, kept: mine.length - remove.size };
+    return batch.kind === "history"
+      ? { removed: goPayments.size + goExpenses.size, kept: payments.length - goPayments.size + expenses.length - goExpenses.size }
+      : { removed: remove.size, kept: mine.length - remove.size };
   },
 
   async deleteClient(clientId) {

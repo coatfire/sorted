@@ -3,7 +3,7 @@ import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom"
 import { normaliseClientPhone, CreateClientInput, CalendarDate, bookAgainStart, bookingAtDublinTime, dublinDateTime, RepeatInput, type Client } from "@sorted/core";
 import { BackButton, Button, Card, EmptyState, Field, Icon, MoneyText, PageHeader } from "../components";
 import type { BookingRow } from "../lib/backend";
-import { centsToInput, formatPhone, longDay, parseEuros, time } from "../lib/format";
+import { centsToInput, formatPhone, longDay, noTime, parseEuros, time } from "../lib/format";
 import { bookingServiceChips, serviceChipPrice } from "../lib/bookingServices";
 import { BookingMessageSheet } from "../BookingMessageSheet";
 import { LocationField } from "../LocationField";
@@ -353,7 +353,7 @@ function Saved({ booking, count }: { booking: BookingRow; count: number }) {
       <Card className="saved-summary">
         <div>
           <Icon name="calendar" />
-          <span>{longDay(booking.startAt)}, {booking.timeTbc ? "Time to be agreed" : time(booking.startAt)}</span>
+          <span>{longDay(booking.startAt)}, {booking.timeTbc ? noTime(booking) : time(booking.startAt)}</span>
         </div>
         <div>
           <Icon name="wallet" />

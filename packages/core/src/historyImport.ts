@@ -1,7 +1,8 @@
 import { z } from "zod";
 import { CalendarDate } from "./dates";
 import { irelandToday } from "./recordPayment";
-import { ExpenseCategory, PaymentKind, PaymentMethod } from "./types";
+import { paidOn } from "./exportRange";
+import { ExpenseCategory, PaymentKind, PaymentMethod, type Booking, type Client, type Expense, type Payment } from "./types";
 import type { ImportTable } from "./clientImport";
 
 export const IMPORT_MAX_HISTORY_ROWS = 5000;
@@ -228,6 +229,24 @@ export interface HistoryHeld {
   income: Pick<HistoryIncomeRow, "paid_on" | "client" | "service" | "amount_cents">[];
   expenses: Pick<HistoryExpenseRow, "date" | "merchant" | "amount_cents">[];
 }
+/** What Sorted already holds, from the app's own data, in the shape planHistoryImport compares against. */
+export function heldHistory(data: {
+  bookings: (Pick<Booking, "id" | "service"> & { client: Pick<Client, "name"> })[];
+  payments: Pick<Payment, "bookingId" | "status" | "paidAt" | "amountCents">[];
+  expenses: Pick<Expense, "expenseDate" | "merchant" | "amountCents">[];
+}): HistoryHeld {
+  const bookings = new Map(data.bookings.map((booking) => [booking.id, booking]));
+  return {
+    income: data.payments.flatMap((payment) => {
+      const booking = bookings.get(payment.bookingId);
+      return payment.status === "paid" && payment.paidAt && booking
+        ? [{ paid_on: paidOn(payment.paidAt), client: booking.client.name, service: booking.service, amount_cents: payment.amountCents }] : [];
+    }),
+    expenses: data.expenses.flatMap((expense) => expense.expenseDate && expense.amountCents !== null
+      ? [{ date: expense.expenseDate.slice(0, 10), merchant: expense.merchant ?? "", amount_cents: expense.amountCents }] : []),
+  };
+}
+
 export function planHistoryImport(rows: Pick<HistorySheet, "income" | "expenses">, held: HistoryHeld) {
   const income = fresh(rows.income, held.income.map(incomeKey), incomeKey);
   const expenses = fresh(rows.expenses, held.expenses.map(expenseKey), expenseKey);
