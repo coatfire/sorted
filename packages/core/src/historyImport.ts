@@ -16,7 +16,8 @@ export const HistoryIncomeRow = z.object({
   client: z.string().trim().min(1).max(200),
   service: z.string().trim().min(1).max(200),
   kind: PaymentKind,
-  method: PaymentMethod.nullable(),
+  // Never "stripe": that means a charge through this account's payment link, which locks the payment.
+  method: PaymentMethod.exclude(["stripe"]).nullable(),
   amount_cents: Cents,
 });
 export type HistoryIncomeRow = z.infer<typeof HistoryIncomeRow>;
@@ -133,7 +134,7 @@ export function readCents(value: string): number | undefined {
 
 const KINDS: Record<string, PaymentKind> = { deposit: "deposit", balance: "balance", full: "full", custom: "custom" };
 // A card payment in a file is never "stripe": this account's Stripe did not take it, so it must stay correctable.
-const METHODS: Record<string, PaymentMethod> = {
+const METHODS: Record<string, Exclude<PaymentMethod, "stripe">> = {
   cash: "cash", revolut: "revolut", stripe: "card", card: "card", "credit card": "card", "debit card": "card",
   "bank transfer": "bank_transfer", transfer: "bank_transfer", bank: "bank_transfer", eft: "bank_transfer",
 };

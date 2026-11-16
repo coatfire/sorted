@@ -206,6 +206,7 @@ describe("saving past income and expenses", () => {
     expect(["card", "Credit Card", "debit card", "stripe"].map((cell) => historySheet([{ name: "Income", rows: [["date_paid", "client", "service", "method", "amount_eur"], ["2025-05-01", "A", "Cut", cell, "60"]] }]).income[0]?.method)).toEqual(Array(4).fill("card"));
     const [payment] = await db.select().from(schema.payments).where(eq(schema.payments.userId, user.id));
     expect(payment).toMatchObject({ method: "card", linkUrl: null });
+    expect((await request("/imports/history", { income: [{ paid_on: "2025-05-02", client: "Card Client", service: "Cut", kind: "full", method: "stripe", amount_cents: 6000 }], expenses: [] })).status).toBe(400);
     expect((await request(`/payments/${payment!.id}`, { amount_cents: 5000 }, "PATCH")).status).toBe(200);
     expect((await db.select().from(schema.payments).where(eq(schema.payments.id, payment!.id)))[0]).toMatchObject({ amountCents: 5000, method: "card" });
     expect((await request(`/payments/${payment!.id}/undo`, {})).status).toBe(200);
