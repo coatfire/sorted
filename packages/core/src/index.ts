@@ -17,3 +17,4 @@ export * from "./enquiries";
 export * from "./monthCalendar";
 export * from "./busy";
 export * from "./places";
+export * from "./exportRange";

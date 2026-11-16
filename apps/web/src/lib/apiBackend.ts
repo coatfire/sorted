@@ -165,5 +165,5 @@ export const apiBackend: Backend = {
     settingsAutosaveRegistry.notifySaved(apiBackend, user.id, changes);
   },
 
-  exportCsv: (year) => apiBlob(`/reports/export?year=${year}`),
+  exportCsv: ({ from, to }) => apiBlob(`/reports/export?from=${from}&to=${to}`),
 };

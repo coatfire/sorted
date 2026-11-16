@@ -108,14 +108,14 @@ describe("browser-driven Drive backup", () => {
   it.each([false, true])("rewrites a previously backed-up year after its final entry moves away, with no current files: %s", async empty => {
     const f = fixture({ empty, existingRoot: true });
     vi.mocked(f.backend.driveFiles).mockResolvedValue({ userId: "user-1", logo: null, documents: [], photos: [], years: empty ? [] : [2026] });
-    vi.mocked(f.backend.exportCsv).mockImplementation(async year => new Blob([year === 2024 ? "HEADER\n" : "HEADER\ncorrected-payment\n"], { type: "text/csv" }));
+    vi.mocked(f.backend.exportCsv).mockImplementation(async range => new Blob([range.from === "2024-01-01" ? "HEADER\n" : "HEADER\ncorrected-payment\n"], { type: "text/csv" }));
     await backUpToDrive(Promise.resolve("test-drive-token"), f.backend, vi.fn());
-    expect(f.backend.exportCsv).toHaveBeenCalledWith(2024);
+    expect(f.backend.exportCsv).toHaveBeenCalledWith({ from: "2024-01-01", to: "2024-12-31" });
     const old = f.uploads.find(upload => upload.url.includes("/files/csv-2024?"))!;
     expect(old.init.method).toBe("PATCH");
     expect(await (old.init.body as Blob).text()).toContain("HEADER\n");
     expect(await (old.init.body as Blob).text()).not.toContain("corrected-payment");
-    if (!empty) expect(f.backend.exportCsv).toHaveBeenCalledWith(2026);
+    if (!empty) expect(f.backend.exportCsv).toHaveBeenCalledWith({ from: "2026-01-01", to: "2026-12-31" });
     expect(f.backedUp).toHaveBeenCalledOnce();
   });
   it("does not upload or mark completion after popup dismissal", async () => {

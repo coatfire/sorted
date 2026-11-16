@@ -170,5 +170,5 @@ it("mirrors edits, receipt protection, undo and export exclusion in the demo", a
   const after = await demoBackend.load(); expect(after.payments.find(item => item.id === payment.id)).toMatchObject({ status: "cancelled", amountCents: 1, receiptVoidedAt: expect.any(String) });
   const voided = await demoBackend.document(payment.bookingId, "receipt", payment.id);
   expect(voided.documentSnapshot).toEqual(receipt.documentSnapshot); expect(voided.voidedAt).toBeTruthy();
-  expect(await (await demoBackend.exportCsv(2025)).text()).not.toContain('"0.01"');
+  expect(await (await demoBackend.exportCsv({ from: "2025-01-01", to: "2025-12-31" })).text()).not.toContain('"0.01"');
 });

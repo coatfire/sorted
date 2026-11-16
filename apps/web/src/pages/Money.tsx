@@ -1,9 +1,9 @@
 import { Link } from "react-router-dom";
 import { useState } from "react";
-import { calendarDaysBetween, dublinDateTime, irelandToday, moneyOwed, moneyYear, type OwedItem } from "@sorted/core";
+import { calendarDaysBetween, dublinDateTime, exportFileName, ExportRange, irelandToday, moneyOwed, moneyYear, yearRange, type OwedItem } from "@sorted/core";
 import { BookingMessageSheet } from "../BookingMessageSheet";
 import type { BookingRow } from "../lib/backend";
-import { Button, Card, EmptyState, Icon, MoneyText, PageHeader } from "../components";
+import { Button, Card, EmptyState, Field, Icon, MoneyText, PageHeader } from "../components";
 import { PaymentActions } from "../PaymentActions";
 import { TaxEstimateCard } from "../TaxEstimateCard";
 import { euros, jobDateLabel } from "../lib/format";
@@ -12,6 +12,7 @@ import { download } from "../lib/image";
 import { useAction, useData, useStore } from "../lib/store";
 
 const MONTHS = ["J", "F", "M", "A", "M", "J", "J", "A", "S", "O", "N", "D"];
+const longDate = (date: string) => new Date(`${date}T12:00:00Z`).toLocaleDateString("en-IE", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
 const MONTH_NAMES = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 
 export function Money() {
@@ -25,6 +26,10 @@ export function Money() {
   const year = estimate.year;
   const thisMonth = Number(dublinDateTime(now).date.slice(5, 7)) - 1;
   const peak = Math.max(...months, 1);
+  const [period, setPeriod] = useState<"this" | "last" | "custom">("this");
+  const [custom, setCustom] = useState<ExportRange>(() => ({ from: `${year}-01-01`, to: irelandToday(now) }));
+  const chosen = ExportRange.safeParse(period === "custom" ? custom : yearRange(period === "last" ? year - 1 : year));
+  const range = chosen.success ? chosen.data : null;
 
   return (
     <div className="page">
@@ -86,16 +91,32 @@ export function Money() {
               <span key={index} className={index === thisMonth ? "current" : ""}>{letter}</span>
             ))}
           </div>
+          <fieldset className="export-period">
+            <legend>Export for your accountant</legend>
+            <div className="export-choices">
+              {([["this", `This year (${year})`], ["last", `Last year (${year - 1})`], ["custom", "Other dates"]] as const).map(([value, label]) => (
+                <button type="button" key={value} aria-pressed={period === value} onClick={() => setPeriod(value)}>{label}</button>
+              ))}
+            </div>
+            {period === "custom" && (
+              <div className="export-dates">
+                <Field label="From"><input name="export-from" type="date" value={custom.from} onChange={(event) => setCustom({ ...custom, from: event.target.value })} /></Field>
+                <Field label="To"><input name="export-to" type="date" value={custom.to} onChange={(event) => setCustom({ ...custom, to: event.target.value })} /></Field>
+              </div>
+            )}
+          </fieldset>
           <Button
             className="export-button"
-            disabled={busy}
-            onClick={() =>
-              run(async () => download(await backend.exportCsv(year), `sorted-${year}.csv`), "Export downloaded")
-            }
+            disabled={busy || !range}
+            onClick={() => range && run(async () => download(await backend.exportCsv(range), exportFileName(range)), "Export downloaded")}
           >
             <Icon name="download" /> Export for accountant
           </Button>
-          <p className="export-note">A CSV of {year}’s income and expenses, ready for your accountant.</p>
+          <p className="export-note" role="status">
+            {range
+              ? `A CSV of income and expenses from ${longDate(range.from)} to ${longDate(range.to)}, ready for your accountant.`
+              : "Choose a from date that's on or before the to date."}
+          </p>
         </Card>
       </section>
       <TaxEstimateCard estimate={estimate} />

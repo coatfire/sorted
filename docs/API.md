@@ -375,7 +375,7 @@ Recording a payment requires a confirmed or completed booking (409 otherwise), o
 | Method | Path                  | Notes |
 |--------|-----------------------|-------|
 | GET    | /reports/summary      | `?year=` → income, expenses, profit, by month + category (dashboard) |
-| GET    | /reports/export       | `?year=&format=csv` → accountant export (income lines + expense lines) |
+| GET    | /reports/export       | `?from=YYYY-MM-DD&to=YYYY-MM-DD` (both days included, dates in Ireland) or `?year=` → accountant CSV: income lines then expense lines, oldest first. `400` if a date is missing or invalid, or `from` is after `to`. The file is named `sorted-2025.csv` for a whole calendar year, otherwise `sorted-<from>-to-<to>.csv` |
 
 ## Webhooks (no JWT)
 | Method | Path              | Notes |
