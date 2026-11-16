@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { EditPaymentInput, dublinDateTime, irelandToday, paymentPaidAt, type Payment, type PaymentMethod } from "@sorted/core";
 import { Button, Field, Sheet } from "./components";
-import { centsToInput, euros, methodLabel, parseEuros } from "./lib/format";
+import { centsToInput, euros, methodLabel, MANUAL_METHODS, parseEuros } from "./lib/format";
 import { useAction, useStore } from "./lib/store";
 import { useValidation } from "./lib/useValidation";
 
@@ -37,7 +37,7 @@ export function PaymentCorrectionSheet({ payment, maximum, onClose }: { payment:
       if (await run(() => backend.editPayment(payment.id, { amount_cents: parseEuros(amount)!, method, paid_at: paidAt }), "Payment updated")) onClose();
     }}>
       <Field label="Amount" {...validation.field("amount")}><div className="money-input"><span>€</span><input name="amount" inputMode="decimal" required value={amount} onChange={event => setAmount(event.target.value)} /></div></Field>
-      <Field label="Method"><select value={method} onChange={event => setMethod(event.target.value as Exclude<PaymentMethod, "stripe">)}>{(["cash", "bank_transfer", "revolut", ...(payment.method === "card" ? ["card" as const] : [])] as const).map(value => <option key={value} value={value}>{methodLabel(value)}</option>)}</select></Field>
+      <Field label="Method"><select value={method} onChange={event => setMethod(event.target.value as Exclude<PaymentMethod, "stripe">)}>{MANUAL_METHODS.map(value => <option key={value} value={value}>{methodLabel(value)}</option>)}</select></Field>
       <Field label="Date" {...validation.field("paid_at")}><input name="paid_at" type="date" required max={irelandToday()} value={date} onChange={event => setDate(event.target.value)} /></Field>
       {feedback}
       <Button type="submit" disabled={busy || committed}>Save changes</Button>
