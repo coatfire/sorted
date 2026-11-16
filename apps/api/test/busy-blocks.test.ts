@@ -35,11 +35,17 @@ describe("busy blocks", () => {
       block("Evening", "2028-08-12T19:00:00Z", "2028-08-12T23:00:00Z"),
       block("Late", "2028-08-12T23:30:00Z", "2028-08-13T00:30:00Z"),
       block("Holiday", "2028-08-12", "2028-08-14", true),
-    ]);
+    ], "2028-08-01", "2028-08-31");
     expect([...days.keys()].sort()).toEqual(["2028-08-12", "2028-08-13", "2028-08-14"]);
     // 23:00Z is midnight in Ireland in summer, so "Evening" stops on the 12th and "Late" is wholly on the 13th.
     expect(days.get("2028-08-12")!.map(item => item.title)).toEqual(["Holiday", "Evening"]);
     expect(days.get("2028-08-13")!.map(item => item.title)).toEqual(["Holiday", "Late"]);
+
+    // An absence of several years stays busy all the way through, and only the days asked for are listed.
+    const leave = busyByDay([block("Leave", "2026-01-10", "2029-06-30", true), block("Trip", "2028-08-30T09:00:00Z", "2028-09-02T09:00:00Z")], "2028-08-01", "2028-08-31");
+    expect(leave.size).toBe(31);
+    expect(leave.get("2028-08-01")!.map(item => item.title)).toEqual(["Leave"]);
+    expect(leave.get("2028-08-31")!.map(item => item.title)).toEqual(["Leave", "Trip"]);
   });
 
   it("reads zones, all-day ranges and repeats, and leaves out cancelled entries and Sorted's own bookings", () => {
@@ -145,6 +151,16 @@ describe("external calendars", () => {
     for (const index of [1, 2]) expect((await f.request("/external", "POST", { url: `${GOOGLE}?ok=${index}` })).status).toBe(201);
     const fourth = await f.request("/external", "POST", { url: `${GOOGLE}?ok=3` });
     expect(fourth.status).toBe(409);
+    expect(await (await f.request("/external")).json()).toHaveLength(3);
+  });
+
+  it("keeps to the limit, and to one copy of a link, when links are added at the same moment", async () => {
+    const f = await account();
+    serve(Object.fromEntries([0, 1, 2, 3].map(index => [`${GOOGLE}?ok=${index}`, () => new Response(calendarFile("Fine"))])));
+    const add = (index: number) => f.request("/external", "POST", { url: `${GOOGLE}?ok=${index}` });
+    expect((await Promise.all([add(0), add(0)])).map(response => response.status).sort()).toEqual([200, 201]);
+    expect((await add(1)).status).toBe(201);
+    expect((await Promise.all([add(2), add(3)])).map(response => response.status).sort()).toEqual([201, 409]);
     expect(await (await f.request("/external")).json()).toHaveLength(3);
   });
 

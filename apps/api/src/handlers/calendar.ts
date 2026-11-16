@@ -66,10 +66,11 @@ calendarRoutes.post("/external", requireAuth, async (c) => {
   if (!parsed.success) return c.json({ error: parsed.error.issues[0]?.message ?? "Paste a calendar link." }, 400);
   const userId = c.get("userId");
   const { url } = parsed.data;
+  const limitError = { error: `You can add up to ${EXTERNAL_CALENDAR_LIMIT} calendars. Remove one first.` };
   const mine = await db.select().from(schema.externalCalendars).where(eq(schema.externalCalendars.userId, userId));
   const existing = mine.find((row) => row.url === url);
   if (existing) return c.json(external(existing));
-  if (mine.length >= EXTERNAL_CALENDAR_LIMIT) return c.json({ error: `You can add up to ${EXTERNAL_CALENDAR_LIMIT} calendars. Remove one first.` }, 409);
+  if (mine.length >= EXTERNAL_CALENDAR_LIMIT) return c.json(limitError, 409);
   let text: string;
   try {
     text = await fetchCalendarText(url);
@@ -77,10 +78,20 @@ calendarRoutes.post("/external", requireAuth, async (c) => {
   } catch {
     return c.json({ error: "Sorted couldn't read that link. Check you copied the whole private calendar address." }, 422);
   }
-  const [row] = await db.insert(schema.externalCalendars).values({ userId, url }).onConflictDoNothing().returning();
-  const saved = row ?? (await db.select().from(schema.externalCalendars).where(and(eq(schema.externalCalendars.userId, userId), eq(schema.externalCalendars.url, url))))[0];
+  // The download above can take seconds, so count again under a lock: two links added at once can't both take the last place.
+  const outcome = await db.transaction(async (tx) => {
+    await tx.select({ id: schema.users.id }).from(schema.users).where(eq(schema.users.id, userId)).for("update");
+    const now = await tx.select().from(schema.externalCalendars).where(eq(schema.externalCalendars.userId, userId));
+    const already = now.find((row) => row.url === url);
+    if (already) return { row: already, created: false };
+    if (now.length >= EXTERNAL_CALENDAR_LIMIT) return null;
+    const [row] = await tx.insert(schema.externalCalendars).values({ userId, url }).returning();
+    return { row, created: true };
+  });
+  if (!outcome) return c.json(limitError, 409);
+  const saved = outcome.row;
   downloads.set(saved.id, { url, at: Date.now(), text });
-  return c.json(external(saved), 201);
+  return c.json(external(saved), outcome.created ? 201 : 200);
 });
 
 calendarRoutes.delete("/external/:id", requireAuth, async (c) => {
