@@ -601,7 +601,10 @@ Rules:
   name and different numbers are both kept. The server decides again when
   saving, so the same file sent twice adds nothing.
 - A phone or email Sorted can't read is not dropped: it goes into the client's
-  notes as written.
+  notes as written. A cell with more than one number or address uses the first
+  readable one and keeps the whole cell in the notes too. A number is only read
+  from text that is nothing but a number, so "087 123 4567 ext 12" is kept in
+  the notes, not saved as a longer wrong number.
 - An existing client is never changed by an import.
 - Importing never sends a message to anyone.
 - At most 2,000 new clients per file.

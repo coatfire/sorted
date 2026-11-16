@@ -84,8 +84,13 @@ function findColumns(row: string[]) {
 
 // The accountant export puts ' in front of text a spreadsheet could run as a formula.
 const text = (value: string | undefined) => (value ?? "").replace(/^'(?=[=+\-@])/, "").replace(/\s+/g, " ").trim();
-// A cell can hold several: "087 123 4567 or 01 234 5678", "a@b.ie / c@d.ie". Sorted keeps the first it can read.
-const firstPhone = (value: string) => [value, ...value.split(/:::|[,;/]|\bor\b/i)].map((part) => normaliseClientPhone(part) ?? undefined).find(Boolean);
+// A cell can hold several: "087 123 4567 or 01 234 5678", "a@b.ie / c@d.ie". Sorted uses the first it can read.
+// Only text that is nothing but a number counts, so "087 123 4567 ext 12" never becomes a longer wrong number.
+const firstPhone = (value: string) => value.split(/:::|[,;]|\bor\b/i)
+  // "087/1234567" is one number; "01 234 5678 / 086 111 2222" is two.
+  .flatMap((chunk) => /^\s*\(?\d{2,4}\)?\s*\/[\d\s-]+$/.test(chunk) ? [chunk] : chunk.split("/"))
+  .map((part) => part.trim())
+  .find((part) => /^[+\d\s()./-]+$/.test(part) && normaliseClientPhone(part));
 const isEmail = (value: string) => z.string().email().max(320).safeParse(value).success;
 const firstEmail = (value: string) => value.toLowerCase().split(/:::|[,;/\s]/).find(isEmail);
 
@@ -113,11 +118,14 @@ export function clientSheet(table: string[][]): ClientSheet {
     if (!name) { sheet.noName++; continue; }
     if (EXAMPLE.test(name)) continue;
     const phoneText = cell(row, at.phone), emailText = cell(row, at.email);
-    const phone = firstPhone(phoneText), email = firstEmail(emailText);
-    // Nothing is thrown away: details Sorted can't use go into the notes as they were written.
+    const phonePart = firstPhone(phoneText), email = firstEmail(emailText);
+    const phone = phonePart ? normaliseClientPhone(phonePart) ?? undefined : undefined;
+    // Nothing is thrown away: a cell Sorted can't read, or one holding more than it used, goes into the notes as written.
     const unread: string[] = [];
-    if (phoneText && !phone) { sheet.unreadPhones++; unread.push(`Phone as written: ${phoneText}`); }
-    if (emailText && !email) { sheet.unreadEmails++; unread.push(`Email as written: ${emailText}`); }
+    if (phoneText && !phone) sheet.unreadPhones++;
+    if (emailText && !email) sheet.unreadEmails++;
+    if (phoneText && phonePart !== phoneText) unread.push(`Phone as written: ${phoneText}`);
+    if (emailText && email !== emailText.toLowerCase()) unread.push(`Email as written: ${emailText}`);
     // Long notes give way to the unread details, never the other way round.
     const details = unread.join(" · ").slice(0, 2000);
     const notes = cell(row, at.notes).slice(0, Math.max(0, 2000 - details.length - (details ? 3 : 0)));

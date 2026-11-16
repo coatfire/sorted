@@ -46,10 +46,22 @@ describe("reading a client list", () => {
       { name: "Róisín Daly", phone: undefined, email: undefined, notes: "=SUM(1,2) · Phone as written: ask her sister" },
     ]);
     expect(sheet).toMatchObject({ noName: 1, unreadPhones: 1, unreadEmails: 1 });
-    expect(clientSheet([["Name", "Phone 1 - Value"], ["Aoife", "087 123 4567 ::: 01 234 5678"]]).rows).toEqual([{ name: "Aoife", phone: "353871234567", email: undefined, notes: undefined }]);
+    expect(clientSheet([["Name", "Phone 1 - Value"], ["Aoife", "087 123 4567 ::: 01 234 5678"]]).rows).toEqual([{ name: "Aoife", phone: "353871234567", email: undefined, notes: "Phone as written: 087 123 4567 ::: 01 234 5678" }]);
     expect(clientSheet([["Name", "Email"], ["Mary", "mary@or.ie"], ["Orla", "or@example.com or orla@example.com"], ["Una", "una@example.com; other@example.com"], ["Ita", "Ita@Example.com/orla@example.com"], ["Eve", "work: eve@example.com"]]).rows.map((row) => row.email)).toEqual(["mary@or.ie", "or@example.com", "una@example.com", "ita@example.com", "eve@example.com"]);
-    expect(clientSheet([["Name", "Phone"], ["A", "087/1234567"], ["B", "01 234 5678 / 086 111 2222"], ["C", "ask her sister or 085 111 2222"], ["D", "landline only, ask Mary"]]).rows.map((row) => [row.phone, row.notes])).toEqual([
-      ["353871234567", undefined], ["35312345678", undefined], ["353851112222", undefined], [undefined, "Phone as written: landline only, ask Mary"]]);
+    const phones = clientSheet([["Name", "Phone"], ["A", "087/1234567"], ["B", "01 234 5678 / 086 111 2222"], ["C", "ask her sister or 085 111 2222"], ["D", "landline only, ask Mary"],
+      ["E", "087 123 4567, ext 12"], ["F", "087 123 4567 ext 12"], ["G", "087 123 4567/12"], ["H", "(087) 123-4567"], ["I", "+353 87 123 4567"]]);
+    expect(phones.rows.map((row) => [row.phone, row.notes])).toEqual([
+      ["353871234567", undefined],
+      ["35312345678", "Phone as written: 01 234 5678 / 086 111 2222"],
+      ["353851112222", "Phone as written: ask her sister or 085 111 2222"],
+      [undefined, "Phone as written: landline only, ask Mary"],
+      ["353871234567", "Phone as written: 087 123 4567, ext 12"],
+      [undefined, "Phone as written: 087 123 4567 ext 12"],
+      ["353871234567", "Phone as written: 087 123 4567/12"],
+      ["353871234567", undefined],
+      ["353871234567", undefined],
+    ]);
+    expect(phones.unreadPhones).toBe(2);
     expect(clientSheet([["Name", "Email"], ["Mary", "Ask Mary for address"]]).rows[0]).toMatchObject({ email: undefined, notes: "Email as written: Ask Mary for address" });
     const long = clientSheet([["Name", "Phone", "Notes"], ["Mary", "ask her sister", "x".repeat(2500)]]).rows[0]!.notes!;
     expect(long).toHaveLength(2000);
