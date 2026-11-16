@@ -9,7 +9,8 @@ export function moneyOwed<T extends Pick<Booking, "id" | "status" | "startAt" | 
   bookings: readonly T[], payments: readonly Pick<Payment, "bookingId" | "status" | "amountCents">[], now = new Date(),
 ) {
   const dueNow: OwedItem<T>[] = [], comingUp: OwedItem<T>[] = [];
-  for (const booking of [...bookings].sort((a, b) => Date.parse(a.startAt) - Date.parse(b.startAt))) {
+  for (const booking of [...bookings].sort((a, b) => (a.startAt ? Date.parse(a.startAt) : Infinity) - (b.startAt ? Date.parse(b.startAt) : Infinity))) {
+    if (booking.priceCents === null || booking.status === "enquiry") continue;
     const { stage, owedCents } = bookingStage(booking, payments, now);
     if (owedCents === 0 || !["due", "owing", "upcoming"].includes(stage)) continue;
     const paid = booking.priceCents - owedCents;

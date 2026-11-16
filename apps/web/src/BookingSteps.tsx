@@ -1,4 +1,4 @@
-import type { BookingStage } from "@sorted/core";
+import { missingBookingDetails, type BookingStage } from "@sorted/core";
 import { Button, Card, Icon } from "./components";
 import type { BookingRow } from "./lib/backend";
 import { type BookingDetailAction } from "./lib/bookingDetail";
@@ -16,6 +16,7 @@ export function BookingSteps({ booking, stage, owedCents, depositCents, hasPaidP
   onAction: (action: BookingDetailAction) => void;
 }) {
   const confirm = confirmCopy(booking.client, automation);
+  const noPrice = booking.priceCents === null;
   const paymentInNextStep = owedCents > 0 && (stage === "upcoming" || stage === "due" || stage === "owing");
   const askInNextStep = owedCents > 0 && (stage === "upcoming" || stage === "owing");
   const open = booking.status === "enquiry" || booking.status === "confirmed";
@@ -23,6 +24,8 @@ export function BookingSteps({ booking, stage, owedCents, depositCents, hasPaidP
   const receiptHelp = !hasPaidPayment ? "receipt-unavailable" : undefined;
 
   function row(action: BookingDetailAction, label: string, icon: Parameters<typeof Icon>[0]["name"], disabled = false) {
+    disabled ||= noPrice && ["quote", "invoice", "ask", "payment", "receipt"].includes(action);
+    disabled ||= action === "cancel" && missingBookingDetails(booking).length > 0;
     return <button type="button" className={`booking-more-action${action === "cancel" ? " is-danger" : ""}`} disabled={disabled} onClick={() => onAction(action)} aria-describedby={action === "receipt" ? receiptHelp : undefined}>
       <Icon name={icon} size={18} /><span>{label}</span>
     </button>;
@@ -37,7 +40,7 @@ export function BookingSteps({ booking, stage, owedCents, depositCents, hasPaidP
         <Button disabled={busy} onClick={() => onAction("confirm")}><Icon name={confirm.caption ? "check" : "message"} />{confirm.label}</Button>
         {confirm.caption && <p className="button-caption">{confirm.caption}</p>}
         <div className="next-step-secondary">
-          <Button kind="quiet" disabled={documentBusy} onClick={() => onAction("quote")}><Icon name="receipt" size={18} />Quote</Button>
+          <Button kind="quiet" disabled={documentBusy || noPrice} onClick={() => onAction("quote")}><Icon name="receipt" size={18} />Quote</Button>
           <Button kind="quiet" onClick={() => onAction("followUp")}><Icon name="clock" size={18} />Change follow-up</Button>
         </div>
       </>}
@@ -78,7 +81,7 @@ export function BookingSteps({ booking, stage, owedCents, depositCents, hasPaidP
       <Card className="booking-more-list">
         {row(booking.status === "enquiry" ? "quote" : "invoice", booking.status === "enquiry" ? "Quote" : "Invoice", "receipt", documentBusy)}
         {stage !== "paid" && row("receipt", "Receipt", "receipt", receiptDisabled)}
-        {stage !== "cancelled" && row("calendar", "Add to calendar", "calendar")}
+        {stage !== "cancelled" && booking.startAt && row("calendar", "Add to calendar", "calendar")}
         {stage !== "cancelled" && row("confirmation", "Send confirmation", "message")}
         {booking.status !== "enquiry" && stage !== "paid" && stage !== "cancelled" && row("again", "Book again", "plus")}
         {open && row("edit", "Edit", "edit")}
@@ -88,6 +91,8 @@ export function BookingSteps({ booking, stage, owedCents, depositCents, hasPaidP
         {open && row("cancel", `Cancel ${booking.status === "enquiry" ? "enquiry" : "booking"}`, "trash")}
       </Card>
       {!hasPaidPayment && <p className="sheet-copy" id="receipt-unavailable">Record a payment to create a receipt.</p>}
+      {noPrice && <p className="sheet-copy">Add a price first to request or record a payment, quote or invoice.</p>}
+      {missingBookingDetails(booking).length > 0 && <p className="sheet-copy">Add the missing details before confirming or cancelling this enquiry.</p>}
     </section>
   </>;
 }

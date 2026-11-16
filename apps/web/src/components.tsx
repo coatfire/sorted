@@ -186,7 +186,7 @@ export function MoneyText({
   cents,
   className = "",
 }: {
-  cents: number;
+  cents: number | null;
   className?: string;
 }) {
   return <span className={`money ${className}`}>{euros(cents)}</span>;

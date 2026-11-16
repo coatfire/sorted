@@ -377,3 +377,26 @@ Single endpoint `N8N_WEBHOOK_URL`, JSON body:
 Events: `booking.confirmed`, `booking.completed`, `booking.cancelled`,
 `payment.link_created`, `payment.paid`. Fire-and-forget with 2s timeout;
 failures logged, never block the response.
+
+## Incomplete enquiries (migration 0018)
+
+Enquiries may omit `start_at` and/or `price_cents` (stored as null).
+`time_tbc` defaults to false. With a known date but unknown time, send
+`time_tbc: true`; the API stores Ireland-local midnight for that date.
+This is an all-day placeholder, not an agreed appointment time.
+An unknown price requires a zero deposit. Repeats require a date.
+
+Any status other than enquiry requires a date, an agreed time and a price.
+Create rejects incomplete confirmed bookings with 400; updates/status changes
+reject incomplete non-enquiries with 422. Confirmation lists missing items.
+`POST /bookings/:id/confirm` optionally accepts `start_at`, `time_tbc` and
+`price_cents` to fill details and confirm atomically under the booking lock.
+All mutations remain tenant-scoped. Explicit null clears enquiry details;
+omitted PATCH fields preserve their values.
+
+Recording/requesting payment or issuing a quote/invoice without a price
+returns 409, `Add a price first`. No payment row is created for an enquiry.
+Undated enquiries are excluded from calendar feeds; time-TBC enquiries are
+all-day events with exclusive next-day ends. Unknown prices never contribute
+to owed, tax or CSV totals; Drive/CSV income continues to derive from paid rows.
+Migration 0018 is append-only and must be applied separately before deployment.

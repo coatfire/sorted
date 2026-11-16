@@ -8,6 +8,7 @@ import { useStore } from "./lib/store";
 export function BookingCalendarSheet({ booking, onClose }: { booking: BookingRow; onClose: () => void }) {
   const { toast } = useStore();
   const [busy, setBusy] = useState(false);
+  if (!booking.startAt) return <Sheet title="Add to calendar" onClose={onClose}><p className="sheet-copy">Add a date first.</p><Button onClick={onClose}>Close</Button></Sheet>;
   const appUrl = window.location.origin;
   return <Sheet title="Add to calendar" onClose={onClose}>
     <p className="sheet-copy">Add this booking to your calendar. For automatic updates, add a calendar in Settings instead.</p>

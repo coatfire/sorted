@@ -124,11 +124,12 @@ export const CreateBookingInput = z
     client: CreateClientInput.optional(),
     service: z.string().min(1).max(200),
     status: z.enum(["confirmed", "enquiry"]).default("enquiry"),
-    start_at: z.coerce.date(),
+    start_at: z.coerce.date().nullable().default(null),
+    time_tbc: z.boolean().default(false),
     follow_up_on: CalendarDate.nullable().optional(),
     repeat: RepeatInput.optional(),
     end_at: z.coerce.date().optional(),
-    price_cents: z.number().int().nonnegative(),
+    price_cents: z.number().int().nonnegative().nullable().default(null),
     deposit_cents: z.number().int().nonnegative().default(0),
     location: z.string().max(500).optional(),
     notes: z.string().max(2000).optional(),
@@ -136,17 +137,20 @@ export const CreateBookingInput = z
   .refine((v) => !!v.client_id !== !!v.client, {
     message: "Provide exactly one of client_id or client",
   })
-  .refine((v) => v.deposit_cents <= v.price_cents, {
+  .refine((v) => v.price_cents === null ? v.deposit_cents === 0 : v.deposit_cents <= v.price_cents, {
     message: "Deposit cannot exceed price",
-  });
+  })
+  .refine(v => v.status === "enquiry" || (v.start_at !== null && !v.time_tbc && v.price_cents !== null), { message: "A booking needs a date, time and price. You can leave these blank for an enquiry." })
+  .refine(v => !v.repeat || v.start_at !== null, { message: "Repeating enquiries need a date." });
 export type CreateBookingInput = z.infer<typeof CreateBookingInput>;
 
 export const UpdateBookingInput = z.object({
   follow_up_on: CalendarDate.nullable().optional(),
   service: z.string().min(1).max(200).optional(),
-  start_at: z.coerce.date().optional(),
+  start_at: z.coerce.date().nullable().optional(),
+  time_tbc: z.boolean().optional(),
   end_at: z.coerce.date().nullable().optional(),
-  price_cents: z.number().int().nonnegative().optional(),
+  price_cents: z.number().int().nonnegative().nullable().optional(),
   deposit_cents: z.number().int().nonnegative().optional(),
   // null clears the field
   location: z.string().max(500).nullable().optional(),
@@ -275,9 +279,10 @@ export interface Booking {
   id: string;
   clientId: string;
   service: string;
-  startAt: string;
+  startAt: string | null;
+  timeTbc?: boolean;
   endAt: string | null;
-  priceCents: number;
+  priceCents: number | null;
   depositCents: number;
   status: BookingStatus;
   location: string | null;

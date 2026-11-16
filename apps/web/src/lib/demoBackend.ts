@@ -5,7 +5,7 @@
  * payment links are simulated — nothing leaves the browser.
  */
 import type { Client, Expense, MessageLogEntry, Payment, BookingDocument } from "@sorted/core";
-import { snapshotReceipt, snapshotDocument, TaxSettings, ConfirmExpenseInput, RecordPaymentInput, EditPaymentInput, paymentPaidAt, irelandToday, addCalendarDays, CalendarDate, shiftDublinWeeks, RepeatInput, Services, bookingStage, CreateClientInput, UpdateClientInput, MessageSentInput } from "@sorted/core";
+import { snapshotReceipt, snapshotDocument, TaxSettings, ConfirmExpenseInput, RecordPaymentInput, EditPaymentInput, paymentPaidAt, irelandToday, addCalendarDays, CalendarDate, shiftDublinWeeks, RepeatInput, Services, bookingStage, CreateClientInput, UpdateClientInput, MessageSentInput, CreateBookingInput, agreedBookingStart, missingBookingDetails } from "@sorted/core";
 import type { Backend, BookingRow, Snapshot } from "./backend";
 import { blobToDataUrl } from "./image";
 import { settingsAutosaveRegistry } from "./settingsAutosaveSession";
@@ -74,7 +74,7 @@ function seed(): DemoData {
     vatRateBp: paid ? 0 : null,
     id: id(), bookingId: bk.id, kind, amountCents, method: paid?.method ?? null,
     status: paid ? "paid" : "pending", linkUrl: null, paidAt: paid?.at ?? null,
-    createdAt: paid?.at ?? bk.startAt,
+    createdAt: paid?.at ?? bk.startAt ?? now(),
   });
   const earlier = (monthsAgo: number, day: number) => {
     const date = new Date();
@@ -200,6 +200,18 @@ const voidPending = (bookingId: string) => {
 
 const csvCell = (value: unknown) => `"${String(value ?? "").replaceAll('"', '""')}"`;
 
+function validateDetails(booking: Pick<BookingRow, "startAt" | "timeTbc" | "priceCents" | "depositCents" | "status">) {
+  const missing = missingBookingDetails(booking);
+  if (booking.status !== "enquiry" && missing.length) throw new Error(`Add ${missing.join(", ")} before saving this booking.`);
+  if (booking.depositCents > (booking.priceCents ?? 0)) throw new Error("Deposit cannot exceed price");
+}
+
+function pricedBooking(bookingId: string) {
+  const booking = mustFind(data().bookings, bookingId, "Booking");
+  if (booking.priceCents === null) throw new Error("Add a price first");
+  return { ...booking, priceCents: booking.priceCents };
+}
+
 export const demoBackend: Backend = {
   async health() { return { ok: true, googleClientId: null, features: { automation: true, paymentLinks: true, googleSignIn: false, googleDrive: false } }; },
   async driveFiles() { throw new Error("Available when you sign in"); },
@@ -210,7 +222,7 @@ export const demoBackend: Backend = {
   async resetCalendar() { throw new Error("Available when you sign in"); },
   async document(bookingId, kind, paymentId) {
     const d = data();
-    const booking = mustFind(d.bookings, bookingId, "Booking");
+    const booking = pricedBooking(bookingId);
     if (kind === "quote" && booking.status !== "enquiry") throw new Error("Quotes are only available for enquiries.");
     const documents = d.documents ??= [];
     const existing = documents.find((document) => document.bookingId === bookingId && document.kind === kind && (kind !== "receipt" || document.paymentId === paymentId));
@@ -243,7 +255,9 @@ export const demoBackend: Backend = {
   async createBooking(draft) {
     if (draft.followUpOn != null) CalendarDate.parse(draft.followUpOn);
     const repeat = draft.repeat ? RepeatInput.parse({ every_weeks: draft.repeat.everyWeeks, count: draft.repeat.count }) : null;
-    const dates = Array.from({ length: repeat?.count ?? 1 }, (_, index) => shiftDublinWeeks(draft.startAt, index * (repeat?.every_weeks ?? 1)).toISOString());
+    CreateBookingInput.parse({ client_id: draft.clientId, client: draft.client, service: draft.service, status: draft.status, start_at: draft.startAt, time_tbc: draft.timeTbc, price_cents: draft.priceCents, deposit_cents: draft.depositCents, repeat: repeat ?? undefined });
+    const start = agreedBookingStart(draft.startAt ? new Date(draft.startAt) : null, draft.timeTbc ?? false);
+    const dates = Array.from({ length: repeat?.count ?? 1 }, (_, index) => start ? shiftDublinWeeks(start, index * (repeat?.every_weeks ?? 1)).toISOString() : null);
     const d = data();
     let client: Client;
     if (draft.clientId) client = mustFind(d.clients, draft.clientId, "Client");
@@ -257,6 +271,7 @@ export const demoBackend: Backend = {
     }
     const bookings: BookingRow[] = dates.map((startAt, index) => ({
       id: id(), clientId: client.id, client, service: draft.service, startAt,
+      timeTbc: Boolean(startAt && draft.timeTbc),
       endAt: null, priceCents: draft.priceCents, depositCents: draft.depositCents,
       status: draft.status ?? "enquiry", location: draft.location, notes: draft.notes, gcalEventId: null,
       completedAt: null, createdAt: now(),
@@ -278,20 +293,28 @@ export const demoBackend: Backend = {
     const booking = mustFind(data().bookings, bookingId, "Booking");
     if (booking.status === "completed" || booking.status === "cancelled") throw new Error(`A ${booking.status} booking can't be edited`);
     if (draft.followUpOn != null && booking.status !== "enquiry") throw new Error("Only enquiries can have a follow-up date");
+    const next = { ...booking, ...draft };
+    const start = agreedBookingStart(next.startAt ? new Date(next.startAt) : null, next.timeTbc ?? false);
+    next.startAt = start?.toISOString() ?? null;
+    next.timeTbc = Boolean(start && next.timeTbc);
+    validateDetails(next);
     if (draft.priceCents !== undefined && draft.priceCents !== booking.priceCents) {
-      const owedCents = draft.priceCents - paidFor(bookingId);
+      const owedCents = (draft.priceCents ?? 0) - paidFor(bookingId);
       if (owedCents < 0) throw new Error("The price can't be less than the amount already paid.");
       const pending = data().payments.filter(payment => payment.bookingId === bookingId && payment.status === "pending");
       if (!(pending.length === 1 && pending[0].amountCents === owedCents)) voidPending(bookingId);
     }
-    Object.assign(booking, draft);
+    Object.assign(booking, next);
     save();
   },
 
-  async confirmBooking(bookingId) {
+  async confirmBooking(bookingId, details) {
     const d = data();
     const booking = mustFind(d.bookings, bookingId, "Booking");
-    booking.status = "confirmed";
+    const next = { ...booking, ...details, status: "confirmed" as const };
+    validateDetails(next);
+    if (booking.status !== "enquiry") throw new Error("Only enquiries can be confirmed");
+    Object.assign(booking, next, { timeTbc: false });
     booking.followUpOn = null;
     if (booking.depositCents > 0) {
       d.payments.push({
@@ -305,6 +328,8 @@ export const demoBackend: Backend = {
   async completeBooking(bookingId) {
     const d = data();
     const booking = mustFind(d.bookings, bookingId, "Booking");
+    validateDetails({ ...booking, status: "completed" });
+    if (booking.status !== "confirmed") throw new Error("Only confirmed bookings can be completed");
     const paid = paidFor(bookingId);
     voidPending(bookingId);
     const remainder = bookingStage(booking, d.payments).owedCents;
@@ -320,6 +345,7 @@ export const demoBackend: Backend = {
   },
 
   async cancelBooking(bookingId) {
+    validateDetails({ ...mustFind(data().bookings, bookingId, "Booking"), status: "cancelled" });
     mustFind(data().bookings, bookingId, "Booking").status = "cancelled";
     mustFind(data().bookings, bookingId, "Booking").followUpOn = null;
     voidPending(bookingId);
@@ -340,6 +366,7 @@ export const demoBackend: Backend = {
   },
 
   async paymentRequested(bookingId) {
+    pricedBooking(bookingId);
     mustFind(data().bookings, bookingId, "Booking").paymentRequestedAt = now();
     save();
   },
@@ -359,6 +386,7 @@ export const demoBackend: Backend = {
 
   async paymentLink(paymentId) {
     const payment = mustFind(data().payments, paymentId, "Payment");
+    pricedBooking(payment.bookingId);
     if (!payment.linkUrl) {
       payment.linkUrl = `https://pay.sorted.example/demo-${payment.id.slice(0, 8)}`;
       payment.method = "stripe";
@@ -369,6 +397,7 @@ export const demoBackend: Backend = {
   },
 
   async bookingPaymentLink(bookingId) {
+    pricedBooking(bookingId);
     const d = data(), booking = mustFind(d.bookings, bookingId, "Booking");
     if (booking.status !== "confirmed" && booking.status !== "completed") throw new Error("This booking cannot take payments.");
     const { owedCents } = bookingStage(booking, d.payments);
@@ -386,6 +415,7 @@ export const demoBackend: Backend = {
 
   async markPaid(paymentId, method) {
     const payment = mustFind(data().payments, paymentId, "Payment");
+    pricedBooking(payment.bookingId);
     if (payment.status !== "pending") throw new Error("Payment is not pending");
     Object.assign(payment, {
       status: "paid", method, paidAt: now(), vatRateBp: data().user.vatRegistered ? data().user.vatRateBp : 0,
@@ -394,6 +424,7 @@ export const demoBackend: Backend = {
   },
 
   async recordPayment(bookingId, input) {
+    pricedBooking(bookingId);
     const parsed = RecordPaymentInput.parse(input);
     const d = data();
     const booking = mustFind(d.bookings, bookingId, "Booking");
@@ -415,7 +446,7 @@ export const demoBackend: Backend = {
 
   async editPayment(paymentId, input) {
     const parsed = EditPaymentInput.parse(input), d = data();
-    const payment = mustFind(d.payments, paymentId, "Payment"), booking = mustFind(d.bookings, payment.bookingId, "Booking");
+    const payment = mustFind(d.payments, paymentId, "Payment"), booking = pricedBooking(payment.bookingId);
     if (payment.method === "stripe") throw new Error("Paid by card — refund it in Stripe");
     if (payment.status !== "paid") throw new Error("Only paid payments can be corrected.");
     if (d.documents.some(document => document.kind === "receipt" && document.paymentId === paymentId)) throw new Error("A receipt was issued for this payment. Undo it and record it again.");
@@ -434,7 +465,7 @@ export const demoBackend: Backend = {
     payment.status = "cancelled";
     for (const document of d.documents) if (document.kind === "receipt" && document.paymentId === paymentId) document.voidedAt = now();
     const booking = mustFind(d.bookings, payment.bookingId, "Booking"), pending = d.payments.filter(item => item.bookingId === booking.id && item.status === "pending");
-    if (pending.length !== 1 || pending[0].amountCents !== booking.priceCents - paidFor(booking.id)) voidPending(booking.id);
+    if (pending.length !== 1 || booking.priceCents === null || pending[0].amountCents !== booking.priceCents - paidFor(booking.id)) voidPending(booking.id);
     save();
   },
 

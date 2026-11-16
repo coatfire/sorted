@@ -23,7 +23,8 @@ export function BookingMessageSheet(props: MessageSheetProps) {
   const { user, payments } = useData();
   const [continued, setContinued] = useState(false);
   const paid = payments.filter(payment => payment.bookingId === props.booking.id && payment.status === "paid").reduce((sum, payment) => sum + payment.amountCents, 0);
-  if (!continued && needsPaymentDetails(user, props.kind, Math.max(0, props.booking.depositCents - paid), Math.max(0, props.booking.priceCents - paid))) {
+  if (props.kind === "payment_request" && props.booking.priceCents === null) return <Sheet title="Request payment" onClose={props.onClose}><p>Add a price first</p><Button onClick={props.onClose}>Close</Button></Sheet>;
+  if (!continued && needsPaymentDetails(user, props.kind, Math.max(0, props.booking.depositCents - paid), Math.max(0, (props.booking.priceCents ?? 0) - paid))) {
     return <Sheet title="How should clients pay you?" onClose={props.onClose}><PaymentDetailsPrompt onContinue={() => setContinued(true)} /></Sheet>;
   }
   return <BookingDraftSheet {...props} />;
@@ -35,7 +36,7 @@ function BookingDraftSheet({ booking, kind, onClose, initialAmountCents, request
   const client = booking.client;
   const theirs = payments.filter((payment) => payment.bookingId === booking.id && payment.status !== "cancelled");
   const paid = theirs.filter((payment) => payment.status === "paid").reduce((sum, payment) => sum + payment.amountCents, 0);
-  const balanceCents = Math.max(0, booking.priceCents - paid);
+  const balanceCents = Math.max(0, (booking.priceCents ?? 0) - paid);
   const confirmation = kind === "confirmation";
   const [amount, setAmount] = useState(centsToInput(initialAmountCents ?? balanceCents));
   const requested = parseEuros(amount);
@@ -48,8 +49,8 @@ function BookingDraftSheet({ booking, kind, onClose, initialAmountCents, request
     kind, revolutLink: user.revolutLink,
     client: client.name,
     business: user.businessName || user.name || "your trader",
-    date: longDay(booking.startAt),
-    time: time(booking.startAt),
+    date: booking.startAt ? longDay(booking.startAt) : null,
+    time: booking.startAt && !booking.timeTbc ? time(booking.startAt) : null,
     service: booking.service,
     priceCents: booking.priceCents,
     depositCents: booking.depositCents,

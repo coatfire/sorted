@@ -37,7 +37,7 @@ export function ClientDetail() {
 
   const theirs = bookings
     .filter((booking) => booking.clientId === client.id)
-    .sort((a, b) => b.startAt.localeCompare(a.startAt));
+    .sort((a, b) => (b.startAt ?? "").localeCompare(a.startAt ?? ""));
   const ids = new Set(theirs.map((booking) => booking.id));
   const hasPaymentHistory = payments.some((payment) => ids.has(payment.bookingId) && (payment.status === "paid" || payment.paidAt !== null));
   const hasOpenBookings = theirs.some((booking) => booking.status === "enquiry" || booking.status === "confirmed");

@@ -32,7 +32,7 @@ export function FollowUpLater({ booking, onClose }: { booking: BookingRow; onClo
 function FollowUpMessage({ booking, onClose }: { booking: BookingRow; onClose: () => void }) {
   const { user } = useData();
   const [channel, setChannel] = useState<"whatsapp" | "email" | null>(null);
-  const [message, setMessage] = useState(`Hi ${firstName(booking.client.name)}, just following up on your enquiry about ${booking.service} on ${longDay(booking.startAt)}. Would you like me to book you in?\n\n${user.businessName || user.name || "Your trader"}`);
+  const [message, setMessage] = useState(`Hi ${firstName(booking.client.name)}, just following up on your enquiry about ${booking.service}${booking.startAt ? ` on ${longDay(booking.startAt)}` : " — date to be agreed"}${booking.timeTbc ? ", time to be agreed" : ""}. Would you like me to book you in?\n\n${user.businessName || user.name || "Your trader"}`);
   const email = booking.client.email;
   const emailLink = email ? `mailto:${encodeURIComponent(email).replace(/%40/g, "@")}?subject=${encodeURIComponent(`Your enquiry — ${booking.service}`)}&body=${encodeURIComponent(message)}` : "";
   return <Sheet title="Follow up" onClose={onClose}>

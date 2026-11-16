@@ -70,7 +70,7 @@ it.each([false, true])("undo retains the payment and frozen receipt, with receip
     expect(document.receiptSnapshot).toEqual(receipt.receiptSnapshot); expect(document.documentSnapshot).toEqual(receipt.documentSnapshot);
     const data = assembleBookingDocument(
       { ...f.user, createdAt: f.user.createdAt.toISOString(), emailVerifiedAt: f.user.emailVerifiedAt?.toISOString() ?? null, driveBackedUpAt: f.user.driveBackedUpAt?.toISOString() ?? null },
-      { ...f.booking, startAt: f.booking.startAt.toISOString(), endAt: null, completedAt: null, paymentRequestedAt: null, createdAt: f.booking.createdAt.toISOString() },
+      { ...f.booking, startAt: f.booking.startAt?.toISOString() ?? null, endAt: null, completedAt: null, paymentRequestedAt: null, createdAt: f.booking.createdAt.toISOString() },
       { ...f.client, createdAt: f.client.createdAt.toISOString() }, [], document,
     );
     expect(data.voided).toBe(true); expect(data.total).toBe(receipt.documentSnapshot!.data.total);
@@ -82,7 +82,7 @@ it("excludes undone payments from totals, tax, yearly income, CSVs and refreshed
   vi.stubEnv("GOOGLE_CLIENT_ID", "test-client");
   const f = await fixture(); await f.receipt(); await f.undo();
   const payments = (await f.payments()).map(payment => ({ ...payment, paidAt: payment.paidAt?.toISOString() ?? null, createdAt: payment.createdAt.toISOString() }));
-  const booking = { ...f.booking, startAt: f.booking.startAt.toISOString() }, now = new Date("2025-12-31");
+  const booking = { ...f.booking, startAt: f.booking.startAt?.toISOString() ?? null }, now = new Date("2025-12-31");
   expect(bookingStage(booking, payments, now)).toEqual({ stage: "owing", owedCents: 10000 });
   expect(moneyOwed([booking], payments, now).dueNowCents).toBe(10000);
   expect(taxEstimate({ payments, expenses: [], settings: f.user, now }).yearIncomeCents).toBe(0);

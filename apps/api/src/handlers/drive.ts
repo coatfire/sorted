@@ -34,7 +34,7 @@ driveRoutes.get("/files", async (c) => {
   return c.json<DriveBackup>({ userId, logo: user.invoiceLogo, years: [...years].sort(), photos: photos.map((photo) => ({ ...photo, date: photo.date.toISOString().slice(0, 10) })), documents: documents.map(({ document, booking, client }) => {
     const data = assembleBookingDocument(
       safeUser,
-      { ...booking, startAt: booking.startAt.toISOString(), endAt: booking.endAt?.toISOString() ?? null, completedAt: booking.completedAt?.toISOString() ?? null, paymentRequestedAt: booking.paymentRequestedAt?.toISOString() ?? null, createdAt: booking.createdAt.toISOString() },
+      { ...booking, startAt: booking.startAt?.toISOString() ?? null, endAt: booking.endAt?.toISOString() ?? null, completedAt: booking.completedAt?.toISOString() ?? null, paymentRequestedAt: booking.paymentRequestedAt?.toISOString() ?? null, createdAt: booking.createdAt.toISOString() },
       { ...client, createdAt: client.createdAt.toISOString() }, paid,
       { ...document, issuedAt: document.issuedAt.toISOString(), voidedAt: document.voidedAt?.toISOString() ?? null },
     );

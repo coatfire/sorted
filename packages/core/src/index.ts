@@ -13,3 +13,4 @@ export * from "./services";
 export * from "./bookingStage";
 export * from "./money";
 export * from "./agenda";
+export * from "./enquiries";

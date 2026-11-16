@@ -2,14 +2,15 @@ import type { ExpenseCategory, MessageLogEntry, Payment } from "@sorted/core";
 import { calendarDaysBetween, dublinDateTime, irelandToday, normaliseClientPhone } from "@sorted/core";
 export { formatPhone } from "@sorted/core";
 
-export function jobDateLabel(startAt: string, now = new Date()) {
+export function jobDateLabel(startAt: string | null, now = new Date()) {
+  if (startAt === null) return "Date to be agreed";
   const days = calendarDaysBetween(irelandToday(now), dublinDateTime(startAt).date);
   if (days === 0) return "job today";
   if (days < 0) return `job was ${-days} ${days === -1 ? "day" : "days"} ago`;
   return `job on ${new Intl.DateTimeFormat("en-IE", { weekday: "short", day: "numeric", month: "short", timeZone: "Europe/Dublin" }).format(new Date(startAt)).replace(/,/g, "")}`;
 }
 
-export const euros = (cents: number) =>
+export const euros = (cents: number | null) => cents === null ? "Price to be agreed" :
   new Intl.NumberFormat("en-IE", { style: "currency", currency: "EUR" }).format(cents / 100);
 
 /** "12,50" / "€12.5" / "1,250.00" → cents, or null if it isn't money. */
@@ -22,12 +23,12 @@ export function parseEuros(input: string): number | null {
   return Math.round(Number(text) * 100);
 }
 
-export const centsToInput = (cents: number) =>
+export const centsToInput = (cents: number | null) => cents === null ? "" :
   cents % 100 === 0 ? String(cents / 100) : (cents / 100).toFixed(2);
 
 const fmt = (options: Intl.DateTimeFormatOptions) => {
-  const formatter = new Intl.DateTimeFormat("en-IE", options);
-  return (value: string | Date) => formatter.format(new Date(value));
+  const formatter = new Intl.DateTimeFormat("en-IE", { timeZone: "Europe/Dublin", ...options });
+  return (value: string | Date | null) => value === null ? options.hour && !options.day ? "Time to be agreed" : "Date to be agreed" : formatter.format(new Date(value));
 };
 
 export const time = fmt({ hour: "2-digit", minute: "2-digit", hour12: false });

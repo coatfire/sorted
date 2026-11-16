@@ -52,6 +52,7 @@ export const apiBackend: Backend = {
       status: draft.status,
       service: draft.service,
       start_at: draft.startAt,
+      time_tbc: draft.timeTbc,
       follow_up_on: draft.followUpOn,
       repeat: draft.repeat ? { every_weeks: draft.repeat.everyWeeks, count: draft.repeat.count } : undefined,
       price_cents: draft.priceCents,
@@ -64,6 +65,7 @@ export const apiBackend: Backend = {
     await patch(`/bookings/${id}`, {
       service: draft.service,
       start_at: draft.startAt,
+      time_tbc: draft.timeTbc,
       follow_up_on: draft.followUpOn,
       price_cents: draft.priceCents,
       deposit_cents: draft.depositCents,
@@ -72,7 +74,7 @@ export const apiBackend: Backend = {
     });
   },
 
-  confirmBooking: (id) => post(`/bookings/${id}/confirm`),
+  confirmBooking: (id, details) => post(`/bookings/${id}/confirm`, details ? { start_at: details.startAt, time_tbc: details.timeTbc, price_cents: details.priceCents } : {}),
   completeBooking: (id) => post(`/bookings/${id}/complete`),
   cancelBooking: (id) => post(`/bookings/${id}/cancel`),
   followUp: (id, date) => patch(`/bookings/${id}`, { follow_up_on: date }),

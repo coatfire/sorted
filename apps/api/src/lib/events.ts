@@ -60,7 +60,7 @@ export async function emitBookingEvent(
         ),
       );
 
-    if (!row) return;
+    if (!row || !row.booking.startAt || row.booking.priceCents === null) return;
 
     await emitEvent({
       event,
