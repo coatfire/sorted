@@ -17,7 +17,7 @@ it("loads the production bundle without local database drivers installed", async
       target: "node20",
       format: "esm",
       external: ["@electric-sql/pglite"],
-      banner: { js: "import { createRequire } from 'module'; const require = createRequire(import.meta.url);" },
+      banner: { js: "import { createRequire as bannerRequire } from 'module'; const require = bannerRequire(import.meta.url);" },
       write: false,
     });
     const entry = join(dir, "index.mjs");

@@ -9,10 +9,13 @@ export type ExportRange = z.infer<typeof ExportRange>;
 
 export const yearRange = (year: number): ExportRange => ({ from: `${year}-01-01`, to: `${year}-12-31` });
 
-/** "sorted-2025.csv" for a whole calendar year, otherwise the two dates. */
-export function exportFileName({ from, to }: ExportRange): string {
+export const ExportFormat = z.enum(["xlsx", "csv"]);
+export type ExportFormat = z.infer<typeof ExportFormat>;
+
+/** "sorted-2025.xlsx" for a whole calendar year, otherwise the two dates. */
+export function exportFileName({ from, to }: ExportRange, format: ExportFormat = "csv"): string {
   const year = from.slice(0, 4);
-  return from === `${year}-01-01` && to === `${year}-12-31` ? `sorted-${year}.csv` : `sorted-${from}-to-${to}.csv`;
+  return `sorted-${from === `${year}-01-01` && to === `${year}-12-31` ? year : `${from}-to-${to}`}.${format}`;
 }
 
 /**

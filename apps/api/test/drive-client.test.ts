@@ -37,7 +37,7 @@ function fixture({ failUpload = false, closePopup = false, empty = false, existi
   const backedUp = vi.fn(async () => { expect(uploads).toHaveLength(empty ? 1 : 2); return { driveBackedUpAt: "2026-07-01T12:00:00Z" }; });
   const backend = {
     driveFiles: vi.fn(async () => ({ userId: "user-1", logo: null, documents: [], photos: [], years: empty ? [] : [2024, 2026] })),
-    exportCsv: vi.fn(async () => new Blob(["INCOME"], { type: "text/csv" })),
+    exportFile: vi.fn(async () => new Blob(["INCOME"], { type: "text/csv" })),
     driveBackedUp: backedUp,
   } as unknown as Backend;
   return { backend, uploads, fetchMock, tokenClient, requestAccessToken, identity, backedUp };
@@ -108,14 +108,14 @@ describe("browser-driven Drive backup", () => {
   it.each([false, true])("rewrites a previously backed-up year after its final entry moves away, with no current files: %s", async empty => {
     const f = fixture({ empty, existingRoot: true });
     vi.mocked(f.backend.driveFiles).mockResolvedValue({ userId: "user-1", logo: null, documents: [], photos: [], years: empty ? [] : [2026] });
-    vi.mocked(f.backend.exportCsv).mockImplementation(async range => new Blob([range.from === "2024-01-01" ? "HEADER\n" : "HEADER\ncorrected-payment\n"], { type: "text/csv" }));
+    vi.mocked(f.backend.exportFile).mockImplementation(async range => new Blob([range.from === "2024-01-01" ? "HEADER\n" : "HEADER\ncorrected-payment\n"], { type: "text/csv" }));
     await backUpToDrive(Promise.resolve("test-drive-token"), f.backend, vi.fn());
-    expect(f.backend.exportCsv).toHaveBeenCalledWith({ from: "2024-01-01", to: "2024-12-31" });
+    expect(f.backend.exportFile).toHaveBeenCalledWith({ from: "2024-01-01", to: "2024-12-31" }, "csv");
     const old = f.uploads.find(upload => upload.url.includes("/files/csv-2024?"))!;
     expect(old.init.method).toBe("PATCH");
     expect(await (old.init.body as Blob).text()).toContain("HEADER\n");
     expect(await (old.init.body as Blob).text()).not.toContain("corrected-payment");
-    if (!empty) expect(f.backend.exportCsv).toHaveBeenCalledWith({ from: "2026-01-01", to: "2026-12-31" });
+    if (!empty) expect(f.backend.exportFile).toHaveBeenCalledWith({ from: "2026-01-01", to: "2026-12-31" }, "csv");
     expect(f.backedUp).toHaveBeenCalledOnce();
   });
   it("does not upload or mark completion after popup dismissal", async () => {

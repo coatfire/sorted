@@ -99,7 +99,7 @@ export async function backUpToDrive(tokenResponse: Promise<string>, backend: Bac
           const { createBookingPdf } = await import("./bookingPdf");
           const document = backup.documents[file.index];
           blob = await createBookingPdf({ ...document, logo: document.logo === undefined ? backup.logo : document.logo });
-        } else if (file.kind === "csv") blob = await backend.exportCsv(yearRange(file.index));
+        } else if (file.kind === "csv") blob = await backend.exportFile(yearRange(file.index), "csv");
         else {
           const photo = backup.photos[file.index];
           const url = await backend.receiptUrl(photo);

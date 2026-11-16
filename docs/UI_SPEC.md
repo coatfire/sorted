@@ -362,7 +362,7 @@ Order: heading → Owed hero → Due now → Coming up → This year → collaps
   Paid income after recorded VAT, confirmed expenses after reclaimable VAT, and
   profit before income tax use the tax estimate's exact YTD basis.
   Monthly paid-income bars use the same net basis and exclude future receipts.
-  Keep **Export for accountant**, downloading the year's cash-basis CSV; no
+  Keep **Export for accountant**, downloading the period's cash-basis Excel file (.xlsx); no
   changes to the underlying export's financial records.
 - **Tax estimate (rough guide):** secondary native disclosure below This year,
   collapsed by default. Expanded: caveat, VAT-period sales/reclaimable VAT and

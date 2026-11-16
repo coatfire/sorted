@@ -32,7 +32,7 @@ it("exports accented names so Excel and Sheets read them as UTF-8", async () => 
 
 it("the demo export opens the same way", async () => {
   resetDemo();
-  const blob = await demoBackend.exportCsv({ from: "2000-01-01", to: "2099-12-31" });
+  const blob = await demoBackend.exportFile({ from: "2000-01-01", to: "2099-12-31" }, "csv");
   expect(firstBytes(await blob.arrayBuffer())).toEqual(BOM);
   expect(blob.type).toBe("text/csv;charset=utf-8");
 });
