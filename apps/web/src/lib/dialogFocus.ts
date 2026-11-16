@@ -1,8 +1,13 @@
+let scrollLocks = 0;
+let originalOverflow = "";
+
 export function manageDialogFocus(panel: HTMLElement, onClose: () => void) {
   const previous = document.activeElement;
-  const overflow = document.body.style.overflow;
+  const body = document.body;
+  if (scrollLocks === 0) originalOverflow = body.style.overflow;
+  scrollLocks += 1;
   panel.focus();
-  document.body.style.overflow = "hidden";
+  body.style.overflow = "hidden";
   const onKey = (event: KeyboardEvent) => {
     if (event.key === "Escape") {
       event.preventDefault();
@@ -27,9 +32,13 @@ export function manageDialogFocus(panel: HTMLElement, onClose: () => void) {
     }
   };
   document.addEventListener("keydown", onKey);
+  let released = false;
   return () => {
+    if (released) return;
+    released = true;
     document.removeEventListener("keydown", onKey);
-    document.body.style.overflow = overflow;
+    scrollLocks -= 1;
+    if (scrollLocks === 0) body.style.overflow = originalOverflow;
     if (previous instanceof HTMLElement) previous.focus();
   };
 }
