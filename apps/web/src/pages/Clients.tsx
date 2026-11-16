@@ -3,8 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { CreateClientInput, formatPhone, normaliseClientPhone } from "@sorted/core";
 import { BackButton, Button, Card, EmptyState, Field, Icon, PageHeader, Sheet } from "../components";
 import { useAction, useData, useStore } from "../lib/store";
-
-const plain = (value: string) => value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+import { searchClients } from "../lib/clientSearch";
 
 export function Clients() {
   const { clients, bookings } = useData();
@@ -21,9 +20,7 @@ export function Clients() {
     return counts;
   }, [bookings]);
   const sorted = useMemo(() => [...clients].sort((a, b) => a.name.localeCompare(b.name, "en-IE", { sensitivity: "base" })), [clients]);
-  // "grainne" finds Gráinne, and digits find a number however it was typed.
-  const text = plain(query.trim()), digits = query.replace(/\D/g, "").replace(/^0/, "");
-  const shown = text ? sorted.filter((client) => plain(client.name).includes(text) || (client.email ?? "").toLowerCase().includes(text) || (digits.length >= 3 && (client.phone ?? "").includes(digits))) : sorted;
+  const shown = searchClients(sorted, query);
 
   async function add(event: React.FormEvent) {
     event.preventDefault();

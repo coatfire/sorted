@@ -5,6 +5,7 @@ import { app } from "../src/app";
 import { db, schema } from "../src/db";
 import { issueJwt } from "../src/lib/auth";
 import { demoBackend, resetDemo } from "../../web/src/lib/demoBackend";
+import { searchClients } from "../../web/src/lib/clientSearch";
 
 afterEach(() => { vi.unstubAllGlobals(); });
 
@@ -151,5 +152,18 @@ describe("importing clients in the demo", () => {
     expect(await demoBackend.imports()).toEqual([]);
     const added = await demoBackend.createClient({ name: "Hand Added", phone: "085 222 3333" });
     expect((await demoBackend.load()).clients.find((client) => client.id === added.id)).toMatchObject({ name: "Hand Added", phone: "353852223333" });
+  });
+});
+
+describe("searching clients", () => {
+  const clients = [{ name: "Gráinne Flynn", phone: "353871234567", email: "grainne@example.com" }, { name: "Seán Byrne", phone: null, email: null }];
+  it("finds by name without accents, by email, and by a number however it is typed", () => {
+    const found = (query: string) => searchClients(clients, query).map((client) => client.name);
+    expect(found(" grainne ")).toEqual(["Gráinne Flynn"]);
+    expect(found("SEAN")).toEqual(["Seán Byrne"]);
+    expect(found("example.com")).toEqual(["Gráinne Flynn"]);
+    for (const query of ["087 123", "0871234567", "00353 87 123 4567", "+353 87 123 4567", "353871234567"]) expect(found(query)).toEqual(["Gráinne Flynn"]);
+    expect(found("zzz")).toEqual([]);
+    expect(found("")).toHaveLength(2);
   });
 });
