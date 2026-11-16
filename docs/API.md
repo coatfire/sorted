@@ -383,8 +383,9 @@ failures logged, never block the response.
 Enquiries may omit `start_at` and/or `price_cents` (stored as null).
 `time_tbc` defaults to false. With a known date but unknown time, send
 `time_tbc: true`; the API stores Ireland-local midnight for that date.
-Clearing `time_tbc` on update or confirmation requires a non-null `start_at`
-in the same request; otherwise the API returns 422, `Add a time`.
+Clearing `time_tbc` requires `start_at` in the same request; omitting it returns
+422, `Add a time`. Explicit null clears the date and time on an enquiry.
+Confirmation still requires an agreed date and time, so cannot accept null.
 This is an all-day placeholder, not an agreed appointment time.
 An unknown price requires a zero deposit. Repeats require a date.
 

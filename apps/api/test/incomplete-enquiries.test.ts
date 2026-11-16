@@ -41,15 +41,24 @@ describe("incomplete enquiry API", () => {
     const booking = await (await f.create({ start_at: "2027-07-10T12:00:00Z", time_tbc: true, price_cents: 8000 })).json() as Booking;
     const path = `/bookings/${booking.id}${action === "confirm" ? "/confirm" : ""}`;
     const method = action === "confirm" ? "POST" : "PATCH";
-    for (const input of [{ time_tbc: false }, { time_tbc: false, start_at: null }]) {
-      const response = await f.request(path, input, method);
-      expect(response.status).toBe(422);
-      expect(await response.json()).toEqual({ error: "Add a time" });
-    }
+    const rejected = await f.request(path, { time_tbc: false }, method);
+    expect(rejected.status).toBe(422);
+    expect(await rejected.json()).toEqual({ error: "Add a time" });
     expect((await f.request(`/bookings/${booking.id}/confirm`)).status).toBe(422);
     const response = await f.request(path, { time_tbc: false, start_at: "2027-07-10T09:30:00Z" }, method);
     expect(response.status).toBe(200);
     expect(await response.json()).toMatchObject({ startAt: "2027-07-10T09:30:00.000Z", timeTbc: false, status: action === "confirm" ? "confirmed" : "enquiry" });
+  });
+  it("allows clearing a time-TBC date without confirming its midnight placeholder", async () => {
+    const f = await fixture();
+    const booking = await (await f.create({ start_at: "2027-07-10T12:00:00Z", time_tbc: true, price_cents: 8000 })).json() as Booking;
+    const incomplete = await f.request(`/bookings/${booking.id}/confirm`, { start_at: null, time_tbc: false });
+    expect(incomplete.status).toBe(422);
+    expect(await incomplete.json()).toEqual({ error: "Add date, time before confirming this booking." });
+    const cleared = await f.request(`/bookings/${booking.id}`, { start_at: null, time_tbc: false }, "PATCH");
+    expect(cleared.status).toBe(200);
+    expect(await cleared.json()).toMatchObject({ startAt: null, timeTbc: false, status: "enquiry", priceCents: 8000 });
+    expect((await f.request(`/bookings/${booking.id}/confirm`)).status).toBe(422);
   });
   it("saves absent details as null, returns a clear confirm 422, then confirms after a scoped update", async () => {
     const f = await fixture();
@@ -191,13 +200,16 @@ describe("incomplete enquiry core", () => {
     await expect(demoBackend.recordPayment(created.id, { amount_cents: 100, method: "cash" })).rejects.toThrow("Add a price first");
     await demoBackend.updateBooking(created.id, { ...draft, startAt: "2027-07-10T12:00:00Z", timeTbc: true });
     expect((await demoBackend.load()).bookings.find(booking => booking.id === created.id)?.startAt).toBe("2027-07-09T23:00:00.000Z");
-    for (const omitStart of [true, false]) {
-      const invalid = { ...draft, timeTbc: false };
-      if (omitStart) Reflect.deleteProperty(invalid, "startAt");
-      await expect(demoBackend.updateBooking(created.id, invalid)).rejects.toThrow("Add a time");
-      await expect(demoBackend.confirmBooking(created.id, invalid)).rejects.toThrow("Add a time");
-    }
+    const invalid = { ...draft, timeTbc: false };
+    Reflect.deleteProperty(invalid, "startAt");
+    await expect(demoBackend.updateBooking(created.id, invalid)).rejects.toThrow("Add a time");
+    await expect(demoBackend.confirmBooking(created.id, invalid)).rejects.toThrow("Add a time");
+    await expect(demoBackend.confirmBooking(created.id, { startAt: null, timeTbc: false, priceCents: 7000 })).rejects.toThrow(/date, time/);
     expect((await demoBackend.load()).bookings.find(booking => booking.id === created.id)).toMatchObject({ status: "enquiry", timeTbc: true, startAt: "2027-07-09T23:00:00.000Z" });
+    const undated = await demoBackend.createBooking({ ...draft, startAt: "2027-07-10T12:00:00Z", timeTbc: true, priceCents: 7000 });
+    await demoBackend.updateBooking(undated.id, { ...draft, timeTbc: false, priceCents: 7000 });
+    expect((await demoBackend.load()).bookings.find(booking => booking.id === undated.id)).toMatchObject({ startAt: null, timeTbc: false, status: "enquiry", priceCents: 7000 });
+    await expect(demoBackend.confirmBooking(undated.id)).rejects.toThrow(/date, time/);
     await demoBackend.confirmBooking(created.id, { startAt: "2027-07-10T09:00:00Z", timeTbc: false, priceCents: 7000 });
     expect((await demoBackend.load()).bookings.find(booking => booking.id === created.id)).toMatchObject({ status: "confirmed", timeTbc: false, priceCents: 7000 });
   });

@@ -300,7 +300,7 @@ bookingRoutes.post("/:id/confirm", async (c) => {
 
     if (!row) return c.json({ error: "Booking not found" }, 404);
     const input = parsed.data;
-    if (row.booking.timeTbc && input.time_tbc === false && input.start_at == null) return c.json({ error: "Add a time" }, 422);
+    if (row.booking.timeTbc && input.time_tbc === false && input.start_at === undefined) return c.json({ error: "Add a time" }, 422);
     const timeTbc = input.time_tbc ?? row.booking.timeTbc;
     const startAt = agreedBookingStart(input.start_at === undefined ? row.booking.startAt : input.start_at, timeTbc);
     const priceCents = input.price_cents === undefined ? row.booking.priceCents : input.price_cents;
@@ -415,7 +415,7 @@ bookingRoutes.patch("/:id", async (c) => {
       );
     }
     const priceCents = input.price_cents === undefined ? current.priceCents : input.price_cents;
-    if (current.timeTbc && input.time_tbc === false && input.start_at == null) return c.json({ error: "Add a time" }, 422);
+    if (current.timeTbc && input.time_tbc === false && input.start_at === undefined) return c.json({ error: "Add a time" }, 422);
     const timeTbc = input.time_tbc ?? current.timeTbc;
     const startAt = agreedBookingStart(input.start_at === undefined ? current.startAt : input.start_at, timeTbc);
     const missing = missingBookingDetails({ startAt, timeTbc, priceCents });

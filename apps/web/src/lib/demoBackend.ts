@@ -294,7 +294,7 @@ export const demoBackend: Backend = {
     const booking = mustFind(data().bookings, bookingId, "Booking");
     if (booking.status === "completed" || booking.status === "cancelled") throw new Error(`A ${booking.status} booking can't be edited`);
     if (draft.followUpOn != null && booking.status !== "enquiry") throw new Error("Only enquiries can have a follow-up date");
-    if (booking.timeTbc && draft.timeTbc === false && draft.startAt == null) throw new Error("Add a time");
+    if (booking.timeTbc && draft.timeTbc === false && draft.startAt === undefined) throw new Error("Add a time");
     const next = { ...booking, ...draft };
     const start = agreedBookingStart(next.startAt ? new Date(next.startAt) : null, next.timeTbc ?? false);
     next.startAt = start?.toISOString() ?? null;
@@ -313,7 +313,7 @@ export const demoBackend: Backend = {
   async confirmBooking(bookingId, details) {
     const d = data();
     const booking = mustFind(d.bookings, bookingId, "Booking");
-    if (booking.timeTbc && details?.timeTbc === false && details.startAt == null) throw new Error("Add a time");
+    if (booking.timeTbc && details?.timeTbc === false && details.startAt === undefined) throw new Error("Add a time");
     const next = { ...booking, ...details, status: "confirmed" as const };
     validateDetails(next);
     if (booking.status !== "enquiry") throw new Error("Only enquiries can be confirmed");
