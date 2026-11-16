@@ -1269,7 +1269,6 @@ a.button { text-decoration: none; }
 .receipt-upload > span, .receipt-file > span { display: flex; min-width: 0; flex-direction: column; gap: 2px; }
 .receipt-upload strong, .receipt-file strong { overflow: hidden; font-size: 0.9rem; text-overflow: ellipsis; white-space: nowrap; }
 .receipt-upload small, .receipt-file small { color: #557160; font-size: 0.72rem; }
-||||||| parent of 7031616 (List issued documents on the client page with Send and an optional Google review link)
 .document-row { display: flex; min-height: 68px; align-items: center; gap: 8px; padding: 8px 14px; }
 .document-row:not(:last-child) { border-bottom: 1px solid var(--line); }
 .document-row .button { width: auto; min-height: 44px; flex: none; padding: 0 16px; }
