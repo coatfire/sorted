@@ -32,7 +32,8 @@ profit, categorised, exportable. That is a relational aggregation problem
 (`SUM(payments) GROUP BY month`, `SUM(expenses) GROUP BY category`). Doing that
 in DynamoDB means either scanning tables or maintaining aggregate items by hand.
 Supabase hosts Postgres. The API connects through its transaction pooler on
-port 6543 using postgres-js (`prepare: false`, `max: 2`) and Drizzle.
+port 6543 using postgres-js (`prepare: false`, `max: 2`, `max_pipeline: 1`,
+`query_timeout: 20`; see `apps/api/src/db/pool.ts`) and Drizzle.
 Local development and tests use embedded Postgres (PGlite).
 
 ### Atomic writes and post-commit side effects

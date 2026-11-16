@@ -111,7 +111,10 @@ and the PGlite fallback even if `NODE_ENV` is not `production`.
 
 The production driver is postgres-js with `prepare: false` (required by the
 transaction pooler) and a pool of at most two connections per serverless
-instance. PGlite is still used locally and in tests. Booking creation,
+instance. `max_pipeline: 1` sends one query per connection at a time, because
+the pooler stops answering queries pipelined on one connection and the request
+then hangs until Vercel kills it after 300 seconds. `query_timeout: 20` fails a
+query the pooler never answers instead of waiting. PGlite is still used locally and in tests. Booking creation,
 confirmation, completion, cancellation, and expense/receipt deletion use
 transactions; booking status transitions lock the booking row. External
 side effects and emitted events run only after commit. This replaces the old

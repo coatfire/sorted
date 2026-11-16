@@ -2,6 +2,7 @@ import { createRequire as createLocalRequire } from "node:module";
 import postgres from "postgres";
 import { drizzle, type PostgresJsDatabase } from "drizzle-orm/postgres-js";
 import * as schema from "./schema";
+import { POOL } from "./pool";
 
 /**
  * Two drivers, one query API:
@@ -17,7 +18,7 @@ type Db = PostgresJsDatabase<typeof schema>;
 
 async function connect(): Promise<Db> {
   const url = process.env.DATABASE_URL;
-  if (url) return drizzle(postgres(url, { prepare: false, max: 2 }), { schema });
+  if (url) return drizzle(postgres(url, POOL), { schema });
 
   if (process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME || process.env.NODE_ENV === "production") {
     throw new Error("DATABASE_URL is required in production");
