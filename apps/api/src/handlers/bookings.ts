@@ -189,7 +189,7 @@ bookingRoutes.post("/:id/documents", async (c) => {
       paymentId: kind === "receipt" ? paymentId : null, receiptSnapshot,
     }).returning();
     const documentSnapshot = snapshotDocument(
-      { ...taxSettings, createdAt: taxSettings.createdAt.toISOString(), emailVerifiedAt: taxSettings.emailVerifiedAt?.toISOString() ?? null, driveBackedUpAt: taxSettings.driveBackedUpAt?.toISOString() ?? null },
+      { ...taxSettings, createdAt: taxSettings.createdAt.toISOString(), emailVerifiedAt: taxSettings.emailVerifiedAt?.toISOString() ?? null, driveBackedUpAt: taxSettings.driveBackedUpAt?.toISOString() ?? null, importOfferClosedAt: taxSettings.importOfferClosedAt?.toISOString() ?? null },
       { ...booking, startAt: booking.startAt?.toISOString() ?? null, endAt: booking.endAt?.toISOString() ?? null, completedAt: booking.completedAt?.toISOString() ?? null, paymentRequestedAt: booking.paymentRequestedAt?.toISOString() ?? null, createdAt: booking.createdAt.toISOString() },
       { ...client, createdAt: client.createdAt.toISOString() },
       paidPayments.map((payment) => ({ ...payment, paidAt: payment.paidAt?.toISOString() ?? null, createdAt: payment.createdAt.toISOString() })),

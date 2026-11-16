@@ -166,6 +166,17 @@ GDPR client anonymisation replaces the client section of retained snapshots
 with `Deleted client` and no email/phone, in the same transaction as the live
 records. Financial, VAT and business data remain unchanged.
 
+### Import offer
+
+`GET /auth/me` returns `importOfferClosedAt`: null while Today should still
+offer import, otherwise when the trader dismissed the offer or first imported
+(`users.import_offer_closed_at`, migration 0024). `PATCH /auth/me` accepts
+`import_offer_closed: true` to dismiss it. It is one-way: any other value is a
+400, and a later `true` keeps the first time. `POST /imports/clients` and
+`POST /imports/history` set it in the same transaction when they add something,
+and leave it alone when the file adds nothing. Undoing an import does not clear
+it. Migration 0024 closes the offer for accounts that already have an import.
+
 ### Revolut payment details
 
 `PATCH /auth/me` accepts optional `revolut_link`: a username, `@username`,

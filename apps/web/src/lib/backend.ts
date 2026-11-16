@@ -142,6 +142,7 @@ export interface Backend {
     invoiceFooter?: string | null;
     vatNumber?: string | null;
     revolutLink?: string | null;
+    importOfferClosed?: true;
     services?: Service[];
     vatRegistered?: boolean;
     vatRateBp?: number | null;

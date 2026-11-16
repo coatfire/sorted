@@ -164,6 +164,8 @@ export type UpdateBookingInput = z.infer<typeof UpdateBookingInput>;
 export const UpdateUserInput = z.object({
   services: ServicesInput.optional(),
   revolut_link: z.union([z.string().trim().length(0).transform(() => null), RevolutLink]).nullable().optional(),
+  /** Stop offering import on Today. It cannot be switched back on; Import stays in Settings. */
+  import_offer_closed: z.literal(true).optional(),
   vat_registered: z.boolean().optional(),
   vat_rate_bp: VatRateBp.nullable().optional(),
   vat_period_months: VatPeriodMonths.optional(),
@@ -247,6 +249,7 @@ export const ConfirmExpenseInput = z.object(expenseFields).refine(expenseVatWith
 export interface User {
   services?: Service[];
   revolutLink?: string | null;
+  importOfferClosedAt?: string | null;
   driveBackedUpAt: string | null;
   vatRegistered: boolean;
   vatRateBp: number | null;

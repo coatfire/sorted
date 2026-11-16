@@ -104,6 +104,8 @@ Route map:
 /money             Money (owed + year summary)
 /money/import      Import past income and expenses
 /expenses          Expenses (snap + list)
+/welcome/import    Import offer straight after the welcome step (with Skip for now)
+/import            The same choices, opened from the reminder on Today
 /expenses/:id      Expense confirm/edit
 /settings          Settings + onboarding fields
 /login             Magic link
@@ -436,8 +438,8 @@ Calm sections, saving as you go. No Save settings button.
 **First-run welcome — `/welcome`:** one short form: required Business name,
 optional Your name, and optional **What do you offer?** with at most three
 service name/price rows saved to the shared catalogue. No phone, address or
-payment details here. **Save and get started** opens Today; retain the committed
-save/Reload guard. Only a missing business name triggers onboarding, not a
+payment details here. **Save and get started** opens the import offer (below);
+retain the committed save/Reload guard. Only a missing business name triggers onboarding, not a
 missing personal name. No migration or new profile fields are needed.
 
 **Payment details when needed:** before a payment-request draft, or a confirmation
@@ -612,6 +614,20 @@ Rules:
 - An existing client is never changed by an import.
 - Importing never sends a message to anyone.
 - At most 2,000 new clients per file.
+
+**The import offer.** Straight after the welcome step the trader sees "Bring in
+what you already have." with **Import my client list**, **Import past income and
+expenses** and **Skip for now**, and a line saying it is in Settings under
+Import. Skip opens Today and changes nothing.
+
+Until the trader imports something or dismisses it, Today shows a reminder,
+"Bring in your clients and past figures", that says Import is also in Settings.
+Tapping it opens `/import`: the same two choices with Back and no Skip. The ×
+on the reminder (a 44px target) removes it for good and confirms "You’ll find
+Import in Settings." A successful import of either kind removes it too; a file
+that adds nothing does not, and undoing an import does not bring it back. It is
+never shown before the welcome step is done, and Settings → Import is always
+there whatever the trader chose. The demo's sample trader is not reminded.
 
 **Settings → Import.** Links to both import screens, and each past import with
 its date and how much of it is still in Sorted. **Undo** asks once. For a client

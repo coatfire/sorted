@@ -14,6 +14,7 @@ import { ClientDetail } from "./pages/ClientDetail";
 import { Clients } from "./pages/Clients";
 import { ClientImport } from "./pages/ClientImport";
 import { HistoryImport } from "./pages/HistoryImport";
+import { ImportOffer } from "./pages/ImportOffer";
 import { Settings } from "./pages/Settings";
 import { Login } from "./pages/Login";
 import { Signup, Verify, Forgot, Reset, GoogleLogin } from "./pages/Account";
@@ -45,6 +46,8 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
             <Route path="/expenses" element={<Expenses />} />
             <Route path="/settings" element={<Settings />} />
             <Route path="/welcome" element={<Settings welcome />} />
+            <Route path="/welcome/import" element={<ImportOffer welcome />} />
+            <Route path="/import" element={<ImportOffer />} />
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

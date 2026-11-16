@@ -26,7 +26,7 @@ export function Welcome() {
     if (!validation.validate(event.currentTarget) || !values.success) return;
     const services = Services.safeParse([...values.data, ...(user.services ?? []).slice(3)]);
     if (!services.success) { setServicesError("Use a different name for each service."); return; }
-    if (await run(() => backend.updateUser({ businessName: businessName.trim(), name: name.trim() || null, services: services.data }))) navigate("/", { replace: true });
+    if (await run(() => backend.updateUser({ businessName: businessName.trim(), name: name.trim() || null, services: services.data }))) navigate("/welcome/import", { replace: true });
   }
   return <div className="page welcome-page">
     <PageHeader eyebrow="Welcome to Sorted" title="Make yourself at home." />
