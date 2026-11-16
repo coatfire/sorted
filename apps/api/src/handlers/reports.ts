@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { and, asc, eq, gte, lt } from "drizzle-orm";
-import { exportBounds, exportFileName, ExportRange, paidOn, yearRange } from "@sorted/core";
+import { exportBounds, exportFileName, ExportRange, paidOn, toCsv, yearRange } from "@sorted/core";
 import { db, schema } from "../db";
 import type { AppEnv } from "../app";
 
@@ -144,7 +144,6 @@ reportRoutes.get("/export", async (c) => {
       )
       .orderBy(asc(schema.expenses.expenseDate)),
   ]);
-  const csvCell = (value: unknown) => `"${String(value ?? "").replaceAll('"', '""')}"`;
   const lines = [
     ["INCOME"],
     ["date_paid", "client", "service", "kind", "method", "amount_eur"],
@@ -170,5 +169,5 @@ reportRoutes.get("/export", async (c) => {
   ];
   c.header("Content-Type", "text/csv; charset=utf-8");
   c.header("Content-Disposition", `attachment; filename=${exportFileName(range)}`);
-  return c.body(lines.map((row) => row.map(csvCell).join(",")).join("\n"));
+  return c.body(toCsv(lines));
 });
