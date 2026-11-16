@@ -191,6 +191,7 @@ export const bookings = pgTable(
     reminderSentAt: timestamp("reminder_sent_at", { withTimezone: true }),
     reviewRequestedAt: timestamp("review_requested_at", { withTimezone: true }),
     completedAt: timestamp("completed_at", { withTimezone: true }),
+    importId: uuid("import_id").references(() => imports.id, { onDelete: "set null" }),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -216,6 +217,7 @@ export const payments = pgTable(
     stripePaymentLinkId: text("stripe_payment_link_id"),
     linkUrl: text("link_url"),
     paidAt: timestamp("paid_at", { withTimezone: true }),
+    importId: uuid("import_id").references(() => imports.id, { onDelete: "set null" }),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -237,6 +239,7 @@ export const expenses = pgTable(
     expenseDate: timestamp("expense_date", { withTimezone: true }),
     receiptKey: text("receipt_key"), // receipts.id today; S3 object key later
     ocrRaw: jsonb("ocr_raw"), // full OCR response for audit/debug
+    importId: uuid("import_id").references(() => imports.id, { onDelete: "set null" }),
     status: expenseStatus("status").notNull().default("needs_review"),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()

@@ -15,10 +15,12 @@ export type ImportClientsInput = z.infer<typeof ImportClientsInput>;
 /** One import a trader ran, and how many of its rows are still in Sorted. */
 export interface ImportBatch {
   id: string;
-  kind: "clients";
+  kind: "clients" | "history";
   fileName: string | null;
   createdAt: string;
   clients: number;
+  payments: number;
+  expenses: number;
 }
 export interface ImportClientsResult { importId: string | null; added: number; alreadyThere: number }
 export interface UndoImportResult { removed: number; kept: number }
@@ -191,27 +193,35 @@ const OLD_XLS_START = [0xd0, 0xcf, 0x11, 0xe0];
 const startsWith = (bytes: Uint8Array, start: number[]) => start.every((byte, index) => bytes[index] === byte);
 
 /** Reads the first sheet of an Excel (.xlsx) file, or a CSV file, into rows of text. */
-export async function readTable(file: Blob): Promise<string[][]> {
+export interface ImportTable { name: string; rows: string[][] }
+
+/** Every sheet of an Excel file, or a CSV as one table, with each cell as text. A date cell reads as 2025-03-14. */
+export async function readTables(file: Blob): Promise<ImportTable[]> {
   if (file.size > IMPORT_MAX_BYTES) throw new Error("That file is over 5 MB. Split it into smaller files and add them one at a time.");
   const bytes = new Uint8Array(await file.arrayBuffer());
   if (startsWith(bytes, OLD_XLS_START)) throw new Error("That's an older Excel file (.xls). Open it and save it as Excel Workbook (.xlsx) or CSV, then try again.");
   if (startsWith(bytes, XLSX_START)) {
-    const { readSheet } = await import("read-excel-file/universal");
-    let sheet: unknown[][];
-    try { sheet = await readSheet(file); }
+    const { default: readXlsxFile } = await import("read-excel-file/universal");
+    let sheets: { sheet: string; data: unknown[][] }[];
+    try { sheets = await readXlsxFile(file); }
     catch { throw new Error("Sorted couldn't read that file. Save it as Excel Workbook (.xlsx) or CSV and try again."); }
-    return sheet.map((row) => row.map((value) =>
-      value === null || value === undefined ? "" : value instanceof Date ? value.toISOString().slice(0, 10) : String(value)));
+    return sheets.map(({ sheet, data }) => ({
+      name: sheet,
+      rows: data.map((row) => row.map((value) =>
+        value === null || value === undefined ? "" : value instanceof Date ? value.toISOString().slice(0, 10) : String(value))),
+    }));
   }
   if (bytes.subarray(0, 4096).includes(0)) throw new Error("Sorted can only read Excel (.xlsx) and CSV files.");
   let decoded: string;
   // Excel on Windows saves plain "CSV" in Windows-1252, which is not valid UTF-8 once a name has an accent.
   try { decoded = new TextDecoder("utf-8", { fatal: true }).decode(bytes); }
   catch { decoded = new TextDecoder("windows-1252").decode(bytes); }
-  return parseCsv(decoded);
+  return [{ name: "", rows: parseCsv(decoded) }];
 }
 
-/** The ready-made file a trader can fill in: the four headings and two example rows that are never imported. */
+/** The first sheet. */
+export const readTable = async (file: Blob): Promise<string[][]> => (await readTables(file))[0]?.rows ?? [];
+
 export async function clientTemplate(): Promise<Blob> {
   const { default: writeXlsxFile } = await import("write-excel-file/universal");
   const rows = [
