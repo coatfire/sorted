@@ -113,7 +113,7 @@ export function ImportSettings() {
             if (await run(async () => {
               const { removed, kept } = await backend.undoImport(batch.id);
               setOutcome(batch.kind === "history"
-                ? `${rows(removed, "row")} removed.${kept ? ` ${rows(kept, "row")} kept because ${kept === 1 ? "it has" : "they have"} a receipt.` : ""}`
+                ? `${rows(removed, "row")} removed.${kept ? ` ${rows(kept, "row")} kept because you’ve used ${kept === 1 ? "it" : "them"} since.` : ""}`
                 : `${people(removed)} removed.${kept ? ` ${people(kept)} kept because they have bookings.` : ""}`);
               setBatches(await backend.imports());
             })) setConfirming(undefined);
@@ -121,7 +121,7 @@ export function ImportSettings() {
           : <Button kind="quiet" onClick={() => { setConfirming(batch.id); setOutcome(undefined); }}>Undo</Button>}
       </div>)}
       {confirming && <p className="sheet-copy">{batches.find((batch) => batch.id === confirming)?.kind === "history"
-        ? "This removes the payments, past jobs and expenses this import added. A payment you’ve issued a receipt for, and an expense you’ve added a receipt photo to, are kept."
+        ? "This removes the payments, past jobs and expenses this import added. A job you’ve issued a receipt or invoice for, messaged about or added a payment to is kept with its payments, and so is an expense you’ve added a receipt photo to."
         : "Clients from this import who have a booking are kept."}</p>}
       {outcome && <p className="sheet-copy" role="status">{outcome}</p>}
       {error && <p role="alert" className="sheet-copy">{error}</p>}

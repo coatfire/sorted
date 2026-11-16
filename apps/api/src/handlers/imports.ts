@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { randomUUID } from "node:crypto";
-import { and, asc, count, desc, eq, inArray, isNotNull, isNull, notExists, sql } from "drizzle-orm";
+import { and, asc, count, desc, eq, exists, inArray, isNotNull, isNull, not, notExists, or, sql } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 import {
   bookingAtDublinTime, historyJobs, ImportClientsInput, ImportHistoryInput, irelandToday, paidOn, paymentPaidAt, planClientImport, planHistoryImport,
   type ImportBatch, type ImportClientsResult, type ImportHistoryResult, type UndoImportResult,
@@ -141,11 +142,16 @@ importRoutes.delete("/:id", async (c) => {
     const [batch] = await tx.select().from(schema.imports).where(and(eq(schema.imports.id, id), eq(schema.imports.userId, userId)));
     if (!batch) return null;
     // Anything the trader has built on since is real work, so it stays: an expense given a receipt photo,
-    // a payment with a receipt issued, a job with another payment, a document or a message.
+    // and a job with a document, a message or a payment added by hand.
     const spent = await tx.delete(schema.expenses)
       .where(and(eq(schema.expenses.userId, userId), eq(schema.expenses.importId, id), isNull(schema.expenses.receiptKey))).returning({ id: schema.expenses.id });
-    const paid = await tx.delete(schema.payments).where(and(eq(schema.payments.userId, userId), eq(schema.payments.importId, id),
-      notExists(tx.select({ id: schema.invoices.id }).from(schema.invoices).where(eq(schema.invoices.paymentId, schema.payments.id))))).returning({ id: schema.payments.id });
+    // A job goes or stays whole: removing one of its payments would leave the rest of its price looking unpaid.
+    const other = alias(schema.payments, "other");
+    const jobUsed = or(
+      exists(tx.select({ id: schema.invoices.id }).from(schema.invoices).where(eq(schema.invoices.bookingId, schema.payments.bookingId))),
+      exists(tx.select({ id: schema.messageLog.id }).from(schema.messageLog).where(eq(schema.messageLog.bookingId, schema.payments.bookingId))),
+      exists(tx.select({ id: other.id }).from(other).where(and(eq(other.bookingId, schema.payments.bookingId), sql`${other.importId} is distinct from ${id}`))))!;
+    const paid = await tx.delete(schema.payments).where(and(eq(schema.payments.userId, userId), eq(schema.payments.importId, id), not(jobUsed))).returning({ id: schema.payments.id });
     await tx.delete(schema.bookings).where(and(eq(schema.bookings.userId, userId), eq(schema.bookings.importId, id),
       notExists(tx.select({ id: schema.payments.id }).from(schema.payments).where(eq(schema.payments.bookingId, schema.bookings.id))),
       notExists(tx.select({ id: schema.invoices.id }).from(schema.invoices).where(eq(schema.invoices.bookingId, schema.bookings.id))),

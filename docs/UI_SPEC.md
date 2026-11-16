@@ -662,6 +662,10 @@ Expenses are saved as confirmed, with no receipt photo.
 - All of it saves together or none of it does.
 
 **Undo** (Settings → Import) removes the payments, past jobs, expenses and
-clients that import added. Kept: a payment a receipt has since been issued for
-(and its job), an expense a receipt photo has since been added to, and a client
-who still has a booking.
+clients that import added. Kept: a job that has since had a receipt or invoice
+issued, a message recorded or a payment added by hand, together with all of its
+payments (removing one would make the rest of its price look unpaid); an expense
+a receipt photo has since been added to; and a client who still has a booking.
+
+An imported payment can be edited or undone on its job like one recorded by
+hand, whatever its method: Sorted never charged the card.

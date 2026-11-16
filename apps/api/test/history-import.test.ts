@@ -179,13 +179,33 @@ describe("saving past income and expenses", () => {
 
     expect((await request(`/imports/${result.importId}`, {}, "DELETE")).status).toBe(400);
     const undone = await (await request(`/imports/${result.importId}`, { confirm: true }, "DELETE")).json() as UndoImportResult;
-    expect(undone).toEqual({ removed: 4, kept: 2 });
-    expect(await counts()).toEqual({ clients: 1, bookings: 1, payments: 1, expenses: 2 });
+    // The receipted balance keeps its deposit: the job stays whole, so nothing reads as still owed.
+    expect(undone).toEqual({ removed: 3, kept: 3 });
+    expect(await counts()).toEqual({ clients: 1, bookings: 1, payments: 2, expenses: 2 });
     expect(await imports()).toEqual([]);
     const [kept] = await db.select().from(schema.bookings).where(eq(schema.bookings.userId, user.id));
-    expect(kept).toMatchObject({ id: receipted.bookingId, importId: null });
+    expect(kept).toMatchObject({ id: receipted.bookingId, importId: null, priceCents: 20000 });
+    expect((await db.select().from(schema.payments).where(eq(schema.payments.userId, user.id))).map((payment) => payment.amountCents).sort()).toEqual([15000, 5000]);
     expect(kept!.reviewRequestedAt).not.toBeNull();
     expect((await db.select().from(schema.expenses).where(eq(schema.expenses.id, mine!.id)))).toHaveLength(1);
+  });
+
+  it("adds the second of two identical rows when Sorted already holds the first", async () => {
+    const { request, counts } = await trader();
+    const twice = income.slice(2);
+    await request("/imports/history", { income: twice.slice(0, 1), expenses: [] });
+    // The whole file is sent, as the import screen does, and exactly the one missing payment is added.
+    expect(await (await request("/imports/history", { income: twice, expenses: [] })).json()).toMatchObject({ payments: 1, alreadyThere: 1 });
+    expect((await counts()).payments).toBe(2);
+    expect(await (await request("/imports/history", { income: twice, expenses: [] })).json()).toMatchObject({ importId: null, payments: 0, alreadyThere: 2 });
+  });
+
+  it("lets an imported card payment be corrected, since Sorted never charged the card", async () => {
+    const { user, request } = await trader();
+    await request("/imports/history", { income: [{ paid_on: "2025-05-01", client: "Card Client", service: "Cut", kind: "full", method: "stripe", amount_cents: 6000 }], expenses: [] });
+    const [payment] = await db.select().from(schema.payments).where(eq(schema.payments.userId, user.id));
+    expect((await request(`/payments/${payment!.id}`, { amount_cents: 5000, method: "cash" }, "PATCH")).status).toBe(200);
+    expect((await db.select().from(schema.payments).where(eq(schema.payments.id, payment!.id)))[0]).toMatchObject({ amountCents: 5000, method: "cash" });
   });
 
   it("does the same in demo mode", async () => {
@@ -205,9 +225,9 @@ describe("saving past income and expenses", () => {
     expect(await demoBackend.imports()).toMatchObject([{ id: result.importId, kind: "history", payments: 4, expenses: 1, clients: 2 }]);
     const receipted = after.payments.find((payment) => payment.amountCents === 15000 && added.some((booking) => booking.id === payment.bookingId))!;
     await demoBackend.document(receipted.bookingId, "receipt", receipted.id);
-    expect(await demoBackend.undoImport(result.importId!)).toEqual({ removed: 4, kept: 1 });
+    expect(await demoBackend.undoImport(result.importId!)).toEqual({ removed: 3, kept: 2 });
     const undone = await demoBackend.load();
-    expect(undone.payments.length - before.payments.length).toBe(1);
+    expect(undone.payments.length - before.payments.length).toBe(2);
     expect(undone.expenses).toHaveLength(before.expenses.length);
     expect(undone.clients.map((client) => client.name).sort()).toEqual([...before.clients.map((client) => client.name), "Gráinne Flynn"].sort());
   });
