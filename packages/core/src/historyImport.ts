@@ -170,7 +170,8 @@ export function historySheet(tables: ImportTable[], today = irelandToday()): His
       if (!asIncome && !asExpenses) continue;
       const names = section.rows[index]!.map(heading);
       const looksLikeExpenses = ["merchant", "supplier", "shop", "vendor", "payee", "paid to", "category", "vat", "vat eur"].some((name) => names.includes(name));
-      const looksLikeIncome = income.client !== undefined || income.service !== undefined;
+      // "Description" could be what was sold or who was paid, so on its own it settles nothing.
+      const looksLikeIncome = income.client !== undefined || ["service", "job", "treatment"].some((name) => names.includes(name));
       kind = titled ?? (looksLikeExpenses ? "expenses" : looksLikeIncome ? "income" : undefined);
       if (kind === "income" && !asIncome || kind === "expenses" && !asExpenses) kind = undefined;
       if (kind) start = index;

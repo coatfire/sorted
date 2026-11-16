@@ -18,7 +18,7 @@ const lockUser = (tx: Parameters<Parameters<typeof db.transaction>[0]>[0], userI
 importRoutes.get("/", async (c) => {
   const userId = c.get("userId");
   const held = (table: typeof schema.clients | typeof schema.payments | typeof schema.expenses) =>
-    sql<number>`(select count(*) from ${table} where ${table.importId} = ${schema.imports.id} and ${table.userId} = ${userId})`;
+    sql<number>`(select count(*) from ${table} as held where held.import_id = "imports"."id" and held.user_id = ${userId})`;
   const rows = await db.select({ batch: schema.imports, clients: held(schema.clients), payments: held(schema.payments), expenses: held(schema.expenses) })
     .from(schema.imports).where(eq(schema.imports.userId, userId)).orderBy(desc(schema.imports.createdAt));
   const batches: ImportBatch[] = rows.map(({ batch, clients, payments, expenses }) => ({
