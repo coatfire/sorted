@@ -25,6 +25,7 @@ import type { ExportFormat, ExportRange, PaymentMethod,
   ImportHistoryInput,
   ImportHistoryResult,
   UndoImportResult,
+  Trip,
 } from "@sorted/core";
 
 export type BookingRow = Booking & { client: Client };
@@ -37,6 +38,8 @@ export interface Snapshot {
   bookings: BookingRow[];
   payments: Payment[];
   expenses: Expense[];
+  /** Business trips that aren't bookings. */
+  trips: Trip[];
   /** Issued invoices, receipts and quotes, newest first. */
   documents: IssuedDocument[];
 }
@@ -55,7 +58,16 @@ export interface BookingDraft {
   priceCents: number | null;
   depositCents: number;
   location: string | null;
+  /** Km for the job, there and back, in metres. */
+  travelMetres?: number | null;
   notes: string | null;
+}
+
+export interface TripDraft {
+  tripDate: string;
+  destination: string;
+  purpose: string;
+  travelMetres: number;
 }
 
 export interface ExpenseDraft {
@@ -101,6 +113,11 @@ export interface Backend {
   completeBooking(id: string): Promise<void>;
   cancelBooking(id: string): Promise<void>;
   followUp(id: string, date: string | null): Promise<void>;
+  /** The km for a job, there and back. Works at any stage, since the distance is often added afterwards. */
+  bookingTravel(id: string, travelMetres: number | null): Promise<void>;
+  createTrip(draft: TripDraft): Promise<void>;
+  updateTrip(id: string, draft: TripDraft): Promise<void>;
+  deleteTrip(id: string): Promise<void>;
   paymentRequested(id: string): Promise<void>;
   messageSent(id: string, input: MessageSentInput): Promise<void>;
   messages(bookingId: string): Promise<MessageLogEntry[]>;
@@ -149,6 +166,6 @@ export interface Backend {
     vatPeriodMonths?: number;
     incomeTaxRateBp?: number | null;
   }>): Promise<void>;
-  /** Income and expenses between two dates, both included. */
+  /** Income, expenses and the mileage log between two dates, both included. */
   exportFile(range: ExportRange, format: ExportFormat): Promise<Blob>;
 }

@@ -49,8 +49,8 @@ const DataContext = createContext<DataValue | null>(null);
 function readCache(): Snapshot | null {
   try {
     const cached = JSON.parse(localStorage.getItem(CACHE_KEY) ?? "null") as Snapshot | null;
-    // A snapshot cached by an older version has no documents list.
-    return cached && { ...cached, documents: cached.documents ?? [] };
+    // A snapshot cached by an older version has no documents or trips list.
+    return cached && { ...cached, documents: cached.documents ?? [], trips: cached.trips ?? [] };
   } catch {
     return null;
   }

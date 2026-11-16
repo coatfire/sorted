@@ -102,7 +102,11 @@ it("the demo's Excel file holds the same rows as its CSV", async () => {
   const csv = (await (await demoBackend.exportFile(range, "csv")).text()).split("\n");
   const blank = csv.indexOf("");
   expect(sheets.Income).toHaveLength(blank - 1);
-  expect(sheets.Expenses).toHaveLength(csv.length - blank - 2);
+  const mileage = csv.indexOf("", blank + 1);
+  expect(sheets.Expenses).toHaveLength(mileage - blank - 2);
+  expect(sheets.Mileage).toHaveLength(csv.length - mileage - 2);
+  expect(sheets.Mileage[0]).toEqual(["date", "from", "to", "purpose", "km_there_and_back"]);
+  expect(sheets.Mileage.slice(1).every((row) => typeof row[4] === "number" && row[4] > 0)).toBe(true);
   expect(sheets.Income.length).toBeGreaterThan(2);
   const text = (row: (string | number | null)[]) => `"${row.slice(0, 5).map((cell) => cell ?? "").join('","')}","${(row[5] as number).toFixed(2)}"`;
   expect(sheets.Income.slice(1).map(text)).toEqual(csv.slice(2, blank));

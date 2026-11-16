@@ -4,9 +4,9 @@ import { expect, it } from "vitest";
 
 it("renders matching due-now totals, a leading appointment and secondary yearly tax disclosure", async () => {
   const client = { id: "client", name: "Áine Murphy", phone: null, email: null };
-  const booking = { id: "owed", clientId: client.id, client, service: "Hair", priceCents: 8000, depositCents: 2000, status: "completed", startAt: "2026-11-14T10:00:00Z", endAt: null, followUpOn: null, paymentRequestedAt: null };
-  const snapshot = { user: { name: "Trader", businessName: "Studio", vatRegistered: false, vatRateBp: null, vatPeriodMonths: 2, incomeTaxRateBp: 2000 }, features: { paymentLinks: true, automation: false }, expenses: [], bookings: [booking, { ...booking, id: "future", status: "confirmed", startAt: "2026-11-16T10:00:00Z", location: "Cork City" }], payments: [{ id: "paid", bookingId: "owed", status: "paid", amountCents: 2500, paidAt: "2026-11-10T10:00:00Z", vatRateBp: 0 }] };
-  const empty = { ...snapshot, bookings: [], payments: [] };
+  const booking = { id: "owed", clientId: client.id, client, service: "Hair", priceCents: 8000, depositCents: 2000, status: "completed", startAt: "2026-11-14T10:00:00Z", endAt: null, followUpOn: null, paymentRequestedAt: null, travelMetres: 24000 };
+  const snapshot = { user: { name: "Trader", businessName: "Studio", vatRegistered: false, vatRateBp: null, vatPeriodMonths: 2, incomeTaxRateBp: 2000 }, features: { paymentLinks: true, automation: false }, expenses: [], trips: [{ id: "trip", tripDate: "2026-11-01", destination: "Wholesaler", purpose: "Stock", travelMetres: 27500, createdAt: "2026-11-01T12:00:00Z" }], bookings: [booking, { ...booking, id: "future", status: "confirmed", startAt: "2026-11-16T10:00:00Z", location: "Cork City", travelMetres: 100000 }], payments: [{ id: "paid", bookingId: "owed", status: "paid", amountCents: 2500, paidAt: "2026-11-10T10:00:00Z", vatRateBp: 0 }] };
+  const empty = { ...snapshot, bookings: [], payments: [], trips: [] };
   const bundle = await build({
     stdin: {
       contents: `import {createElement} from "react"; import {renderToStaticMarkup} from "react-dom/server"; import {MemoryRouter} from "react-router-dom";
@@ -56,6 +56,11 @@ it("renders matching due-now totals, a leading appointment and secondary yearly 
   expect(money).toContain("Balance · job was 1 day ago");
   expect(money).toContain("€20.00 deposit due first · job on Mon 16 Nov");
   expect(money.indexOf("2026 so far")).toBeLessThan(money.indexOf("Tax estimate (rough guide)"));
+  // Km for the job that's happened and the trip; tomorrow's job isn't driven yet.
+  expect(money).toContain('<span>Business km</span><strong class="money">51.5 km</strong>');
+  expect(money).toContain("income, expenses and your mileage log from");
+  expect(emptyMoney).not.toContain("Business km");
+  expect(emptyMoney).toContain("income and expenses from");
   // The year switch sits on the card, above the figures it changes, and the export follows the year shown.
   expect(money.indexOf('aria-pressed="true">This year (2026)')).toBeGreaterThan(-1);
   expect(money.indexOf("Last year (2025)</button>")).toBeLessThan(money.indexOf("Paid income"));

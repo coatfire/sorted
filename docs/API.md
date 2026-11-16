@@ -382,6 +382,28 @@ Recording a payment requires a confirmed or completed booking (409 otherwise), o
 | PATCH  | /expenses/:id           | confirm/correct OCR fields → `status=confirmed` |
 | DELETE | /expenses/:id           | also deletes its receipt |
 
+## Mileage (migration 0025)
+
+Km driven for the business, kept as a log for the accountant. Distances are
+metres, there and back (`travel_metres`, a whole number up to 5,000 km); the app
+shows km to one decimal. Nothing here is money: km never becomes an expense or
+changes profit or the tax estimate.
+
+| Method | Path                  | Notes |
+|--------|-----------------------|-------|
+| PUT    | /bookings/:id/travel  | body `{travel_metres}`; null clears it. Allowed at any booking status, since the distance is often added after the job. `POST /bookings` and `PATCH /bookings/:id` also accept `travel_metres`; a repeat series copies it to every booking |
+| GET    | /trips                | business trips that aren't bookings, newest first |
+| POST   | /trips                | body `{trip_date, destination, purpose, travel_metres}`. `trip_date` is a date in Ireland and can't be in the future |
+| PATCH  | /trips/:id            | same body as POST |
+| DELETE | /trips/:id            | |
+
+The mileage log for a range is: bookings that are confirmed or completed, have
+`travel_metres`, and whose day (in Ireland) is in the range and not after today;
+plus trips dated in the range. `GET /reports/export` adds it as a third table,
+`Mileage` (`date, from, to, purpose, km_there_and_back`), only when it has rows.
+`from` is the trader's business address at the time of the export. Importing an
+exported file passes over this table.
+
 ## Reports
 | Method | Path                  | Notes |
 |--------|-----------------------|-------|

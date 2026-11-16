@@ -1,6 +1,6 @@
 import { Hono } from "hono";
-import { and, asc, eq, gte, lt } from "drizzle-orm";
-import { exportBounds, exportCsvText, exportFileName, ExportFormat, ExportRange, exportSections, exportXlsx, paidOn, XLSX_TYPE, yearRange } from "@sorted/core";
+import { and, asc, eq, gte, isNotNull, lt, lte } from "drizzle-orm";
+import { exportBounds, exportCsvText, exportFileName, ExportFormat, ExportRange, exportSections, exportXlsx, mileageLog, mileageSection, paidOn, XLSX_TYPE, yearRange } from "@sorted/core";
 import { db, schema } from "../db";
 import type { AppEnv } from "../app";
 
@@ -93,6 +93,7 @@ reportRoutes.get("/summary", async (c) => {
  * The two sections an accountant expects, oldest first:
  *   INCOME:   date_paid, client, service, kind, method, amount_eur
  *   EXPENSES: date, merchant, category, amount_eur, has_receipt, vat_eur
+ *   MILEAGE:  date, from, to, purpose, km_there_and_back (only when there are trips; km, not money)
  * Header row per section, amounts as decimal euro (cents/100, 2dp).
  */
 reportRoutes.get("/export", async (c) => {
@@ -111,7 +112,7 @@ reportRoutes.get("/export", async (c) => {
   }
   const bounds = exportBounds(range);
   const userId = c.get("userId");
-  const [income, expenses] = await Promise.all([
+  const [income, expenses, travelled, trips, [user]] = await Promise.all([
     db
       .select({
         paidAt: schema.payments.paidAt,
@@ -145,7 +146,29 @@ reportRoutes.get("/export", async (c) => {
         ),
       )
       .orderBy(asc(schema.expenses.expenseDate)),
+    db
+      .select({ booking: schema.bookings, client: schema.clients })
+      .from(schema.bookings)
+      .innerJoin(schema.clients, eq(schema.bookings.clientId, schema.clients.id))
+      .where(
+        and(
+          eq(schema.bookings.userId, userId),
+          isNotNull(schema.bookings.travelMetres),
+          gte(schema.bookings.startAt, bounds.paidFrom),
+          lt(schema.bookings.startAt, bounds.paidBefore),
+        ),
+      ),
+    db
+      .select()
+      .from(schema.trips)
+      .where(and(eq(schema.trips.userId, userId), gte(schema.trips.tripDate, range.from), lte(schema.trips.tripDate, range.to))),
+    db.select({ address: schema.users.address }).from(schema.users).where(eq(schema.users.id, userId)),
   ]);
+  const mileage = mileageLog(
+    travelled.map(({ booking, client }) => ({ ...booking, startAt: booking.startAt?.toISOString() ?? null, client })),
+    trips.map((trip) => ({ ...trip, createdAt: trip.createdAt.toISOString() })),
+    range,
+  );
   const sections = exportSections(
     income.map((row) => ({ ...row, paidOn: row.paidAt ? paidOn(row.paidAt) : "" })),
     expenses.map((row) => ({
@@ -156,6 +179,7 @@ reportRoutes.get("/export", async (c) => {
       hasReceipt: Boolean(row.receiptKey),
       vatCents: row.vatCents,
     })),
+    mileageSection(mileage, user?.address ?? null),
   );
   c.header("Content-Disposition", `attachment; filename=${exportFileName(range, format.data)}`);
   if (format.data === "xlsx") {
