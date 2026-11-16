@@ -52,6 +52,25 @@ short-lived code table. No production Google credentials are provisioned by this
 feature. Tests generate an RSA key pair and mock Google's token endpoint/JWKS;
 they never need real Google credentials.
 
+## Optional address search
+
+The Location field on a booking always suggests places the trader has used before.
+Setting `GOOGLE_MAPS_API_KEY` on the API adds address and venue search for Ireland
+through Google's Places API (New). Until then `/api/health` reports
+`features.addressSearch: false`, the UI doesn't ask, and no request reaches Google.
+
+1. In Google Cloud, create or pick a project and attach a billing account.
+2. Enable **Places API (New)**.
+3. Create an API key. Under **API restrictions** allow only Places API (New).
+   Leave **Application restrictions** at None: the key is used from the server,
+   whose address changes, and it never reaches a browser.
+4. Under **Places API (New) → Quotas**, lower the daily limit for Autocomplete
+   requests to cap what the key can spend.
+5. Set `GOOGLE_MAPS_API_KEY` on the API (Vercel: Production) and redeploy.
+
+Each pause in typing is one billed Autocomplete request. Do not use a `VITE_`
+variable for the key.
+
 ## Schema changes
 Edit `src/db/schema.ts`, then:
 ```bash

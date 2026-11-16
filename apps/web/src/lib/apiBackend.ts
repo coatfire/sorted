@@ -24,6 +24,7 @@ export const apiBackend: Backend = {
   addExternalCalendar: (url) => post("/calendar/external", { url }),
   removeExternalCalendar: async (id) => { await api(`/calendar/external/${id}`, { method: "DELETE" }); },
   busy: (from, to) => api(`/calendar/busy?from=${from}&to=${to}`),
+  searchPlaces: (input) => post("/places/search", { input }),
   document: (bookingId, kind, paymentId) => post<BookingDocument>(`/bookings/${bookingId}/documents`, { kind, payment_id: paymentId }),
   signup: (email, password) => post("/auth/signup", { email, password }),
   login: (email, password) => post("/auth/login", { email, password }),

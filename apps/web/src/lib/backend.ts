@@ -17,6 +17,7 @@ import type {
   MessageSentInput,
   IssuedDocument,
   BusyResult,
+  PlaceSearchResult,
   ExternalCalendar,
 } from "@sorted/core";
 
@@ -80,6 +81,8 @@ export interface Backend {
   removeExternalCalendar(id: string): Promise<void>;
   /** Read-only entries from those calendars between two days (inclusive). */
   busy(from: string, to: string): Promise<BusyResult>;
+  /** Addresses and venues matching what's typed. Only offered when `features.addressSearch` is on. */
+  searchPlaces(input: string): Promise<PlaceSearchResult>;
   signup(email: string, password: string): Promise<{ ok: true; dev_link?: string }>;
   login(email: string, password: string): Promise<{ jwt: string; user: User }>;
   verify(token: string): Promise<{ jwt: string; user: User }>;
