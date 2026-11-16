@@ -74,8 +74,12 @@ export function AppShell() {
       </main>
       <nav className="tabbar" aria-label="Main navigation">
         <NavLink to="/" end>
-          <Icon name="calendar" />
+          <Icon name="home" />
           <span>Today</span>
+        </NavLink>
+        <NavLink to="/calendar">
+          <Icon name="calendar" />
+          <span>Calendar</span>
         </NavLink>
         <NavLink to="/bookings/new" className="fab" aria-label="Add booking">
           <Icon name="plus" size={28} />

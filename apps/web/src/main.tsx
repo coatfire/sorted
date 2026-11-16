@@ -5,6 +5,7 @@ import "@fontsource-variable/dm-sans";
 import "@fontsource/newsreader/600.css";
 import { AppShell } from "./AppShell";
 import { Home } from "./pages/Home";
+import { Calendar } from "./pages/Calendar";
 import { BookingForm } from "./pages/BookingForm";
 import { Money } from "./pages/Money";
 import { Expenses } from "./pages/Expenses";
@@ -29,6 +30,7 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
           <Route path="/reset" element={<Reset />} />
           <Route element={<AppShell />}>
             <Route path="/" element={<Home />} />
+            <Route path="/calendar" element={<Calendar />} />
             <Route path="/bookings/new" element={<BookingForm />} />
             <Route path="/bookings/:id" element={<BookingDetail />} />
             <Route path="/bookings/:id/edit" element={<BookingForm />} />

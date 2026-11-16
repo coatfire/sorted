@@ -106,6 +106,13 @@ describe("calendar subscriptions", () => {
     expect(enquiries).toContain(`? ${f.client.name} · Service enquiry (follow up)`);
     for (const row of [confirmed, completed, cancelled, old, foreign]) expect(enquiries).not.toContain(row.id);
   });
+  it("keeps bookings made years ahead in the feeds", async () => {
+    const f = await account();
+    const wedding = await f.add("confirmed", 3 * 365), enquiry = await f.add("enquiry", 5 * 365);
+    const links = await (await f.request()).json() as CalendarLinks;
+    expect(unfold(await (await app.request(links.confirmed.https)).text())).toContain(`UID:${wedding.id}@sorted`);
+    expect(unfold(await (await app.request(links.enquiries.https)).text())).toContain(`UID:${enquiry.id}@sorted`);
+  });
   it("returns 404 for bad tokens and reset invalidates both old feeds", async () => {
     const f = await account();
     const old = await (await f.request()).json() as CalendarLinks;
