@@ -639,7 +639,7 @@ income or expenses. A sheet where that can't be told is not read.
 - A row with no readable date, no amount above zero, or a date after today is
   left out, and the preview says how many of each.
 - No client name → "Client not recorded". No service → "Service not recorded".
-  No supplier → "Not recorded". Unknown category → Other. Unknown method → none.
+  No supplier → "Not recorded". Unknown category → Other. Unknown method → none. Any card payment → Card.
   Unknown kind → full. VAT more than the amount → no VAT.
 
 **Preview.** How many payments and expenses will be added, income and expenses
@@ -667,5 +667,7 @@ issued, a message recorded or a payment added by hand, together with all of its
 payments (removing one would make the rest of its price look unpaid); an expense
 a receipt photo has since been added to; and a client who still has a booking.
 
-An imported payment can be edited or undone on its job like one recorded by
-hand, whatever its method: Sorted never charged the card.
+A card payment in a file ("card", "credit card", "debit card" or "stripe") is
+saved with the method **Card**, never as a Stripe charge, because this account's
+Stripe did not take it. It can be edited or undone on its job like any payment
+recorded by hand.

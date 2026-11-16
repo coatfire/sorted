@@ -93,7 +93,7 @@ export const kindLabel = (kind: Payment["kind"]) =>
 
 export const methodLabel = (method: Payment["method"]) =>
   method
-    ? { stripe: "Card (Stripe)", revolut: "Revolut", cash: "Cash", bank_transfer: "Bank transfer" }[method]
+    ? { stripe: "Card (Stripe)", revolut: "Revolut", cash: "Cash", bank_transfer: "Bank transfer", card: "Card" }[method]
     : null;
 
 export const messageLabel = (message: MessageLogEntry) => {

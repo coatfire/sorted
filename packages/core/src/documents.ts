@@ -93,7 +93,7 @@ function liveBookingDocument(user: User, booking: Booking, client: Client, payme
   const date = (iso: string | null) => iso ? new Intl.DateTimeFormat("en-IE", {
     day: "2-digit", month: "short", year: "numeric", timeZone: "Europe/Dublin",
   }).format(new Date(iso)) : "Date to be agreed";
-  const methods = { cash: "Cash", bank_transfer: "Bank transfer", stripe: "Card", revolut: "Revolut" };
+  const methods = { cash: "Cash", bank_transfer: "Bank transfer", stripe: "Card", card: "Card", revolut: "Revolut" };
   return {
     kind: document.kind,
     title: receipt ? "Receipt" : quote ? "Quote" : "Invoice",

@@ -492,7 +492,7 @@ export const demoBackend: Backend = {
   async editPayment(paymentId, input) {
     const parsed = EditPaymentInput.parse(input), d = data();
     const payment = mustFind(d.payments, paymentId, "Payment"), booking = pricedBooking(payment.bookingId);
-    if (payment.method === "stripe" && !payment.importId) throw new Error("Paid by card — refund it in Stripe");
+    if (payment.method === "stripe") throw new Error("Paid by card — refund it in Stripe");
     if (payment.status !== "paid") throw new Error("Only paid payments can be corrected.");
     if (d.documents.some(document => document.kind === "receipt" && document.paymentId === paymentId)) throw new Error("A receipt was issued for this payment. Undo it and record it again.");
     const total = paidFor(booking.id) - payment.amountCents + (parsed.amount_cents ?? payment.amountCents);
@@ -505,7 +505,7 @@ export const demoBackend: Backend = {
 
   async undoPayment(paymentId) {
     const d = data(), payment = mustFind(d.payments, paymentId, "Payment");
-    if (payment.method === "stripe" && !payment.importId) throw new Error("Paid by card — refund it in Stripe");
+    if (payment.method === "stripe") throw new Error("Paid by card — refund it in Stripe");
     if (payment.status !== "paid") throw new Error("Only paid payments can be corrected.");
     payment.status = "cancelled";
     for (const document of d.documents) if (document.kind === "receipt" && document.paymentId === paymentId) document.voidedAt = now();
@@ -604,7 +604,7 @@ export const demoBackend: Backend = {
       d.bookings.push(booking); batch.bookingIds.push(booking.id);
       for (const payment of job.payments) {
         const paidAt = paymentPaidAt(payment.paid_on).toISOString(), paymentId = id();
-        d.payments.push({ id: paymentId, importId: batch.id, bookingId: booking.id, kind: payment.kind, amountCents: payment.amount_cents, method: payment.method, status: "paid", linkUrl: null, paidAt, createdAt: paidAt, vatRateBp: d.user.vatRegistered ? d.user.vatRateBp : 0 });
+        d.payments.push({ id: paymentId, bookingId: booking.id, kind: payment.kind, amountCents: payment.amount_cents, method: payment.method, status: "paid", linkUrl: null, paidAt, createdAt: paidAt, vatRateBp: d.user.vatRegistered ? d.user.vatRateBp : 0 });
         batch.paymentIds.push(paymentId);
       }
     }
@@ -642,7 +642,6 @@ export const demoBackend: Backend = {
     const remove = new Set(mine.filter((client) => !booked.has(client.id)).map((client) => client.id));
     d.clients = d.clients.filter((client) => !remove.has(client.id));
     d.imports = (d.imports ?? []).filter((item) => item.id !== importId);
-    for (const payment of payments) delete payment.importId;
     save();
     return batch.kind === "history"
       ? { removed: goPayments.size + goExpenses.size, kept: payments.length - goPayments.size + expenses.length - goExpenses.size }

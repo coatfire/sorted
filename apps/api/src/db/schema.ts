@@ -32,6 +32,7 @@ export const paymentMethod = pgEnum("payment_method", [
   "revolut",
   "cash",
   "bank_transfer",
+  "card",
 ]);
 export const paymentStatus = pgEnum("payment_status", [
   "pending",

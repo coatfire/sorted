@@ -65,7 +65,7 @@ describe("reading past income and expenses", () => {
       ["16/03/2025", "Example: Mary", "x", "", "10"],
     ]);
     expect(found.income).toEqual([
-      { paid_on: "2025-03-14", client: "Róisín Daly", service: "=SUM(1,2)", kind: "full", method: "stripe", amount_cents: 12000 },
+      { paid_on: "2025-03-14", client: "Róisín Daly", service: "=SUM(1,2)", kind: "full", method: "card", amount_cents: 12000 },
       { paid_on: "2025-03-15", client: "Client not recorded", service: "Service not recorded", kind: "full", method: "bank_transfer", amount_cents: 5500 },
     ]);
     const spent = sheet([["Date", "Supplier", "Type", "Cost", "VAT"], ["01/02/2025", "Three", "Phone & internet", "35", "6.54"], ["02/02/2025", "", "nonsense", "10", "99"]]);
@@ -200,12 +200,15 @@ describe("saving past income and expenses", () => {
     expect(await (await request("/imports/history", { income: twice, expenses: [] })).json()).toMatchObject({ importId: null, payments: 0, alreadyThere: 2 });
   });
 
-  it("lets an imported card payment be corrected, since Sorted never charged the card", async () => {
+  it("saves a card payment as Card rather than a Stripe charge, so it can still be corrected", async () => {
     const { user, request } = await trader();
-    await request("/imports/history", { income: [{ paid_on: "2025-05-01", client: "Card Client", service: "Cut", kind: "full", method: "stripe", amount_cents: 6000 }], expenses: [] });
+    await request("/imports/history", { income: [{ paid_on: "2025-05-01", client: "Card Client", service: "Cut", kind: "full", method: "card", amount_cents: 6000 }], expenses: [] });
+    expect(["card", "Credit Card", "debit card", "stripe"].map((cell) => historySheet([{ name: "Income", rows: [["date_paid", "client", "service", "method", "amount_eur"], ["2025-05-01", "A", "Cut", cell, "60"]] }]).income[0]?.method)).toEqual(Array(4).fill("card"));
     const [payment] = await db.select().from(schema.payments).where(eq(schema.payments.userId, user.id));
-    expect((await request(`/payments/${payment!.id}`, { amount_cents: 5000, method: "cash" }, "PATCH")).status).toBe(200);
-    expect((await db.select().from(schema.payments).where(eq(schema.payments.id, payment!.id)))[0]).toMatchObject({ amountCents: 5000, method: "cash" });
+    expect(payment).toMatchObject({ method: "card", linkUrl: null });
+    expect((await request(`/payments/${payment!.id}`, { amount_cents: 5000 }, "PATCH")).status).toBe(200);
+    expect((await db.select().from(schema.payments).where(eq(schema.payments.id, payment!.id)))[0]).toMatchObject({ amountCents: 5000, method: "card" });
+    expect((await request(`/payments/${payment!.id}/undo`, {})).status).toBe(200);
   });
 
   it("does the same in demo mode", async () => {

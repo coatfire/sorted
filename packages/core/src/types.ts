@@ -19,11 +19,13 @@ export type BookingStatus = z.infer<typeof BookingStatus>;
 export const PaymentKind = z.enum(["deposit", "balance", "full", "custom"]);
 export type PaymentKind = z.infer<typeof PaymentKind>;
 
+/** "stripe" is a card charged through one of Sorted's payment links. "card" is any other card payment, such as a terminal. */
 export const PaymentMethod = z.enum([
   "stripe",
   "revolut",
   "cash",
   "bank_transfer",
+  "card",
 ]);
 export type PaymentMethod = z.infer<typeof PaymentMethod>;
 

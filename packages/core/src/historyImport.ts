@@ -132,8 +132,9 @@ export function readCents(value: string): number | undefined {
 }
 
 const KINDS: Record<string, PaymentKind> = { deposit: "deposit", balance: "balance", full: "full", custom: "custom" };
+// A card payment in a file is never "stripe": this account's Stripe did not take it, so it must stay correctable.
 const METHODS: Record<string, PaymentMethod> = {
-  cash: "cash", revolut: "revolut", stripe: "stripe", card: "stripe", "credit card": "stripe", "debit card": "stripe",
+  cash: "cash", revolut: "revolut", stripe: "card", card: "card", "credit card": "card", "debit card": "card",
   "bank transfer": "bank_transfer", transfer: "bank_transfer", bank: "bank_transfer", eft: "bank_transfer",
 };
 const CATEGORIES: Record<string, ExpenseCategory> = {

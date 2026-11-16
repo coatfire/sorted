@@ -21,3 +21,5 @@ DO $$ BEGIN
 EXCEPTION
  WHEN duplicate_object THEN null;
 END $$;
+--> statement-breakpoint
+ALTER TYPE "public"."payment_method" ADD VALUE IF NOT EXISTS 'card';
