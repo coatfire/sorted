@@ -4,9 +4,9 @@
  * someone tries here is what they get after signing up. "Messages" and
  * payment links are simulated — nothing leaves the browser.
  */
-import type { Client, Expense, MessageLogEntry, Payment, BookingDocument, BusyBlock } from "@sorted/core";
-import { ImportClientsInput, planClientImport, ImportHistoryInput, planHistoryImport, historyJobs, heldHistory, exportCsvText, exportSections, exportXlsx, inExportRange, paidOn, PlaceSearchInput, PLACE_SUGGESTION_LIMIT, snapshotReceipt, snapshotDocument, documentNumber, TaxSettings, ConfirmExpenseInput, RecordPaymentInput, EditPaymentInput, paymentPaidAt, irelandToday, addCalendarDays, CalendarDate, shiftDublinWeeks, RepeatInput, Services, bookingStage, CreateClientInput, UpdateClientInput, MessageSentInput, CreateBookingInput, agreedBookingStart, missingBookingDetails, bookingAtDublinTime, BusyRange } from "@sorted/core";
-import type { Backend, BookingRow, Snapshot } from "./backend";
+import type { Client, Expense, MessageLogEntry, Payment, BookingDocument, BusyBlock, Trip } from "@sorted/core";
+import { TripInput, BookingTravelInput, TravelMetres, mileageLog, mileageSection, ImportClientsInput, planClientImport, ImportHistoryInput, planHistoryImport, historyJobs, heldHistory, exportCsvText, exportSections, exportXlsx, inExportRange, paidOn, PlaceSearchInput, PLACE_SUGGESTION_LIMIT, snapshotReceipt, snapshotDocument, documentNumber, TaxSettings, ConfirmExpenseInput, RecordPaymentInput, EditPaymentInput, paymentPaidAt, irelandToday, addCalendarDays, CalendarDate, shiftDublinWeeks, RepeatInput, Services, bookingStage, CreateClientInput, UpdateClientInput, MessageSentInput, CreateBookingInput, agreedBookingStart, missingBookingDetails, bookingAtDublinTime, BusyRange } from "@sorted/core";
+import type { Backend, BookingRow, Snapshot, TripDraft } from "./backend";
 import { blobToDataUrl } from "./image";
 import { settingsAutosaveRegistry } from "./settingsAutosaveSession";
 
@@ -20,6 +20,10 @@ interface DemoData extends Omit<Snapshot, "documents"> {
 }
 
 const id = () => crypto.randomUUID();
+function tripFields(draft: TripDraft): Omit<Trip, "id" | "createdAt"> {
+  const input = TripInput.parse({ trip_date: draft.tripDate, destination: draft.destination, purpose: draft.purpose, travel_metres: draft.travelMetres });
+  return { tripDate: input.trip_date, destination: input.destination, purpose: input.purpose, travelMetres: input.travel_metres };
+}
 const now = () => new Date().toISOString();
 
 function at(daysFromNow: number, hour: number, minute = 0) {
@@ -54,14 +58,16 @@ function seed(): DemoData {
       location: "Studio", notes: "Soft, natural look. Bring veil options.",
     }),
     aoife: booking(aoife, "Wedding hair", at(0, 14, 30), 35000, 5000, "confirmed", {
-      location: "The K Club, Kildare",
+      location: "The K Club, Kildare", travelMetres: 64000,
     }),
     emma: booking(emma, "Makeup", at(2, 11), 12000, 0, "enquiry"),
     ryan: booking(ryan, "Wedding party", at(4, 8, 30), 40000, 10000, "confirmed", {
       location: "Ballymagarvey Village",
     }),
     late: booking(emma, "Debs makeup", at(-1, 16), 6500, 0, "confirmed"),
-    niamh: booking(niamh, "Bridal makeup", at(-4, 9), 22000, 4000, "completed"),
+    niamh: booking(niamh, "Bridal makeup", at(-4, 9), 22000, 4000, "completed", {
+      location: "Carton House, Maynooth", travelMetres: 38000,
+    }),
     laura: booking(laura, "Editorial makeup", at(-13, 12), 18000, 0, "completed"),
     autumn: booking(sarah, "Wedding makeup", at(38, 9), 28000, 5000, "confirmed", {
       location: "Tankardstown House",
@@ -135,6 +141,9 @@ function seed(): DemoData {
       expense("MAC Cosmetics", 13290, "materials", earlier(1, 16)),
       expense("Three Ireland", 3500, "phone_internet", earlier(2, 3)),
       expense("Hiscox", 21000, "insurance", earlier(3, 11)),
+    ],
+    trips: [
+      { id: id(), tripDate: irelandToday(new Date(at(-9, 12))), destination: "Salon Services, Dublin 12", purpose: "Stock from the wholesaler", travelMetres: 27000, createdAt: at(-9, 12) },
     ],
     messages: [
       message(b.sarah, "confirmation", at(-5, 14, 2)),
@@ -288,6 +297,7 @@ export const demoBackend: Backend = {
   async load() {
     const { messages: _m, receipts: _r, documents: _d, ...snapshot } = data();
     snapshot.bookings.forEach((booking) => { booking.followUpOn ??= null; booking.paymentRequestedAt ??= null; });
+    snapshot.trips = data().trips ??= [];
     const sentAt = (documentId: string) => data().messages.filter(message => message.meta?.documentId === documentId).map(message => message.sentAt).sort().at(-1) ?? null;
     const documents = (data().documents ?? []).map(({ id, bookingId, kind, number, issuedAt, paymentId, voidedAt }) => ({ id, bookingId, kind, number, issuedAt, paymentId, voidedAt: voidedAt ?? null, sentAt: sentAt(id) }))
       .sort((a, b) => b.issuedAt.localeCompare(a.issuedAt));
@@ -297,7 +307,7 @@ export const demoBackend: Backend = {
   async createBooking(draft) {
     if (draft.followUpOn != null) CalendarDate.parse(draft.followUpOn);
     const repeat = draft.repeat ? RepeatInput.parse({ every_weeks: draft.repeat.everyWeeks, count: draft.repeat.count }) : null;
-    CreateBookingInput.parse({ client_id: draft.clientId, client: draft.client, service: draft.service, status: draft.status, start_at: draft.startAt, time_tbc: draft.timeTbc, price_cents: draft.priceCents, deposit_cents: draft.depositCents, repeat: repeat ?? undefined });
+    CreateBookingInput.parse({ client_id: draft.clientId, client: draft.client, service: draft.service, status: draft.status, start_at: draft.startAt, time_tbc: draft.timeTbc, price_cents: draft.priceCents, deposit_cents: draft.depositCents, travel_metres: draft.travelMetres, repeat: repeat ?? undefined });
     const start = agreedBookingStart(draft.startAt ? new Date(draft.startAt) : null, draft.timeTbc ?? false);
     const dates = Array.from({ length: repeat?.count ?? 1 }, (_, index) => start ? shiftDublinWeeks(start, index * (repeat?.every_weeks ?? 1)).toISOString() : null);
     const d = data();
@@ -315,7 +325,7 @@ export const demoBackend: Backend = {
       id: id(), clientId: client.id, client, service: draft.service, startAt,
       timeTbc: Boolean(startAt && draft.timeTbc),
       endAt: null, priceCents: draft.priceCents, depositCents: draft.depositCents,
-      status: draft.status ?? "enquiry", location: draft.location, notes: draft.notes, gcalEventId: null,
+      status: draft.status ?? "enquiry", location: draft.location, travelMetres: draft.travelMetres ?? null, notes: draft.notes, gcalEventId: null,
       completedAt: null, createdAt: now(),
       followUpOn: draft.status !== "confirmed" && index === 0 ? draft.followUpOn === undefined ? addCalendarDays(irelandToday(), 2) : draft.followUpOn : null, paymentRequestedAt: null,
     }));
@@ -335,6 +345,7 @@ export const demoBackend: Backend = {
     const booking = mustFind(data().bookings, bookingId, "Booking");
     if (booking.status === "completed" || booking.status === "cancelled") throw new Error(`A ${booking.status} booking can't be edited`);
     if (draft.followUpOn != null && booking.status !== "enquiry") throw new Error("Only enquiries can have a follow-up date");
+    if (draft.travelMetres != null) TravelMetres.parse(draft.travelMetres);
     if (booking.timeTbc && draft.timeTbc === false && draft.startAt === undefined) throw new Error("Add a time");
     const next = { ...booking, ...draft };
     const start = agreedBookingStart(next.startAt ? new Date(next.startAt) : null, next.timeTbc ?? false);
@@ -405,6 +416,27 @@ export const demoBackend: Backend = {
     const booking = mustFind(data().bookings, bookingId, "Booking");
     if (booking.status !== "enquiry") throw new Error("Only enquiries can have a follow-up date");
     booking.followUpOn = date === null ? null : CalendarDate.parse(date);
+    save();
+  },
+
+  async bookingTravel(bookingId, travelMetres) {
+    mustFind(data().bookings, bookingId, "Booking").travelMetres = BookingTravelInput.parse({ travel_metres: travelMetres }).travel_metres;
+    save();
+  },
+
+  async createTrip(draft) {
+    (data().trips ??= []).push({ id: id(), ...tripFields(draft), createdAt: now() });
+    save();
+  },
+
+  async updateTrip(tripId, draft) {
+    Object.assign(mustFind(data().trips ?? [], tripId, "Trip"), tripFields(draft));
+    save();
+  },
+
+  async deleteTrip(tripId) {
+    const d = data();
+    d.trips = (d.trips ?? []).filter((trip) => trip.id !== tripId);
     save();
   },
 
@@ -701,6 +733,7 @@ export const demoBackend: Backend = {
           date: e.expenseDate!.slice(0, 10), merchant: e.merchant, category: e.category,
           amountCents: e.amountCents, hasReceipt: Boolean(e.receiptKey), vatCents: e.vatCents ?? null,
         })),
+      mileageSection(mileageLog(d.bookings, d.trips ?? [], range), d.user.address),
     );
     return format === "xlsx" ? exportXlsx(sections) : new Blob([exportCsvText(sections)], { type: "text/csv;charset=utf-8" });
   },

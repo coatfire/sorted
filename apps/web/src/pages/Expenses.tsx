@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState, type ChangeEvent, type FormEvent } from "react";
-import { RECEIPT_PDF_MAX_BYTES, type Expense, type ExpenseCategory } from "@sorted/core";
+import { RECEIPT_PDF_MAX_BYTES, type Expense, type ExpenseCategory, type Trip } from "@sorted/core";
 import { Button, Card, EmptyState, Field, Icon, MoneyText, PageHeader, Sheet } from "../components";
 import { CATEGORIES, categoryLabel, centsToInput, dayMonth, monthYear, parseEuros, toDateInput } from "../lib/format";
 import { downscaleImage } from "../lib/image";
 import { manageDialogFocus } from "../lib/dialogFocus";
 import { useAction, useData, useStore } from "../lib/store";
 import { useValidation } from "../lib/useValidation";
+import { TripList, TripSheet } from "../Trips";
 
 /** Browsers won't open a data: URL in a new tab, so PDFs always get a blob: URL. */
 async function storedReceipt(pending: Promise<string | null>) {
@@ -38,6 +39,7 @@ export function Expenses() {
   const [open, setOpen] = useState<"new" | Expense | null>(null);
   const [photo, setPhoto] = useState<{ blob?: Blob; url: string; pdf?: boolean; name?: string } | null>(null);
   const [form, setForm] = useState(blank);
+  const [trip, setTrip] = useState<"new" | Trip | null>(null);
   const validation = useValidation({
     amount: () => !parseEuros(form.amount) ? "Add the amount, like 24.60." : !user.vatRegistered && (parseEuros(form.vat) ?? 0) > parseEuros(form.amount)! ? "The amount cannot be less than the saved VAT paid. Update VAT in Settings to edit it." : undefined,
     vat: () => user.vatRegistered && form.vat.trim() && (parseEuros(form.vat) === null || parseEuros(form.vat)! > (parseEuros(form.amount) ?? 0)) ? "VAT paid cannot exceed the expense amount." : undefined,
@@ -167,6 +169,9 @@ export function Expenses() {
           </button>
           <button className="reveal-button" onClick={() => { setForm(blank()); show("new"); }}>
             <Icon name="plus" size={17} /> Add one without a receipt
+          </button>
+          <button className="reveal-button" onClick={() => setTrip("new")}>
+            <Icon name="map" size={17} /> Add a trip (km)
           </button>
         </div>
       {open && <Sheet title={editing ? "Edit expense" : "New expense"} onClose={close}>
@@ -338,6 +343,9 @@ export function Expenses() {
           )}
         </Card>
       </section>
+
+      <TripList onOpen={setTrip} />
+      {trip && <TripSheet key={trip === "new" ? "new" : trip.id} trip={trip} onClose={() => setTrip(null)} />}
 
       {confirmDelete && editing && (
         <Sheet title="Delete this expense?" onClose={() => setConfirmDelete(false)}>

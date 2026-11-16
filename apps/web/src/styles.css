@@ -1558,3 +1558,10 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 .year-stats .year-note { grid-column: 1 / -1; margin: -4px 0 0; color: var(--muted); font-size: 0.75rem; line-height: 1.5; }
 .year-stats .wide-stat { grid-column: 1 / -1; }
 .icon-button.labelled { display: inline-flex; width: auto; align-items: center; gap: 6px; padding: 0 14px; border-radius: 22px; color: var(--ink); font-size: 0.85rem; font-weight: 700; }
+
+/* Km travelled */
+button.detail-link { width: 100%; padding: 0; border: 0; background: none; font: inherit; color: inherit; text-align: left; cursor: pointer; }
+.trip-km { font-size: 0.86rem; font-weight: 700; white-space: nowrap; }
+.trip-note { margin: 10px 4px 0; }
+.year-stats .km-stat { padding: 12px 13px; }
+.year-stats .km-stat .year-note { margin: 2px 0 0; }

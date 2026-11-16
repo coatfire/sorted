@@ -10,6 +10,7 @@ import { importRoutes } from "./handlers/imports";
 import { bookingRoutes } from "./handlers/bookings";
 import { paymentRoutes } from "./handlers/payments";
 import { expenseRoutes } from "./handlers/expenses";
+import { tripRoutes } from "./handlers/trips";
 import { reportRoutes } from "./handlers/reports";
 import { webhookRoutes } from "./handlers/webhooks";
 import { internalRoutes } from "./handlers/internal";
@@ -49,6 +50,7 @@ app.use("/api/imports/*", requireAuth);
 app.use("/api/bookings/*", requireAuth);
 app.use("/api/payments/*", requireAuth);
 app.use("/api/expenses/*", requireAuth);
+app.use("/api/trips/*", requireAuth);
 app.use("/api/reports/*", requireAuth);
 app.use("/api/drive/*", requireAuth);
 app.use("/api/places/*", requireAuth);
@@ -59,6 +61,7 @@ app.route("/api/imports", importRoutes);
 app.route("/api/bookings", bookingRoutes);
 app.route("/api/payments", paymentRoutes);
 app.route("/api/expenses", expenseRoutes);
+app.route("/api/trips", tripRoutes);
 app.route("/api/reports", reportRoutes);
 
 // n8n callbacks

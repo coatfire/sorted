@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom";
 import { useState } from "react";
-import { calendarDaysBetween, dublinDateTime, exportFileName, ExportRange, irelandToday, lastYearEnd, moneyOwed, moneyYear, yearRange, type OwedItem } from "@sorted/core";
+import { calendarDaysBetween, dublinDateTime, exportFileName, ExportRange, irelandToday, lastYearEnd, moneyOwed, moneyYear, yearRange, kmLabel, mileageLog, mileageMetres, type OwedItem } from "@sorted/core";
 import { BookingMessageSheet } from "../BookingMessageSheet";
 import type { BookingRow } from "../lib/backend";
 import { Button, Card, EmptyState, Field, Icon, MoneyText, PageHeader } from "../components";
@@ -16,7 +16,7 @@ const longDate = (date: string) => new Date(`${date}T12:00:00Z`).toLocaleDateStr
 const MONTH_NAMES = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 
 export function Money() {
-  const { bookings, payments, expenses, user } = useData();
+  const { bookings, payments, expenses, user, trips } = useData();
   const { backend } = useStore();
   const { busy, run } = useAction();
   const [reminder, setReminder] = useState<{ booking: BookingRow; amount: number } | null>(null);
@@ -33,6 +33,7 @@ export function Money() {
   const [custom, setCustom] = useState<ExportRange>(() => ({ from: `${year}-01-01`, to: irelandToday(now) }));
   const chosen = ExportRange.safeParse(otherDates ? custom : yearRange(shown.year));
   const range = chosen.success ? chosen.data : null;
+  const businessMetres = mileageMetres(mileageLog(bookings, trips, yearRange(shown.year), irelandToday(now)));
 
   return (
     <div className="page">
@@ -83,6 +84,13 @@ export function Money() {
             <div className="profit-stat">
               <span>Profit before income tax</span><MoneyText cents={shown.profitCents} />
             </div>
+            {businessMetres > 0 && <div className="wide-stat km-stat">
+              <span>Business km</span><strong className="money">{kmLabel(businessMetres)}</strong>
+              <p className="year-note">
+                Driven for jobs and trips. For your accountant: not counted in expenses or profit.
+                {!user.address?.trim() && <> <Link className="text-link" to="/settings">Add your business address</Link> so the log shows where each trip starts.</>}
+              </p>
+            </div>}
           </div>
           <p className="chart-title">Paid income by month · same {showLast ? "full-year" : "year-to-date"} basis</p>
           <div className="bar-chart" role="img" aria-label={`Paid income after recorded VAT by month, ${shown.year}. ${months.map((amount, i) => `${MONTH_NAMES[i]} ${euros(amount)}`).join(", ")}`}>
@@ -123,7 +131,7 @@ export function Money() {
           </Button>
           <p className="export-note" role="status">
             {range
-              ? `An Excel file of income and expenses from ${longDate(range.from)} to ${longDate(range.to)}, ready for your accountant.`
+              ? `An Excel file of income${businessMetres > 0 ? ", expenses and your mileage log" : " and expenses"} from ${longDate(range.from)} to ${longDate(range.to)}, ready for your accountant.`
               : "Choose a from date that's on or before the to date."}
           </p>
           <Link className="text-link" to="/money/import">Import past income and expenses</Link>

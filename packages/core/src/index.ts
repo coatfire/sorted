@@ -22,3 +22,4 @@ export * from "./exportFile";
 export * from "./clientImport";
 export * from "./exportRange";
 export * from "./historyImport";
+export * from "./mileage";

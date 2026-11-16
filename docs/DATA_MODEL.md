@@ -54,6 +54,11 @@ Both emit `payment.paid`.
 `id, user_id, merchant, amount_cents, category, expense_date, receipt_key,
 ocr_raw (jsonb), status (needs_review|confirmed), created_at`
 
+### trips
+`id, user_id, trip_date (date), destination, purpose, travel_metres, created_at`
+Business trips that aren't bookings. `bookings.travel_metres` holds the km for a
+job (there and back, in metres). Together they are the mileage log; see API.md.
+
 ### receipts
 Receipt photos, downscaled in the browser and stored as base64 in Postgres —
 no bucket to provision for the MVP. `expenses.receipt_key` holds the receipt

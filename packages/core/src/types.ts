@@ -116,6 +116,9 @@ export const UpdateClientInput = z.object({
   notes: z.string().max(2000).nullable().optional(),
 });
 
+/** A distance driven for the business, there and back, in metres. 5,000 km is further than any day's work. */
+export const TravelMetres = z.number().int().positive().max(5_000_000);
+
 export const RepeatInput = z.object({ every_weeks: z.union([z.literal(1), z.literal(2), z.literal(4)]), count: z.number().int().min(2).max(12) });
 export type RepeatInput = z.infer<typeof RepeatInput>;
 
@@ -135,6 +138,8 @@ export const CreateBookingInput = z
     price_cents: z.number().int().nonnegative().nullable().default(null),
     deposit_cents: z.number().int().nonnegative().default(0),
     location: z.string().max(500).optional(),
+    /** Km driven for this job, there and back, in metres. */
+    travel_metres: TravelMetres.nullable().optional(),
     notes: z.string().max(2000).optional(),
   })
   .refine((v) => !!v.client_id !== !!v.client, {
@@ -157,6 +162,7 @@ export const UpdateBookingInput = z.object({
   deposit_cents: z.number().int().nonnegative().optional(),
   // null clears the field
   location: z.string().max(500).nullable().optional(),
+  travel_metres: TravelMetres.nullable().optional(),
   notes: z.string().max(2000).nullable().optional(),
 });
 export type UpdateBookingInput = z.infer<typeof UpdateBookingInput>;
@@ -297,6 +303,8 @@ export interface Booking {
   depositCents: number;
   status: BookingStatus;
   location: string | null;
+  /** Km driven for this job, there and back, in metres. */
+  travelMetres?: number | null;
   notes: string | null;
   gcalEventId: string | null;
   completedAt: string | null;

@@ -145,8 +145,8 @@ const CATEGORIES: Record<string, ExpenseCategory> = {
 };
 
 type Section = { title: string; rows: string[][] };
-const TITLE = /^(income|expenses)$/i;
-/** A CSV export holds both tables, each under its own INCOME or EXPENSES line. */
+const TITLE = /^(income|expenses|mileage)$/i;
+/** A CSV export holds each table under its own INCOME, EXPENSES or MILEAGE line. The mileage log has no amounts, so it is passed over. */
 function sections({ name, rows }: ImportTable): Section[] {
   const found: Section[] = [{ title: name, rows: [] }];
   for (const row of rows) {

@@ -1,6 +1,6 @@
-import type { Booking, Client, Expense, Health, MessageLogEntry, Payment, User, BookingDocument, CalendarLinks, IssuedDocument } from "@sorted/core";
+import type { Booking, Client, Expense, Health, MessageLogEntry, Payment, User, BookingDocument, CalendarLinks, IssuedDocument, Trip } from "@sorted/core";
 import { api, apiBlob, apiUrl, patch, post } from "./api";
-import type { Backend, ExpenseDraft } from "./backend";
+import type { Backend, ExpenseDraft, TripDraft } from "./backend";
 import { blobToDataUrl } from "./image";
 import { settingsAutosaveRegistry } from "./settingsAutosaveSession";
 
@@ -10,6 +10,10 @@ const expenseBody = (draft: ExpenseDraft) => ({
   vat_cents: draft.vatCents,
   category: draft.category,
   expense_date: draft.expenseDate,
+});
+
+const tripBody = (draft: TripDraft) => ({
+  trip_date: draft.tripDate, destination: draft.destination, purpose: draft.purpose, travel_metres: draft.travelMetres,
 });
 
 export const apiBackend: Backend = {
@@ -32,7 +36,7 @@ export const apiBackend: Backend = {
   forgot: (email) => post("/auth/forgot", { email }),
   resetPassword: (token, password) => post("/auth/reset", { token, password }),
   async load() {
-    const [user, health, clients, bookings, payments, expenses, documents] = await Promise.all([
+    const [user, health, clients, bookings, payments, expenses, documents, trips] = await Promise.all([
       api<User>("/auth/me"),
       api<Health>("/health"),
       api<Client[]>("/clients"),
@@ -40,6 +44,7 @@ export const apiBackend: Backend = {
       api<Array<{ payment: Payment; receiptVoidedAt: string | null }>>("/payments"),
       api<Expense[]>("/expenses"),
       api<IssuedDocument[]>("/bookings/documents"),
+      api<Trip[]>("/trips"),
     ]);
     return {
       user,
@@ -48,6 +53,7 @@ export const apiBackend: Backend = {
       bookings: bookings.map(({ booking, client }) => ({ ...booking, client })),
       payments: payments.map(({ payment, receiptVoidedAt }) => ({ ...payment, receiptVoidedAt })),
       expenses,
+      trips,
       documents,
     };
   },
@@ -65,6 +71,7 @@ export const apiBackend: Backend = {
       price_cents: draft.priceCents,
       deposit_cents: draft.depositCents,
       location: draft.location ?? undefined,
+      travel_metres: draft.travelMetres ?? undefined,
       notes: draft.notes ?? undefined,
     }),
 
@@ -77,6 +84,7 @@ export const apiBackend: Backend = {
       price_cents: draft.priceCents,
       deposit_cents: draft.depositCents,
       location: draft.location,
+      travel_metres: draft.travelMetres,
       notes: draft.notes,
     });
   },
@@ -85,6 +93,10 @@ export const apiBackend: Backend = {
   completeBooking: (id) => post(`/bookings/${id}/complete`),
   cancelBooking: (id) => post(`/bookings/${id}/cancel`),
   followUp: (id, date) => patch(`/bookings/${id}`, { follow_up_on: date }),
+  bookingTravel: async (id, travelMetres) => { await api(`/bookings/${id}/travel`, { method: "PUT", body: JSON.stringify({ travel_metres: travelMetres }) }); },
+  createTrip: async (draft) => { await post("/trips", tripBody(draft)); },
+  updateTrip: async (id, draft) => { await patch(`/trips/${id}`, tripBody(draft)); },
+  deleteTrip: (id) => api(`/trips/${id}`, { method: "DELETE" }),
   paymentRequested: (id) => post(`/bookings/${id}/payment-requested`),
   messageSent: (id, input) => post(`/bookings/${id}/message-sent`, input),
 

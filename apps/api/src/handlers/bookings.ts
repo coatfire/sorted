@@ -15,6 +15,7 @@ import {
   BookingStatus,
   CreateBookingInput,
   UpdateBookingInput,
+  BookingTravelInput,
   CreateDocumentInput,
   snapshotReceipt,
   snapshotDocument,
@@ -298,6 +299,7 @@ bookingRoutes.post("/", async (c) => {
         priceCents: input.price_cents,
         depositCents: input.deposit_cents,
         location: input.location,
+        travelMetres: input.travel_metres,
         notes: input.notes,
         followUpOn: input.status === "enquiry" && index === 0 ? input.follow_up_on === undefined ? addCalendarDays(irelandToday(), 2) : input.follow_up_on : null,
         };
@@ -316,6 +318,18 @@ bookingRoutes.post("/", async (c) => {
     await Promise.all(rows.map(booking => emitBookingEvent(userId, booking.id, "booking.confirmed")));
   }
   return c.json({ ...rows[0], seriesCount: rows.length }, 201);
+});
+
+/**
+ * PUT /api/bookings/:id/travel { travel_metres } — the km for a job, there and back. Null clears it.
+ * Allowed at any stage: the real distance is often only known once the job is done.
+ */
+bookingRoutes.put("/:id/travel", async (c) => {
+  const parsed = BookingTravelInput.safeParse(await c.req.json());
+  if (!parsed.success) return c.json({ error: "Enter the km as a number, like 24 or 24.5." }, 400);
+  const [booking] = await db.update(schema.bookings).set({ travelMetres: parsed.data.travel_metres })
+    .where(and(eq(schema.bookings.id, c.req.param("id")), eq(schema.bookings.userId, c.get("userId")))).returning();
+  return booking ? c.json(booking) : c.json({ error: "Booking not found" }, 404);
 });
 
 /** POST /api/bookings/:id/confirm — enquiry → confirmed, emits automation */
@@ -478,6 +492,7 @@ bookingRoutes.patch("/:id", async (c) => {
         priceCents: input.price_cents,
         depositCents: input.deposit_cents,
         location: input.location,
+        travelMetres: input.travel_metres,
         notes: input.notes,
         followUpOn: input.follow_up_on,
       })

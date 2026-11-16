@@ -105,7 +105,10 @@ it("the demo exports the same range, oldest first", async () => {
   const income = all.slice(2, all.indexOf(""));
   expect(income).toHaveLength(paid.length);
   expect(income.map((row) => row.slice(1, 11))).toEqual(paid);
-  expect(all.slice(all.indexOf("") + 3)).toHaveLength(expenses.filter((expense) => expense.expenseDate).length);
+  // The demo has trips, so a MILEAGE table follows the expenses.
+  const mileage = all.indexOf("", all.indexOf("") + 1);
+  expect(all[mileage + 1]).toBe('"MILEAGE"');
+  expect(all.slice(all.indexOf("") + 3, mileage)).toHaveLength(expenses.filter((expense) => expense.expenseDate).length);
   const onlyFirst = await rows(first, first);
   expect(onlyFirst.slice(2, onlyFirst.indexOf(""))).toHaveLength(paid.filter((date) => date === first).length);
   const none = await rows("1999-01-01", "1999-12-31");

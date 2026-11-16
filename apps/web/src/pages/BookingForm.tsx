@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState, type FormEvent } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
-import { normaliseClientPhone, CreateClientInput, CalendarDate, bookAgainStart, bookingAtDublinTime, dublinDateTime, RepeatInput, type Client } from "@sorted/core";
+import { normaliseClientPhone, CreateClientInput, CalendarDate, bookAgainStart, bookingAtDublinTime, dublinDateTime, RepeatInput, kmInput, lastTravelTo, parseKm, type Client } from "@sorted/core";
 import { BackButton, Button, Card, EmptyState, Field, Icon, MoneyText, PageHeader } from "../components";
 import type { BookingRow } from "../lib/backend";
 import { centsToInput, formatPhone, longDay, noTime, parseEuros, time } from "../lib/format";
@@ -48,11 +48,14 @@ export function BookingForm() {
       price: initial ? centsToInput(initial.priceCents) : "",
       deposit: initial?.depositCents ? centsToInput(initial.depositCents) : "",
       location: initial?.location ?? "",
+      km: kmInput(initial?.travelMetres),
       notes: initial?.notes ?? "",
     };
   });
+  // Km filled in from an earlier job follows the address; km the trader typed is left alone.
+  const [kmFromLastTime, setKmFromLastTime] = useState(false);
   const [showDeposit, setShowDeposit] = useState(Boolean(initial?.depositCents));
-  const [showMore, setShowMore] = useState(Boolean(initial?.location || initial?.notes));
+  const [showMore, setShowMore] = useState(Boolean(initial?.location || initial?.notes || initial?.travelMetres));
   const validation = useValidation({
     clientName: () => !client && !form.clientName.trim() ? "Add the client’s name." : undefined,
     service: () => !form.service.trim() ? "Choose or enter a service." : undefined,
@@ -75,6 +78,7 @@ export function BookingForm() {
       if (price === null && deposit > 0) return "Add a price before requesting a deposit.";
       if (price !== null && deposit > price) return "The deposit can’t be more than the price.";
     },
+    km: () => parseKm(form.km) === undefined ? "Enter the km as a number, like 24 or 24.5." : undefined,
     date: () => !form.date && !strict.current && !form.time && !repeatEvery ? undefined : !CalendarDate.safeParse(form.date).success ? "Add a date for Save booking or repeats. It’s optional for an enquiry." : undefined,
     time: () => !form.time && !strict.current ? undefined : !/^\d{2}:\d{2}$/.test(form.time) ? "Add a time for Save booking. It’s optional for an enquiry." : undefined,
   });
@@ -89,6 +93,14 @@ export function BookingForm() {
   function update(field: keyof typeof form, value: string) {
     validation.field(field).onChangeCapture();
     setForm((current) => ({ ...current, [field]: value }));
+  }
+
+  function changeLocation(location: string) {
+    update("location", location);
+    if (!kmFromLastTime && form.km.trim()) return;
+    const lastTime = lastTravelTo(bookings, location);
+    setForm((current) => ({ ...current, km: kmInput(lastTime) }));
+    setKmFromLastTime(lastTime !== null);
   }
 
   if (id && !editing) {
@@ -125,6 +137,7 @@ export function BookingForm() {
       priceCents,
       depositCents,
       location: form.location.trim() || null,
+      travelMetres: parseKm(form.km) ?? null,
       notes: form.notes.trim() || null,
     };
     if (editing) {
@@ -310,7 +323,14 @@ export function BookingForm() {
             </button>
           ) : (
             <>
-              <LocationField value={form.location} onChange={(location) => update("location", location)} />
+              <LocationField value={form.location} onChange={changeLocation} />
+              <Field
+                label="Km there and back (optional)"
+                helper={kmFromLastTime ? "From your last job at this address. Change it if it’s different." : "For your mileage log. You can add it after the job too."}
+                {...validation.field("km")}
+              >
+                <input name="km" inputMode="decimal" value={form.km} onChange={(event) => { update("km", event.target.value); setKmFromLastTime(false); }} placeholder="e.g. 24" />
+              </Field>
               <Field label="Notes">
                 <textarea
                   value={form.notes}

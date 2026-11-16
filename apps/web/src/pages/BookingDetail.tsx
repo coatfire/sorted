@@ -19,11 +19,12 @@ import {
 import { useAction, useData, useStore, useSession } from "../lib/store";
 import { buildDocumentFile, downloadFile, shareFile } from "../lib/documentFile";
 import { DocumentSendSheet } from "../DocumentSendSheet";
+import { BookingKm } from "../BookingKm";
 
 export function BookingDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { bookings, payments, features, user } = useData();
+  const { bookings, payments, features, user, trips } = useData();
   const { backend, toast, refresh } = useStore();
   const { mode } = useSession();
   const [documentBusy, setDocumentBusy] = useState(false);
@@ -64,6 +65,9 @@ export function BookingDetail() {
   }
 
   const client = booking.client;
+  // Offered where there's somewhere to drive to, and everywhere once the trader keeps a mileage log.
+  const showKm = booking.travelMetres != null
+    || (booking.status !== "cancelled" && (Boolean(booking.location) || trips.length > 0 || bookings.some((item) => item.travelMetres)));
   const bookingPayments = payments
     .filter((payment) => payment.bookingId === booking.id && (payment.status !== "cancelled" || payment.paidAt !== null))
     .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
@@ -141,6 +145,7 @@ export function BookingDetail() {
             <a className="detail-link calendar-directions" href={directionsLink(booking.location)} target="_blank" rel="noreferrer"><strong>{booking.location}</strong><span>Get directions</span></a>
           </div>
         )}
+        {showKm && <BookingKm booking={booking} />}
         <div className="detail-line">
           <span className="detail-icon"><Icon name="user" /></span>
           <Link to={`/clients/${client.id}`} className="detail-link">

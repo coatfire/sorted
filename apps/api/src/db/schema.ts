@@ -189,6 +189,7 @@ export const bookings = pgTable(
     depositCents: integer("deposit_cents").notNull().default(0),
     status: bookingStatus("status").notNull().default("enquiry"),
     location: text("location"),
+    travelMetres: integer("travel_metres"), // km for the job, there and back
     notes: text("notes"),
     gcalEventId: text("gcal_event_id"),
     reminderSentAt: timestamp("reminder_sent_at", { withTimezone: true }),
@@ -200,6 +201,25 @@ export const bookings = pgTable(
       .defaultNow(),
   },
   (t) => [index("bookings_user_start_idx").on(t.userId, t.startAt)],
+);
+
+/** Business trips that aren't bookings. With bookings' travel_metres they make up the mileage log. */
+export const trips = pgTable(
+  "trips",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    tripDate: date("trip_date").notNull(),
+    destination: text("destination").notNull(),
+    purpose: text("purpose").notNull(),
+    travelMetres: integer("travel_metres").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [index("trips_user_date_idx").on(t.userId, t.tripDate)],
 );
 
 export const payments = pgTable(
