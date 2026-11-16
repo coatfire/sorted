@@ -114,12 +114,14 @@ export function clientSheet(table: string[][]): ClientSheet {
     const phoneText = firstPhone(cell(row, at.phone)), emailText = firstEmail(cell(row, at.email)).toLowerCase();
     const phone = phoneText ? normaliseClientPhone(phoneText) ?? undefined : undefined;
     const email = emailText && z.string().email().max(320).safeParse(emailText).success ? emailText : undefined;
-    const kept: string[] = [];
-    if (cell(row, at.notes)) kept.push(cell(row, at.notes));
     // Nothing is thrown away: details Sorted can't use go into the notes as they were written.
-    if (phoneText && !phone) { sheet.unreadPhones++; kept.push(`Phone as written: ${phoneText}`); }
-    if (emailText && !email) { sheet.unreadEmails++; kept.push(`Email as written: ${emailText}`); }
-    sheet.rows.push({ name, phone, email, notes: kept.join(" · ").slice(0, 2000) || undefined });
+    const unread: string[] = [];
+    if (phoneText && !phone) { sheet.unreadPhones++; unread.push(`Phone as written: ${phoneText}`); }
+    if (emailText && !email) { sheet.unreadEmails++; unread.push(`Email as written: ${emailText}`); }
+    // Long notes give way to the unread details, never the other way round.
+    const details = unread.join(" · ").slice(0, 2000);
+    const notes = cell(row, at.notes).slice(0, Math.max(0, 2000 - details.length - (details ? 3 : 0)));
+    sheet.rows.push({ name, phone, email, notes: [notes, details].filter(Boolean).join(" · ") || undefined });
   }
   return sheet;
 }
