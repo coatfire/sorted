@@ -16,13 +16,12 @@ export function BookingCalendarSheet({ booking, onClose }: { booking: BookingRow
       try {
         const content = buildCalendar({ bookings: [booking], name: "Sorted", appUrl });
         const file = new File([content], `booking-${booking.id}.ics`, { type: "text/calendar;charset=utf-8" });
-        if (navigator.canShare?.({ files: [file] })) await navigator.share({ files: [file], title: booking.service });
-        else download(file, file.name);
+        download(file, file.name);
       } catch (error) {
         if (!(error instanceof DOMException && error.name === "AbortError")) toast("Couldn't open the calendar file. Try again.", "error");
       } finally { setBusy(false); }
-    }}>iPhone / phone calendar</Button>
-    <a className="button button-soft" href={googleCalendarEventUrl(booking, appUrl)} target="_blank" rel="noreferrer">Google Calendar</a>
+    }}>Add to phone calendar</Button>
+    <a className="button button-soft" href={googleCalendarEventUrl(booking, appUrl)} target="_blank" rel="noreferrer">Google Calendar (web)</a>
     <Button kind="quiet" onClick={onClose}>Done</Button>
   </Sheet>;
 }

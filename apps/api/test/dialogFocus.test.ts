@@ -77,3 +77,22 @@ it("keeps focus inside a dialog with no focusable controls", () => {
   expect(documentState.activeElement).toBe(panel);
   cleanup();
 });
+
+it.each(["", "auto", "clip"])("restores the original overflow %s only after every nested sheet closes, in either order", overflow => {
+  vi.stubGlobal("document", documentState);
+  vi.stubGlobal("HTMLElement", Element);
+  const panel = () => Object.assign(new Element(), { querySelectorAll: () => [] }) as unknown as HTMLElement;
+  for (const parentFirst of [true, false]) {
+    documentState.body.style.overflow = overflow;
+    const parent = manageDialogFocus(panel(), vi.fn());
+    const child = manageDialogFocus(panel(), vi.fn());
+    expect(documentState.body.style.overflow).toBe("hidden");
+    const first = parentFirst ? parent : child, last = parentFirst ? child : parent;
+    first();
+    expect(documentState.body.style.overflow).toBe("hidden");
+    first();
+    expect(documentState.body.style.overflow).toBe("hidden");
+    last();
+    expect(documentState.body.style.overflow).toBe(overflow);
+  }
+});

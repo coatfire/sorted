@@ -1,9 +1,9 @@
 import { useMemo, useState, type FormEvent } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
-import { normalisePhone, CreateClientInput, CalendarDate, irelandToday, addCalendarDays, bookAgainStart, bookingAtDublinTime, dublinDateTime, RepeatInput, type Client } from "@sorted/core";
+import { normaliseClientPhone, CreateClientInput, CalendarDate, irelandToday, addCalendarDays, bookAgainStart, bookingAtDublinTime, dublinDateTime, RepeatInput, type Client } from "@sorted/core";
 import { BackButton, Button, Card, EmptyState, Field, Icon, MoneyText, PageHeader } from "../components";
 import type { BookingRow } from "../lib/backend";
-import { centsToInput, longDay, parseEuros, time } from "../lib/format";
+import { centsToInput, formatPhone, longDay, parseEuros, time } from "../lib/format";
 import { bookingServiceChips, serviceChipPrice } from "../lib/bookingServices";
 import { BookingMessageSheet } from "../BookingMessageSheet";
 import { useAction, useData, useStore } from "../lib/store";
@@ -54,7 +54,7 @@ export function BookingForm() {
     repeatCount: () => repeatEvery && !RepeatInput.safeParse({ every_weeks: Number(repeatEvery), count: Number(repeatCount) }).success ? "Choose 2 to 12 bookings." : undefined,
     clientEmail: () => !client && form.clientEmail.trim() && !CreateClientInput.shape.email.safeParse(form.clientEmail.trim()).success
       ? "Enter a valid email address." : undefined,
-    clientPhone: () => form.clientPhone.trim() && !normalisePhone(form.clientPhone)
+    clientPhone: () => form.clientPhone.trim() && !normaliseClientPhone(form.clientPhone)
       ? "That mobile number doesn’t look right. Try it like 087 123 4567." : undefined,
     price: () => {
       const price = parseEuros(form.price);
@@ -107,7 +107,7 @@ export function BookingForm() {
     const startAt = bookingAtDublinTime(form.date, form.time, editing?.startAt);
     let phone: string | undefined;
     if (!client && form.clientPhone.trim()) {
-      const normalised = normalisePhone(form.clientPhone);
+      const normalised = normaliseClientPhone(form.clientPhone);
       phone = normalised ?? undefined;
     }
     if (priceCents === null || depositCents === null) return;
@@ -168,7 +168,7 @@ export function BookingForm() {
                 <span className="client-initial">{client.name[0]?.toUpperCase()}</span>
                 <div>
                   <strong>{client.name}</strong>
-                  <span>{client.phone ?? "No mobile on file"}</span>
+                  <span>{formatPhone(client.phone) || "No mobile on file"}</span>
                 </div>
                 <button type="button" className="text-link" onClick={() => setClient(null)}>Change</button>
               </div>
@@ -193,7 +193,7 @@ export function BookingForm() {
                     {matches.map((match) => (
                       <button type="button" key={match.id} onClick={() => { setClient(match); validation.clear(); }}>
                         <span className="client-initial">{match.name[0]?.toUpperCase()}</span>
-                        <span><strong>{match.name}</strong><small>{match.phone ?? "No mobile"}</small></span>
+                        <span><strong>{match.name}</strong><small>{formatPhone(match.phone) || "No mobile"}</small></span>
                         <em>Use</em>
                       </button>
                     ))}

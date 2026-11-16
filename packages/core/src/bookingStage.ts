@@ -1,4 +1,3 @@
-import { dublinDateTime } from "./dates";
 import type { Booking, Payment } from "./types";
 
 export type BookingStage = "enquiry" | "upcoming" | "due" | "owing" | "paid" | "cancelled";
@@ -16,7 +15,12 @@ export function bookingStage(
     case "enquiry": stage = "enquiry"; break;
     case "cancelled": stage = "cancelled"; break;
     case "completed": stage = owedCents > 0 ? "owing" : "paid"; break;
-    case "confirmed": stage = dublinDateTime(booking.startAt).date > dublinDateTime(now).date ? "upcoming" : "due"; break;
+    case "confirmed": {
+      const start = Date.parse(booking.startAt);
+      if (!Number.isFinite(start) || !Number.isFinite(now.getTime())) throw new RangeError("Invalid booking date");
+      stage = start > now.getTime() ? "upcoming" : "due";
+      break;
+    }
   }
   return { stage, owedCents };
 }

@@ -6,6 +6,7 @@ import type { BookingRow } from "./lib/backend";
 import { firstName, longDay, whatsappLink } from "./lib/format";
 import { useAction, useData, useStore } from "./lib/store";
 import { useValidation } from "./lib/useValidation";
+import { MessageOutcome } from "./MessageOutcome";
 
 export function FollowUpLater({ booking, onClose }: { booking: BookingRow; onClose: () => void }) {
   const { backend } = useStore();
@@ -30,15 +31,16 @@ export function FollowUpLater({ booking, onClose }: { booking: BookingRow; onClo
 
 function FollowUpMessage({ booking, onClose }: { booking: BookingRow; onClose: () => void }) {
   const { user } = useData();
+  const [channel, setChannel] = useState<"whatsapp" | "email" | null>(null);
   const [message, setMessage] = useState(`Hi ${firstName(booking.client.name)}, just following up on your enquiry about ${booking.service} on ${longDay(booking.startAt)}. Would you like me to book you in?\n\n${user.businessName || user.name || "Your trader"}`);
   const email = booking.client.email;
   const emailLink = email ? `mailto:${encodeURIComponent(email).replace(/%40/g, "@")}?subject=${encodeURIComponent(`Your enquiry — ${booking.service}`)}&body=${encodeURIComponent(message)}` : "";
   return <Sheet title="Follow up" onClose={onClose}>
-    <p className="sheet-copy">Opens a draft in your app. Review it and tap send there. Sorted won’t mark it as sent.</p>
+    <p className="sheet-copy">Opens a draft in your app. Review it and tap send there. Come back here to confirm whether you sent it.</p>
     <Field label="Message"><textarea rows={6} value={message} onChange={(event) => setMessage(event.target.value)} /></Field>
-    {booking.client.phone && message.trim() ? <a className="button button-primary" href={whatsappLink(booking.client.phone, message)} target="_blank" rel="noreferrer">WhatsApp</a> : <><Button disabled>WhatsApp</Button><p className="sheet-copy">{!booking.client.phone ? "No mobile number added for this client." : "Add a message to open a draft."}</p></>}
-    {email && message.trim() ? <a className="button button-soft" href={emailLink}>Email</a> : <><Button kind="soft" disabled>Email</Button><p className="sheet-copy">{!email ? "No email address added for this client." : "Add a message to open a draft."}</p></>}
-    <Button kind="quiet" onClick={onClose}>Done</Button>
+    {booking.client.phone && message.trim() ? <a className="button button-primary" href={whatsappLink(booking.client.phone, message)} onClick={() => setChannel("whatsapp")} target="_blank" rel="noreferrer">WhatsApp</a> : <><Button disabled>WhatsApp</Button><p className="sheet-copy">{!booking.client.phone ? "No mobile number added for this client." : "Add a message to open a draft."}</p></>}
+    {email && message.trim() ? <a className="button button-soft" href={emailLink} onClick={() => setChannel("email")}>Email</a> : <><Button kind="soft" disabled>Email</Button><p className="sheet-copy">{!email ? "No email address added for this client." : "Add a message to open a draft."}</p></>}
+    <MessageOutcome bookingId={booking.id} kind="follow_up" channel={channel} onClose={onClose} />
   </Sheet>;
 }
 

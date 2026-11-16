@@ -134,7 +134,13 @@ No weekly totals, charts or snapshot card.
     Both pages use core `moneyOwed`: only due/owing bookings, price minus paid;
     future jobs, enquiries and cancelled bookings never inflate owed-now totals.
 - Follow-up Message is an editable draft with WhatsApp/Email, retaining missing
-  contact reasons. Nothing is labelled or logged Sent. **Remind me later** opens
+  contact reasons. **Close** dismisses without changing anything. After opening
+  an external app, **I sent it** records user-confirmed sending (not delivery)
+  and sets the next follow-up to today +3 calendar days in Europe/Dublin. The
+  enquiry remains until confirmed/cancelled and returns after three days.
+  A failed external-app attempt records nothing without that acknowledgement.
+  Confirming/cancelling clears only the enquiry follow-up, not payment reminders.
+  **Remind me later** opens
   Tomorrow / In 3 days / Next week / a date picker / Remove follow-up; a quick
   choice saves immediately. Follow-up calendar dates use Europe/Dublin.
 - Retain the optional business-name Settings nudge, below the hero/attention.
@@ -218,26 +224,30 @@ Money → Client messages. Lead with at most one primary page action.
   **Completed · Paid in full**, or simply **Enquiry / Confirmed / Cancelled**.
   Details retain date/time, location/directions and the client link/mobile.
 - **Stage:** shared core `bookingStage(booking, payments, now)` sums only this
-  booking's paid payments and clamps owed cents at zero. Confirmed dates after
-  today in Europe/Dublin are upcoming; today/past dates are due, irrespective
-  of appointment time. Completed jobs are owing or paid; work status is separate.
+  booking's paid payments and clamps owed cents at zero. Confirmed appointments
+  are upcoming until their actual start instant, including later today; then
+  they are due. This matches Today’s **In X hours** versus **Now** wording.
+  Financial Due now totals retain their Ireland-local due-date rule (today or
+  earlier); next-step timing does not postpone money already due today.
+  Completed jobs are owing or paid; work status is separate.
 - **Next step**, directly below details:
   - enquiry: primary **Confirm booking** (or **Confirm & notify <name>** using
-    existing automation/mobile wording and caption); quiet **Send quote** and
+    existing automation/mobile wording and caption); quiet **Quote** and
     **Change follow-up**, with the follow-up date or **No follow-up set** here.
-  - upcoming with money owed: pending **€X deposit due**, or **€X still to pay**
-    when the outstanding money is not a pending deposit; primary **Add payment**
+  - upcoming: **Booking confirmed**, with preparation wording for the service/date.
+    With money owed, show **€X deposit due**, or **€X still to pay**;
+    primary **Add payment**
     and quiet **Ask for payment**. Deposit wording never exceeds total owed.
-  - upcoming with nothing owed: **Next: <Ireland weekday/date/time>**, soft
-    **Send confirmation**, and no primary.
-  - due: primary **Mark complete**; when owed, **€X still to pay** and quiet
+  - upcoming with nothing owed: **All set — paid in full**, and no primary.
+    **Mark complete** remains secondary in More, allowing early completion.
+  - due: **Ready to finish?**, primary **Mark complete**; when owed, **€X still to pay** and quiet
     **Add payment**.
   - owing: **€X left to pay**, primary **Add payment**, quiet **Ask for payment**.
   - paid: **Paid in full**, primary **Book again**, quiet **Receipt**.
   - cancelled: soft **Book again**, with no primary.
 - **More:** a compact list of quiet icon rows, each at least 44px high, not a
   stack of large buttons. Preserve availability and avoid duplicate actions:
-  **Invoice**, **Receipt** (unless in Next step), **Add to calendar**,
+  **Quote** for enquiries / **Invoice** otherwise, **Receipt** (unless in Next step), **Add to calendar**,
   **Send confirmation** (unless in Next step), **Book again** (unless in Next
   step; never for enquiries), **Edit** (enquiry/confirmed), **Mark complete**
   (upcoming only, retaining early completion), and payment actions not already
@@ -253,13 +263,14 @@ Money → Client messages. Lead with at most one primary page action.
   payment buttons and no per-row Mark paid on booking detail. Money's quick
   Mark paid sheet still offers Cash / Bank transfer / Revolut.
 - **Add to calendar:** non-cancelled bookings offer a button opening a Sheet
-  with **iPhone / phone calendar** (share an `.ics` file where supported,
-  otherwise download) and **Google Calendar** (a prefilled event). Explain
+  with primary **Add to phone calendar** (download an `.ics` file)
+  and secondary **Google Calendar (web)** (a prefilled event). Explain
   that this is a one-off copy; automatic updates come from Settings. Works
   in demo too. Booking location opens Google Maps directions in a new tab.
 - **Calendar subscriptions (Settings):** replace the Google Calendar “soon”
   connection with **Add bookings to your calendar**. Confirmed and Enquiries
-  each have 44px-minimum **iPhone / Mac** and **Google** links. Explain:
+  each have primary **Add to phone calendar** (subscribe) then secondary
+  **Google Calendar (web)** links, all at least 44px. Explain:
   “Pick a colour for each calendar in your calendar app. Changes can take a
   few hours to show in Google.” **Reset links** requires confirmation:
   “Old links will stop working.” In demo, disable the controls and show
@@ -292,9 +303,10 @@ Money → Client messages. Lead with at most one primary page action.
   balance placeholder uses this amount. Include a pending payment link only
   when its amount matches the requested amount; disable draft actions for
   invalid amounts. Opening a draft records nothing; after opening, retain
-  **Did you send it?**, **Yes, I sent it** and **Not yet**. Only explicit Yes
-  records the request timestamp; manual drafts are never logged as sent.
-- **Quote:** enquiries have a quiet **Send quote** action in Next step using the same PDF
+  **I sent it** and **Close**. Only explicit **I sent it**
+  records the request timestamp and user-confirmed contact history; it is not
+  verified delivery.
+- **Quote:** enquiries have a quiet **Quote** action in Next step using the same PDF
   share/download flow and branding as invoices. Title **Quote**, stable
   **QTE-0001** number and issue date, **Valid until** (issue date + 30 days),
   service/date/price at issue time and VAT breakdown, deposit if positive, and
@@ -304,7 +316,9 @@ Money → Client messages. Lead with at most one primary page action.
   change it; legacy documents without a snapshot retain live rendering.
   It is a quote, not proof of acceptance or payment. Confirming remains the
   existing Confirm action, and removes Quote availability.
-- **Messages (M3):** timeline of message_log rows — "✓ Confirmation sent
+- **Messages (M3):** timeline of message_log rows. Manual acknowledgements say
+  **Confirmation / Payment request / Follow-up · you confirmed sending**, not
+  verified delivery. Provider-reported rows retain their normal status — "✓ Confirmation sent
   Tue 14:02 · ✓ Reminder sent Fri 10:00". Failed sends show `--danger` with
   the reason. This card is what makes the automation trustworthy — the
   vendor can *see* what their client was sent.
@@ -335,7 +349,7 @@ Order: heading → Owed hero → Due now → Coming up → This year → collaps
   most recent user-confirmed request timestamp and Ireland-local days.
   **Send reminder** opens the existing editable draft with the booking's owed
   amount, not a pending row's amount. Opening WhatsApp/Email records nothing.
-  Retain **Did you send it? / Yes, I sent it / Not yet** and draft-only wording.
+  Use **I sent it / Close** and draft-only wording.
 - **Mark paid** offers Cash / Bank transfer / Revolut and records the full owed
   amount via the booking record-payment handler. Existing pending deposits/
   balances are voided, not additionally marked paid. It works without pending
@@ -359,6 +373,8 @@ Order: heading → Owed hero → Due now → Coming up → This year → collaps
 
 ### 5. Expenses — `/expenses` (M5)
 - Heading copy: **Keep your expenses in one place.**
+- Add/edit expense opens in the shared bottom sheet, not above the list.
+  Opening, saving and closing keep the list’s scroll position and filters.
 - Top: full-width **📷 Snap receipt** button (opens
   `<input type="file" accept="image/*" capture="environment">`).
 - Upload → goes straight to **Confirm screen** (`/expenses/:id`): receipt
@@ -454,6 +470,28 @@ kit; resist adding more.
   2dp, always tabular.
 
 ## Payment details and issued documents (Settings)
+
+- Every Mark paid / Record payment success toast includes the client and amount:
+  **Marked Eimear Kelleher €65.00 paid**. Coming up’s expected total drops by
+  the amount recorded; only paid rows count.
+- WhatsApp links normalise existing stored client numbers as well as new edits:
+  Irish `08…` → `3538…`, `+353` / `00353` → `353`, formatting stripped;
+  other `+` international numbers become digits only. Client saves store the
+  same digits-only international form.
+- Confirmation defaults show **Price: €X** with no deposit/balance breakdown
+  when no deposit applies. With a deposit, show **Deposit required** for its
+  unpaid portion and **Deposit received** for its paid portion, derived only
+  from paid payments. The balance excludes the still-required deposit.
+  Optional empty lines (including payment links) are removed cleanly.
+- All manual message drafts use **Close** for dismissal. Opening WhatsApp/email
+  alone never records Asked or history. After opening, **I sent it** explicitly
+  records user-confirmed sending; payment requests also update Asked. No
+  acknowledgement issues a receipt or changes income/work status.
+- App-wide: while a text control is focused, hide sticky save footers, bottom
+  navigation and its floating +. Resizing a desktop window without editable
+  focus must not hide controls; there is no retained height baseline.
+  Sheet content remains scrollable within the visible height; static form
+  buttons remain reachable. Restore controls on blur.
 
 ### Revolut payment details and documents
 

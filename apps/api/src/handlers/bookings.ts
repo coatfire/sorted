@@ -23,6 +23,7 @@ import {
   irelandToday,
   addCalendarDays,
   shiftDublinWeeks,
+  MessageSentInput,
 } from "@sorted/core";
 import { db, schema } from "../db";
 import { emitBookingEvent } from "../lib/events";
@@ -34,6 +35,37 @@ import { env } from "../lib/env";
 import { createPaymentLink } from "./payments";
 
 export const bookingRoutes = new Hono<AppEnv>();
+
+bookingRoutes.post("/:id/message-sent", async (c) => {
+  const parsed = MessageSentInput.safeParse(await c.req.json());
+  if (!parsed.success) return c.json({ error: parsed.error.flatten() }, 400);
+  const userId = c.get("userId"), bookingId = c.req.param("id");
+  const input = parsed.data;
+  return userTransaction(userId, async tx => {
+    const row = await lockBookingWithClient(tx, userId, bookingId);
+    if (!row) return c.json({ error: "Booking not found" }, 404);
+    const [existing] = await tx.select().from(schema.messageLog).where(and(
+      eq(schema.messageLog.userId, userId), eq(schema.messageLog.bookingId, bookingId),
+      sql`${schema.messageLog.meta}->>'acknowledgementId' = ${input.acknowledgement_id}`,
+    ));
+    if (existing) return c.json(row.booking);
+    if (input.kind === "follow_up" && row.booking.status !== "enquiry") {
+      return c.json({ error: "Only enquiries can have a follow-up." }, 409);
+    }
+    const sentAt = new Date();
+    const patch = input.kind === "follow_up"
+      ? { followUpOn: addCalendarDays(irelandToday(sentAt), 3) }
+      : input.kind === "payment_request" ? { paymentRequestedAt: sentAt } : null;
+    const booking = patch ? (await tx.update(schema.bookings).set(patch)
+      .where(and(eq(schema.bookings.id, bookingId), eq(schema.bookings.userId, userId))).returning())[0] : row.booking;
+    await tx.insert(schema.messageLog).values({
+      userId, bookingId, clientId: row.client.id, channel: input.channel,
+      template: input.kind === "follow_up" ? "reminder" : input.kind,
+      status: "sent", sentAt, meta: { userConfirmed: true, kind: input.kind, acknowledgementId: input.acknowledgement_id },
+    });
+    return c.json(booking);
+  });
+});
 
 bookingRoutes.post("/:id/payment-link", async (c) => {
   const userId = c.get("userId"), bookingId = c.req.param("id");

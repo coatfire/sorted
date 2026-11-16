@@ -6,9 +6,10 @@ import { Button, Field, Sheet } from "./components";
 import type { BookingRow } from "./lib/backend";
 import { centsToInput, parseEuros, longDay, time, whatsappLink } from "./lib/format";
 import { useValidation } from "./lib/useValidation";
-import { useAction, useData, useStore } from "./lib/store";
+import { useData } from "./lib/store";
 import { needsPaymentDetails } from "./lib/setup";
 import { PaymentDetailsPrompt } from "./PaymentDetailsPrompt";
+import { MessageOutcome } from "./MessageOutcome";
 
 interface MessageSheetProps {
   booking: BookingRow;
@@ -30,10 +31,7 @@ export function BookingMessageSheet(props: MessageSheetProps) {
 
 function BookingDraftSheet({ booking, kind, onClose, initialAmountCents, requestLabel = "Request payment" }: MessageSheetProps) {
   const { user, payments, features } = useData();
-  const { backend } = useStore();
-  const { run, busy, error, committed } = useAction();
-  const [draftOpened, setDraftOpened] = useState(false);
-  const openedDraft = () => { if (kind === "payment_request") setDraftOpened(true); };
+  const [channel, setChannel] = useState<"whatsapp" | "email" | null>(null);
   const client = booking.client;
   const theirs = payments.filter((payment) => payment.bookingId === booking.id && payment.status !== "cancelled");
   const paid = theirs.filter((payment) => payment.status === "paid").reduce((sum, payment) => sum + payment.amountCents, 0);
@@ -55,6 +53,7 @@ function BookingDraftSheet({ booking, kind, onClose, initialAmountCents, request
     service: booking.service,
     priceCents: booking.priceCents,
     depositCents: booking.depositCents,
+    paidCents: paid,
     balanceCents: confirmation ? balanceCents : requested ?? 0,
     iban: user.iban,
     bic: user.bic,
@@ -65,13 +64,13 @@ function BookingDraftSheet({ booking, kind, onClose, initialAmountCents, request
 
   return (
     <Sheet title={confirmation ? "Send confirmation" : requestLabel} onClose={onClose}>
-      <p className="sheet-copy">Opens a draft in your app. Review it and tap send there.{!confirmation && " Come back here to confirm whether you sent it."}</p>
+      <p className="sheet-copy">Opens a draft in your app. Review it and tap send there. Come back here to confirm whether you sent it.</p>
       {!confirmation && <Field label="Amount to request" {...validation.field("amount")}>
         <div className="money-input"><span>€</span><input name="amount" inputMode="decimal" required value={amount} onChange={(event) => setAmount(event.target.value)} /></div>
       </Field>}
       <p className="sheet-copy message-preview">{message || "Your template is empty. Add a message in Settings."}</p>
       {client.phone && validAmount ? (
-        <a className="button button-primary" href={whatsappLink(client.phone, message)} onClick={openedDraft} target="_blank" rel="noreferrer">WhatsApp</a>
+        <a className="button button-primary" href={whatsappLink(client.phone, message)} onClick={() => setChannel("whatsapp")} target="_blank" rel="noreferrer">WhatsApp</a>
       ) : (
         <>
           <Button disabled aria-describedby="confirmation-no-phone">WhatsApp</Button>
@@ -79,23 +78,14 @@ function BookingDraftSheet({ booking, kind, onClose, initialAmountCents, request
         </>
       )}
       {email && validAmount ? (
-        <a className="button button-soft" href={email} onClick={openedDraft}>Email</a>
+        <a className="button button-soft" href={email} onClick={() => setChannel("email")}>Email</a>
       ) : (
         <>
           <Button kind="soft" disabled aria-describedby="confirmation-no-email">Email</Button>
           <p className="sheet-copy" id="confirmation-no-email">{!validAmount ? "Enter a valid amount to open a draft." : "No email address added for this client. Add one in their details."}</p>
         </>
       )}
-      {draftOpened && <>
-        <h3>Did you send it?</h3>
-        {error && <p className="sheet-copy" role="alert">{error}</p>}
-        {committed && error && <Button kind="soft" onClick={() => window.location.reload()}>Reload</Button>}
-        <Button disabled={busy || committed} onClick={async () => {
-          if (await run(() => backend.paymentRequested(booking.id), "Marked as asked")) onClose();
-        }}>Yes, I sent it</Button>
-        <Button kind="quiet" disabled={busy} onClick={onClose}>Not yet</Button>
-      </>}
-      {!draftOpened && <Button kind="quiet" onClick={onClose}>Done</Button>}
+      <MessageOutcome bookingId={booking.id} kind={kind} channel={channel} onClose={onClose} />
     </Sheet>
   );
 }

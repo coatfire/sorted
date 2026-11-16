@@ -15,7 +15,7 @@ describe("bookingStage", () => {
   ] as const)("classifies $status with €55 owed as $stage", ({ status, stage }) => {
     expect(bookingStage({ ...booking, status }, [payment], now)).toEqual({ stage, owedCents: 5500 });
   });
-  it.each(["2026-11-15T23:59:00Z", "2026-11-15T00:00:00Z", "2026-11-14T10:00:00Z"])("treats all of today and past dates as due: %s", startAt => {
+  it.each(["2026-11-15T12:00:00Z", "2026-11-15T00:00:00Z", "2026-11-14T10:00:00Z"])("treats started and past appointments as due: %s", startAt => {
     expect(bookingStage({ ...booking, startAt }, [], now)).toEqual({ stage: "due", owedCents: 8000 });
   });
   it("counts only this booking's paid payments, ignoring cancelled and pending rows", () => {
@@ -28,15 +28,18 @@ describe("bookingStage", () => {
     expect(bookingStage({ ...booking, status: "completed" }, [{ ...payment, amountCents: 8500 }], now)).toEqual({ stage: "paid", owedCents: 0 });
     expect(bookingStage(booking, [{ ...payment, amountCents: 8000 }], now)).toEqual({ stage: "upcoming", owedCents: 0 });
   });
-  it("changes stage at Ireland midnight in summer, not UTC midnight", () => {
+  it("changes stage at the actual start, matching Today’s in-future versus Now phrasing", () => {
     const summer = { ...booking, startAt: "2026-07-01T23:30:00Z" };
     expect(bookingStage(summer, [], new Date("2026-07-01T22:59:59Z")).stage).toBe("upcoming");
-    expect(bookingStage(summer, [], new Date("2026-07-01T23:00:00Z")).stage).toBe("due");
+    expect(bookingStage(summer, [], new Date("2026-07-01T23:00:00Z")).stage).toBe("upcoming");
+    expect(bookingStage(summer, [], new Date("2026-07-01T23:29:59Z")).stage).toBe("upcoming");
+    expect(bookingStage(summer, [], new Date("2026-07-01T23:30:00Z")).stage).toBe("due");
+    expect(bookingStage({ ...booking, startAt: "2026-11-15T23:59:00Z" }, [], now).stage).toBe("upcoming");
     expect(bookingStage({ ...booking, startAt: "2026-11-16T00:30:00Z" }, [], new Date("2026-11-15T23:59:59Z")).stage).toBe("upcoming");
   });
-  it("uses Irish dates across both clock changes", () => {
-    expect(bookingStage({ ...booking, startAt: "2026-03-29T23:30:00Z" }, [], new Date("2026-03-29T23:05:00Z")).stage).toBe("due");
-    expect(bookingStage({ ...booking, startAt: "2026-10-25T00:30:00Z" }, [], new Date("2026-10-24T23:30:00Z")).stage).toBe("due");
+  it("uses instants across both Irish clock changes", () => {
+    expect(bookingStage({ ...booking, startAt: "2026-03-29T23:30:00Z" }, [], new Date("2026-03-29T23:05:00Z")).stage).toBe("upcoming");
+    expect(bookingStage({ ...booking, startAt: "2026-10-25T00:30:00Z" }, [], new Date("2026-10-24T23:30:00Z")).stage).toBe("upcoming");
   });
   it("rejects invalid dates for confirmed bookings rather than silently assigning a stage", () => {
     expect(() => bookingStage({ ...booking, startAt: "invalid" }, [], now)).toThrow();

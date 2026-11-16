@@ -233,12 +233,32 @@ User responses and the `users.services` JSONB column contain camelCase
 tenant-scoped. These are suggestions: bookings retain their own service text
 and price, unaffected by later catalogue changes.
 
-`POST /bookings/:id/payment-requested` (authenticated, no body) records the
+Client creation (including inline booking clients) and PATCH normalise mobile
+numbers to digits-only international form: `08…` → `3538…`, `+353`/`00353` →
+`353…`, formatting removed; other `+` international numbers retain their country
+code. Invalid numbers return 400. Existing stored numbers remain readable.
+
+`POST /bookings/:id/message-sent` accepts `{ kind, channel, acknowledgement_id }`.
+Kinds: `confirmation`, `payment_request`, `follow_up`; channels: `whatsapp`,
+`email`; acknowledgement ID: UUID, stable across retries of the same draft.
+Authenticated and tenant-scoped. Records a message-log entry with
+`meta: { userConfirmed: true, kind, acknowledgementId }`; this is the user's
+acknowledgement, never verified delivery. Follow-ups use the existing reminder
+template type. Payment requests update `paymentRequestedAt`; follow-ups set
+`followUpOn` to today +3 calendar days in Europe/Dublin and leave status enquiry.
+Confirmations change neither follow-ups nor payment reminders. No income,
+receipt or automatic message is created. Booking lock and history write are
+transactional, with global lock order/deadlock retry; duplicate acknowledgement
+IDs return without recording/rescheduling again. Missing/foreign bookings: 404;
+follow-up on a non-enquiry: 409; invalid input: 400. Confirm/cancel clears
+enquiry follow-ups without changing payment reminders.
+
+Legacy `POST /bookings/:id/payment-requested` (authenticated, no body) records the
 current time in `paymentRequestedAt` and returns the booking. Missing or foreign
 bookings return 404. It emits no event and creates no message-log entry: opening
-a draft is not proof the user sent it. Payment-request sheets (including Money
-reminders) call this only after the user answers **Yes, I sent it**. Opening a
-WhatsApp/Email draft or choosing **Not yet** records nothing.
+a draft is not proof the user sent it. Manual draft sheets now call
+`message-sent` only after **I sent it**. Opening WhatsApp/Email, an unsuccessful
+app launch, or choosing **Close** records nothing.
 
 Today selects enquiries with `followUpOn <= today` in Europe/Dublin, oldest
 follow-up date first. Rescheduling uses PATCH with `follow_up_on`.

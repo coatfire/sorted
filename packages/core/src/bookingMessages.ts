@@ -1,11 +1,20 @@
 import type { Payment } from "./types";
+import { z } from "zod";
+
+export const MessageSentInput = z.object({
+  kind: z.enum(["confirmation", "payment_request", "follow_up"]),
+  channel: z.enum(["whatsapp", "email"]),
+  acknowledgement_id: z.string().uuid(),
+});
+export type MessageSentInput = z.infer<typeof MessageSentInput>;
 
 export const MESSAGE_PLACEHOLDERS = [
-  "client", "business", "date", "time", "service", "price", "deposit", "balance", "iban", "bic", "pay_link", "revolut_link",
+  "client", "business", "date", "time", "service", "price", "deposit", "balance", "iban", "bic", "pay_link", "revolut_link", "deposit_breakdown",
 ] as const;
 
 export const DEFAULT_BOOKING_CONFIRMATION_TEMPLATE = `Hi {client}, you're booked in with {business} for {service} on {date} at {time}.
-Price: {price} · Deposit: {deposit} · Balance: {balance}
+Price: {price}
+{deposit_breakdown}
 IBAN: {iban}
 BIC: {bic}
 Pay by Revolut: {revolut_link}
@@ -28,6 +37,7 @@ export interface BookingMessageDetails {
   service: string;
   priceCents: number;
   depositCents: number;
+  paidCents?: number;
   balanceCents: number;
   iban: string | null;
   bic: string | null;
@@ -49,6 +59,8 @@ export function renderBookingMessage(template: string, details: BookingMessageDe
   const money = (cents: number) => new Intl.NumberFormat("en-IE", {
     style: "currency", currency: "EUR",
   }).format(cents / 100);
+  const received = Math.min(details.depositCents, details.paidCents ?? 0);
+  const required = Math.max(0, details.depositCents - received);
   const values: Record<string, string> = {
     client: details.client,
     business: details.business,
@@ -57,6 +69,11 @@ export function renderBookingMessage(template: string, details: BookingMessageDe
     service: details.service,
     price: money(details.priceCents),
     deposit: money(details.depositCents),
+    deposit_breakdown: details.depositCents > 0 ? [
+      received > 0 ? `Deposit received: ${money(received)}` : "",
+      required > 0 ? `Deposit required: ${money(required)}` : "",
+      `Balance: ${money(Math.max(0, details.balanceCents - required))}`,
+    ].filter(Boolean).join("\n") : "",
     balance: money(details.balanceCents),
     iban: details.iban?.trim() ?? "",
     bic: details.bic?.trim() ?? "",
@@ -65,10 +82,10 @@ export function renderBookingMessage(template: string, details: BookingMessageDe
   };
   const rendered = template.split(/\r?\n/).filter((line) => {
     const tokens = line.match(/\{[a-z_]+\}/g) ?? [];
-    const emptyBankLine = tokens.length > 0 && tokens.every((token) =>
-      (token === "{iban}" || token === "{bic}" || token === "{revolut_link}") && !values[token.slice(1, -1)],
+    const emptyLine = tokens.length > 0 && tokens.every((token) =>
+      Object.hasOwn(values, token.slice(1, -1)) && !values[token.slice(1, -1)],
     );
-    return !emptyBankLine;
+    return !emptyLine;
   }).map((line) => line.replace(/\{([a-z_]+)\}/g, (token: string, key: string) => Object.hasOwn(values, key) ? values[key] : token))
     .join("\n").replace(/\n{3,}/g, "\n\n").trim();
   const include = details.kind !== "confirmation" || /\{(?:iban|bic)\}/.test(template);

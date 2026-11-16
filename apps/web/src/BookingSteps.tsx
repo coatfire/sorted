@@ -1,7 +1,7 @@
 import type { BookingStage } from "@sorted/core";
 import { Button, Card, Icon } from "./components";
 import type { BookingRow } from "./lib/backend";
-import { nextBookingDate, type BookingDetailAction } from "./lib/bookingDetail";
+import { type BookingDetailAction } from "./lib/bookingDetail";
 import { confirmCopy, euros, longDay } from "./lib/format";
 
 export function BookingSteps({ booking, stage, owedCents, depositCents, hasPaidPayment, automation, busy, documentBusy, onAction }: {
@@ -18,7 +18,6 @@ export function BookingSteps({ booking, stage, owedCents, depositCents, hasPaidP
   const confirm = confirmCopy(booking.client, automation);
   const paymentInNextStep = owedCents > 0 && (stage === "upcoming" || stage === "due" || stage === "owing");
   const askInNextStep = owedCents > 0 && (stage === "upcoming" || stage === "owing");
-  const confirmationInNextStep = stage === "upcoming" && owedCents === 0;
   const open = booking.status === "enquiry" || booking.status === "confirmed";
   const receiptDisabled = documentBusy || !hasPaidPayment;
   const receiptHelp = !hasPaidPayment ? "receipt-unavailable" : undefined;
@@ -38,18 +37,21 @@ export function BookingSteps({ booking, stage, owedCents, depositCents, hasPaidP
         <Button disabled={busy} onClick={() => onAction("confirm")}><Icon name={confirm.caption ? "check" : "message"} />{confirm.label}</Button>
         {confirm.caption && <p className="button-caption">{confirm.caption}</p>}
         <div className="next-step-secondary">
-          <Button kind="quiet" disabled={documentBusy} onClick={() => onAction("quote")}><Icon name="receipt" size={18} />Send quote</Button>
+          <Button kind="quiet" disabled={documentBusy} onClick={() => onAction("quote")}><Icon name="receipt" size={18} />Quote</Button>
           <Button kind="quiet" onClick={() => onAction("followUp")}><Icon name="clock" size={18} />Change follow-up</Button>
         </div>
       </>}
-      {stage === "upcoming" && (owedCents > 0 ? <>
-        <h2>{depositCents > 0 ? `${euros(depositCents)} deposit due` : `${euros(owedCents)} still to pay`}</h2>
+      {stage === "upcoming" && <>
+        <h2>Booking confirmed</h2>
+        <p className="sheet-copy">Get ready for {booking.service} on {longDay(booking.startAt)}.</p>
+        {owedCents > 0 ? <>
+        <p className="sheet-copy">{depositCents > 0 ? `${euros(depositCents)} deposit due` : `${euros(owedCents)} still to pay`}</p>
         <Button onClick={() => onAction("payment")}><Icon name="wallet" />Add payment</Button>
         <div className="next-step-secondary"><Button kind="quiet" onClick={() => onAction("ask")}><Icon name="message" size={18} />Ask for payment</Button></div>
       </> : <>
-        <h2>Next: {nextBookingDate(booking.startAt)}</h2>
-        <Button kind="soft" onClick={() => onAction("confirmation")}><Icon name="message" />Send confirmation</Button>
-      </>)}
+        <p className="sheet-copy">All set — paid in full.</p>
+      </>}
+      </>}
       {stage === "due" && <>
         <h2>Ready to finish?</h2>
         {owedCents > 0 && <p className="sheet-copy">{euros(owedCents)} still to pay</p>}
@@ -74,10 +76,10 @@ export function BookingSteps({ booking, stage, owedCents, depositCents, hasPaidP
     <section className="detail-section" aria-labelledby="booking-more">
       <div className="section-heading compact"><h2 id="booking-more">More</h2></div>
       <Card className="booking-more-list">
-        {row("invoice", "Invoice", "receipt", documentBusy)}
+        {row(booking.status === "enquiry" ? "quote" : "invoice", booking.status === "enquiry" ? "Quote" : "Invoice", "receipt", documentBusy)}
         {stage !== "paid" && row("receipt", "Receipt", "receipt", receiptDisabled)}
         {stage !== "cancelled" && row("calendar", "Add to calendar", "calendar")}
-        {stage !== "cancelled" && !confirmationInNextStep && row("confirmation", "Send confirmation", "message")}
+        {stage !== "cancelled" && row("confirmation", "Send confirmation", "message")}
         {booking.status !== "enquiry" && stage !== "paid" && stage !== "cancelled" && row("again", "Book again", "plus")}
         {open && row("edit", "Edit", "edit")}
         {stage === "upcoming" && row("complete", "Mark complete", "check", busy)}

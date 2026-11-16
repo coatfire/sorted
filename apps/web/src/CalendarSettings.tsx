@@ -24,9 +24,9 @@ export function CalendarSettings() {
       <h3>{kind === "confirmed" ? "Confirmed" : "Enquiries"}</h3>
       <div className="action-pair">
         {links ? <>
-          <a className="button button-soft" href={links[kind].webcal}>iPhone / Mac</a>
-          <a className="button button-soft" href={links[kind].google} target="_blank" rel="noreferrer">Google</a>
-        </> : <><Button kind="soft" disabled>iPhone / Mac</Button><Button kind="soft" disabled>Google</Button></>}
+          <a className="button button-primary" href={links[kind].webcal}>Add to phone calendar</a>
+          <a className="button button-soft" href={links[kind].google} target="_blank" rel="noreferrer">Google Calendar (web)</a>
+        </> : <><Button disabled>Add to phone calendar</Button><Button kind="soft" disabled>Google Calendar (web)</Button></>}
       </div>
     </Card>)}
     <p className="sheet-copy">Pick a colour for each calendar in your calendar app. Changes can take a few hours to show in Google.</p>

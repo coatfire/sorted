@@ -11,7 +11,7 @@ import { BookingCalendarSheet } from "../BookingCalendarSheet";
 import { BookingSteps } from "../BookingSteps";
 import { bookingPaymentPhrase, unpaidDepositCents, type BookingDetailAction } from "../lib/bookingDetail";
 import {
-  euros, firstName, kindLabel, longDay, messageLabel, methodLabel, stamp, time,
+  euros, formatPhone, kindLabel, longDay, messageLabel, methodLabel, stamp, time,
 } from "../lib/format";
 import { useAction, useData, useStore, useSession } from "../lib/store";
 import { download } from "../lib/image";
@@ -143,7 +143,7 @@ export function BookingDetail() {
           <span className="detail-icon"><Icon name="user" /></span>
           <Link to={`/clients/${client.id}`} className="detail-link">
             <strong>{client.name}</strong>
-            <span>{client.phone || "No mobile added — tap to add one"}</span>
+            <span>{formatPhone(client.phone) || "No mobile added — tap to add one"}</span>
           </Link>
         </div>
       </Card>
@@ -232,12 +232,8 @@ export function BookingDetail() {
               </div>
             ))
           ) : (
-            <EmptyState icon="message" title="No messages sent" small>
-              {!features.automation
-                ? "Automatic messages aren’t connected yet. Use Send confirmation or Ask for payment to open a draft. Manual sends aren’t tracked here."
-                : !client.phone
-                  ? `Add a mobile for ${firstName(client.name)} and Sorted will send confirmations and reminders.`
-                  : "Confirmations, reminders and payment requests will show here as they’re sent."}
+            <EmptyState icon="message" title="No messages recorded" small>
+              Open a draft with Send confirmation or Ask for payment, then tap I sent it after sending. Closing a draft records nothing.
             </EmptyState>
           )}
         </Card>

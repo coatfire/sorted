@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Navigate, NavLink, Outlet, useLocation } from "react-router-dom";
 import { Button, Icon } from "./components";
 import { useSession, useStore } from "./lib/store";
+import { useKeyboardControls } from "./lib/useKeyboardControls";
 
 function useOnline() {
   const [online, setOnline] = useState(navigator.onLine);
@@ -30,6 +31,7 @@ function Skeleton() {
 }
 
 export function AppShell() {
+  useKeyboardControls();
   const { mode, signOut } = useSession();
   const { data, loadError, stale, refresh } = useStore();
   const online = useOnline();

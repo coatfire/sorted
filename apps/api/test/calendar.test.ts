@@ -19,7 +19,7 @@ describe("calendar files", () => {
     expect(content).toContain("REFRESH-INTERVAL;VALUE=DURATION:PT15M\r\nX-PUBLISHED-TTL:PT15M");
     expect(content).toContain("UID:booking-1@sorted\r\nDTSTAMP:20260101T123456Z\r\nDTSTART:20260701T090000Z\r\nDTEND:20260701T100000Z");
     expect(content).toContain("SUMMARY:✓ Aoife · Hair\r\n");
-    expect(unfold(content)).toContain("DESCRIPTION:+353861234567\\n€123.00\\nhttps://sorted.example/bookings/booking-1");
+    expect(unfold(content)).toContain("DESCRIPTION:086 123 4567\\n€123.00\\nhttps://sorted.example/bookings/booking-1");
     expect(content).toContain("STATUS:CONFIRMED\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n");
     expect(content.replace(/\r\n/g, "")).not.toMatch(/[\r\n]/);
     expect(buildCalendar({ bookings: [booking], name: "Sorted", appUrl, now: new Date("2026-02-01") })).toContain("UID:booking-1@sorted");

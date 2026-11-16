@@ -2,8 +2,9 @@ import { useState } from "react";
 import type { Payment } from "@sorted/core";
 import { Button, Icon, MoneyText, Sheet } from "./components";
 import type { BookingRow } from "./lib/backend";
-import { euros, firstName, methodLabel, whatsappLink } from "./lib/format";
+import { euros, firstName, methodLabel, whatsappLink, paymentRecordedToast } from "./lib/format";
 import { useAction, useData, useStore } from "./lib/store";
+import { MessageOutcome } from "./MessageOutcome";
 
 /** The two things you can do with money you're owed: chase it, or record it. */
 export function PaymentActions({ payment, booking, showMarkPaid = true, owedCents }: { booking: BookingRow; showMarkPaid?: boolean } & ({ payment: Payment; owedCents?: never } | { payment?: never; owedCents: number })) {
@@ -12,10 +13,12 @@ export function PaymentActions({ payment, booking, showMarkPaid = true, owedCent
   const { busy, run, error, committed } = useAction();
   const [sheet, setSheet] = useState<"paid" | "link" | null>(null);
   const [link, setLink] = useState(payment?.linkUrl ?? null);
+  const [channel, setChannel] = useState<"whatsapp" | null>(null);
   const amountCents = owedCents ?? payment!.amountCents;
   const client = booking.client;
 
   async function openLink() {
+    setChannel(null);
     if (!link) {
       let created = "";
       const ok = await run(async () => {
@@ -69,7 +72,7 @@ export function PaymentActions({ payment, booking, showMarkPaid = true, owedCent
               kind="soft"
               disabled={busy || Boolean(committed && error)}
               onClick={async () => {
-                if (await run(() => owedCents !== undefined ? backend.recordPayment(booking.id, { amount_cents: owedCents, method }) : backend.markPaid(payment!.id, method), "Marked paid")) {
+                if (await run(() => owedCents !== undefined ? backend.recordPayment(booking.id, { amount_cents: owedCents, method }) : backend.markPaid(payment!.id, method), paymentRecordedToast(client.name, amountCents))) {
                   setSheet(null);
                 }
               }}
@@ -86,13 +89,13 @@ export function PaymentActions({ payment, booking, showMarkPaid = true, owedCent
           <p className="sheet-copy">
             {client.name} can pay <MoneyText cents={amountCents} /> by card. It’ll flip to
             paid here on its own.
-            {features.automation && client.phone && " Sorted has sent it on WhatsApp."}
           </p>
           <p className="link-box">{link}</p>
           {client.phone && (
             <a
               className="button button-primary"
               href={whatsappLink(client.phone, message)}
+              onClick={() => setChannel("whatsapp")}
               target="_blank"
               rel="noreferrer"
             >
@@ -100,7 +103,7 @@ export function PaymentActions({ payment, booking, showMarkPaid = true, owedCent
             </a>
           )}
           <Button kind="soft" onClick={copy}><Icon name="copy" size={17} /> Copy link</Button>
-          <Button kind="quiet" onClick={() => setSheet(null)}>Done</Button>
+          <MessageOutcome bookingId={booking.id} kind="payment_request" channel={channel} onClose={() => setSheet(null)} />
         </Sheet>
       )}
     </>
